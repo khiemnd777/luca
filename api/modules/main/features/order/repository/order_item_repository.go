@@ -1,0 +1,950 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/khiemnd777/noah_api/modules/main/config"
+	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemmaterial"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemproduct"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
+	"github.com/khiemnd777/noah_api/shared/mapper"
+	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
+	"github.com/khiemnd777/noah_api/shared/module"
+	"github.com/khiemnd777/noah_api/shared/utils"
+	"github.com/khiemnd777/noah_api/shared/utils/table"
+)
+
+type OrderItemRepository interface {
+	IsLatest(ctx context.Context, orderItemID int64) (bool, error)
+	IsLatestIfOrderID(ctx context.Context, orderID, orderItemID int64) (bool, error)
+	GetLatestByOrderID(ctx context.Context, orderID int64) (*model.OrderItemDTO, error)
+	GetLatestOrderItemIDByOrderID(ctx context.Context, orderID int64) (int64, error)
+	GetHistoricalByOrderIDAndOrderItemID(ctx context.Context, orderID, orderItemID int64) ([]*model.OrderItemHistoricalDTO, error)
+	GetTotalPriceByOrderItemID(ctx context.Context, orderItemID int64) (float64, error)
+	GetTotalPriceByOrderID(ctx context.Context, tx *generated.Tx, orderID int64) (float64, error)
+	GetAllProductsAndMaterialsByOrderID(ctx context.Context, orderID int64) (model.OrderProductsAndMaterialsDTO, error)
+	GetDeliveryStatus(ctx context.Context, orderID, orderItemID int64) (*string, error)
+	UpdateDeliveryStatus(ctx context.Context, tx *generated.Tx, orderID, orderItemID int64, status string) (*model.OrderItemDTO, error)
+	// -- general functions
+	Create(ctx context.Context, tx *generated.Tx, order *model.OrderDTO, input *model.OrderItemUpsertDTO) (*model.OrderItemDTO, error)
+	Update(ctx context.Context, tx *generated.Tx, order *model.OrderDTO, input *model.OrderItemUpsertDTO) (*model.OrderItemDTO, error)
+	GetOrderIDAndOrderItemIDByCode(ctx context.Context, code string) (int64, int64, error)
+	GetByID(ctx context.Context, id int64) (*model.OrderItemDTO, error)
+	PrepareLatestForRemakeByOrderID(
+		ctx context.Context,
+		orderID int64,
+	) (*model.OrderItemDTO, error)
+	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.OrderItemDTO], error)
+	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderItemDTO], error)
+	Delete(ctx context.Context, id int64) error
+}
+
+type orderItemRepository struct {
+	db                    *generated.Client
+	deps                  *module.ModuleDeps[config.ModuleConfig]
+	cfMgr                 *customfields.Manager
+	orderItemProcessRepo  OrderItemProcessRepository
+	orderItemProductRepo  OrderItemProductRepository
+	orderItemMaterialRepo OrderItemMaterialRepository
+}
+
+func NewOrderItemRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) OrderItemRepository {
+	orderItemProcessRepo := NewOrderItemProcessRepository(db, deps, cfMgr)
+	orderItemProductRepo := NewOrderItemProductRepository(db)
+	orderItemMaterialRepo := NewOrderItemMaterialRepository(db)
+
+	return &orderItemRepository{
+		db:                    db,
+		deps:                  deps,
+		cfMgr:                 cfMgr,
+		orderItemProcessRepo:  orderItemProcessRepo,
+		orderItemProductRepo:  orderItemProductRepo,
+		orderItemMaterialRepo: orderItemMaterialRepo,
+	}
+}
+
+func (r *orderItemRepository) IsLatest(ctx context.Context, orderItemID int64) (bool, error) {
+	cur, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.ID(orderItemID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	orderID := cur.OrderID
+
+	latest, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		return false, err
+	}
+	return latest.ID == orderItemID, nil
+}
+
+func (r *orderItemRepository) IsLatestIfOrderID(ctx context.Context, orderID, orderItemID int64) (bool, error) {
+	latest, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		return false, err
+	}
+	return latest.ID == orderItemID, nil
+}
+
+func (r *orderItemRepository) GetLatestByOrderID(ctx context.Context, orderID int64) (*model.OrderItemDTO, error) {
+	itemEnt, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := r.mapOrderItemEntityToDTO(itemEnt)
+
+	// Products
+	if err := r.orderItemProductRepo.Load(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	// Materials
+	if err := r.orderItemMaterialRepo.LoadConsumable(ctx, dto); err != nil {
+		return nil, err
+	}
+	if err := r.orderItemMaterialRepo.LoadLoaner(ctx, dto); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderItemRepository) GetDeliveryStatus(ctx context.Context, orderID, orderItemID int64) (*string, error) {
+	itemEnt, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.IDEQ(orderItemID),
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Select(orderitem.FieldDeliveryStatus).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return itemEnt.DeliveryStatus, nil
+}
+
+func (r *orderItemRepository) UpdateDeliveryStatus(ctx context.Context, tx *generated.Tx, orderID, orderItemID int64, status string) (*model.OrderItemDTO, error) {
+	orderItemClient := r.db.OrderItem
+	if tx != nil {
+		orderItemClient = tx.OrderItem
+	}
+
+	itemEnt, err := orderItemClient.
+		Query().
+		Where(
+			orderitem.IDEQ(orderItemID),
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	q := orderItemClient.
+		UpdateOneID(itemEnt.ID).
+		SetDeliveryStatus(status)
+
+	now := time.Now()
+	switch status {
+	case "delivery_in_progress":
+		q.SetDeliveryInProgressAt(now)
+	case "delivered":
+		q.SetDeliveredAt(now)
+	case "returned":
+		q.SetDeliveryReturnedAt(now)
+	}
+
+	entity, err := q.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.mapOrderItemEntityToDTO(entity), nil
+}
+
+func (r *orderItemRepository) PrepareLatestForRemakeByOrderID(
+	ctx context.Context,
+	orderID int64,
+) (*model.OrderItemDTO, error) {
+
+	itemEnt, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		First(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := mapper.MapAs[
+		*generated.OrderItem,
+		*model.OrderItemDTO,
+	](itemEnt)
+
+	if err := r.orderItemProductRepo.
+		PrepareForRemake(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	if err := r.orderItemMaterialRepo.
+		PrepareConsumableForRemake(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	if err := r.orderItemMaterialRepo.
+		PrepareLoanerForRemake(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+func (r *orderItemRepository) GetHistoricalByOrderIDAndOrderItemID(
+	ctx context.Context,
+	orderID, orderItemID int64,
+) ([]*model.OrderItemHistoricalDTO, error) {
+
+	items, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*model.OrderItemHistoricalDTO, 0, len(items))
+
+	var latestID int64 = 0
+	if len(items) > 0 {
+		latestID = items[0].ID
+	}
+
+	for _, it := range items {
+		id := it.ID
+
+		isCurrent := (id == latestID)
+
+		var isHighlight bool
+		if orderItemID == 0 {
+			isHighlight = (id == latestID)
+		} else {
+			isHighlight = (id == orderItemID)
+		}
+
+		out = append(out, &model.OrderItemHistoricalDTO{
+			ID:          id,
+			Code:        *it.Code,
+			CreatedAt:   it.CreatedAt,
+			IsCurrent:   isCurrent,
+			IsHighlight: isHighlight,
+		})
+	}
+
+	return out, nil
+}
+
+func (r *orderItemRepository) GetTotalPriceByOrderItemID(ctx context.Context, orderItemID int64) (float64, error) {
+	productTotal, err := r.orderItemProductRepo.GetTotalPriceByOrderItemID(ctx, orderItemID)
+	if err != nil {
+		return 0, nil
+	}
+
+	consumableMaterialTotal, err := r.orderItemMaterialRepo.GetConsumableTotalPriceByOrderItemID(ctx, orderItemID)
+	if err != nil {
+		return 0, err
+	}
+
+	total := productTotal + consumableMaterialTotal
+	return total, nil
+}
+
+func (r *orderItemRepository) GetTotalPriceByOrderID(ctx context.Context, tx *generated.Tx, orderID int64) (float64, error) {
+	productTotal, err := r.orderItemProductRepo.GetTotalPriceByOrderID(ctx, tx, orderID)
+	if err != nil {
+		return 0, nil
+	}
+	consumableMaterialTotal, err := r.orderItemMaterialRepo.GetConsumableTotalPriceByOrderID(ctx, tx, orderID)
+	if err != nil {
+		return 0, nil
+	}
+	total := productTotal + consumableMaterialTotal
+	return total, nil
+}
+
+func (r *orderItemRepository) GetAllProductsAndMaterialsByOrderID(ctx context.Context, orderID int64) (model.OrderProductsAndMaterialsDTO, error) {
+	items, err := r.db.OrderItem.Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Select(orderitem.FieldID, orderitem.FieldOrderID).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+
+	out := make(model.OrderProductsAndMaterialsDTO, len(items))
+	itemIndex := make(map[int64]*model.OrderItemWithProductsAndMaterialsDTO, len(items))
+	for i, it := range items {
+		dto := model.OrderItemWithProductsAndMaterialsDTO{
+			ID:      it.ID,
+			OrderID: it.OrderID,
+		}
+		out[i] = dto
+		itemIndex[it.ID] = &out[i]
+	}
+
+	// Products
+	products, err := r.db.OrderItemProduct.Query().
+		Where(
+			orderitemproduct.OrderIDEQ(orderID),
+			orderitemproduct.HasOrderItemWith(orderitem.DeletedAtIsNil()),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, product := range products {
+		if dto, ok := itemIndex[product.OrderItemID]; ok {
+			dto.Products = append(dto.Products, mapper.MapAs[*generated.OrderItemProduct, *model.OrderItemProductDTO](product))
+		}
+	}
+
+	// Materials
+	materials, err := r.db.OrderItemMaterial.Query().
+		Where(
+			orderitemmaterial.OrderIDEQ(orderID),
+			orderitemmaterial.HasOrderItemWith(orderitem.DeletedAtIsNil()),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, material := range materials {
+		dto, ok := itemIndex[material.OrderItemID]
+		if !ok {
+			continue
+		}
+		switch material.Type {
+		case utils.Ptr("consumable"):
+			dto.ConsumableMaterials = append(dto.ConsumableMaterials, mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](material))
+		case utils.Ptr("loaner"):
+			dto.LoanerMaterials = append(dto.LoanerMaterials, mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](material))
+		}
+	}
+
+	return out, nil
+}
+
+// -- helpers
+func (r *orderItemRepository) getNextItemSeq(ctx context.Context, orderID int64) (int, error) {
+	count, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return count + 1, nil
+}
+
+func (r *orderItemRepository) applyTotalPrice(dto *model.OrderItemDTO, totalPrices ...*float64) {
+	if dto == nil {
+		return
+	}
+
+	if len(totalPrices) == 0 {
+		dto.TotalPrice = nil
+		return
+	}
+
+	var sum float64
+	for _, p := range totalPrices {
+		if p == nil {
+			continue
+		}
+		sum += *p
+	}
+
+	dto.TotalPrice = &sum
+}
+
+func (r *orderItemRepository) mapOrderItemEntityToDTO(entity *generated.OrderItem) *model.OrderItemDTO {
+	dto := mapper.MapAs[*generated.OrderItem, *model.OrderItemDTO](entity)
+	if dto == nil || entity == nil {
+		return dto
+	}
+	dto.IsCash = entity.IsCash
+	dto.IsCredit = entity.IsCredit
+	return dto
+}
+
+// -- general functions
+func (r *orderItemRepository) Create(ctx context.Context, tx *generated.Tx, order *model.OrderDTO, input *model.OrderItemUpsertDTO) (*model.OrderItemDTO, error) {
+	in := &input.DTO
+
+	products := r.orderItemProductRepo.PrepareProducts(in)
+	totalPriceProduct := r.orderItemProductRepo.CalculateTotalPrice(products)
+	consumableMaterials := r.orderItemMaterialRepo.PrepareConsumableMaterials(in)
+	totalPriceConsumableMaterial := r.orderItemMaterialRepo.CalculateConsumableTotalPrice(consumableMaterials)
+	r.applyTotalPrice(in, totalPriceProduct, totalPriceConsumableMaterial)
+
+	// order item - ParentItemID + RemakeCount
+	prev, errLatest := r.GetLatestByOrderID(ctx, in.OrderID)
+	if errLatest == nil && prev != nil {
+		in.ParentItemID = &prev.ID
+		in.RemakeCount = prev.RemakeCount + 1
+	} else {
+		in.ParentItemID = nil
+		in.RemakeCount = 0
+	}
+
+	// order item - code
+	if in.Code == nil || *in.Code == "" {
+		if in.RemakeCount > 0 {
+			seq, errSeq := r.getNextItemSeq(ctx, in.OrderID)
+			if errSeq != nil {
+				return nil, errSeq
+			}
+
+			alpha := utils.AlphabetSeq(seq)
+
+			code := fmt.Sprintf("%s%s", alpha, *in.CodeOriginal)
+			in.Code = &code
+		} else {
+			in.Code = in.CodeOriginal
+		}
+	}
+
+	// qr code
+	qrCode := utils.GenerateQRCodeString(in.Code)
+
+	q := tx.OrderItem.Create().
+		SetCode(*in.Code).
+		SetNillableQrCode(qrCode)
+
+	if in.ParentItemID != nil {
+		q.SetParentItemID(*in.ParentItemID)
+	}
+
+	q.SetRemakeCount(in.RemakeCount).
+		SetOrderID(in.OrderID).
+		SetNillableCodeOriginal(in.CodeOriginal).
+		SetNillableTotalPrice(in.TotalPrice).
+		SetNillableDeliveryStatus(in.DeliveryStatus).
+		SetStatus("received").
+		SetIsCash(!in.IsCredit).
+		SetIsCredit(in.IsCredit)
+
+	if in.DeliveryStatus != nil {
+		now := time.Now()
+
+		switch *in.DeliveryStatus {
+		case "delivery_in_progress":
+			if _, exists := q.Mutation().DeliveryInProgressAt(); !exists {
+				q.SetDeliveryInProgressAt(now)
+			}
+
+		case "delivered":
+			if _, exists := q.Mutation().DeliveredAt(); !exists {
+				q.SetDeliveredAt(now)
+			}
+
+		case "returned":
+			if _, exists := q.Mutation().DeliveryReturnedAt(); !exists {
+				q.SetDeliveryReturnedAt(now)
+			}
+		}
+	}
+
+	// metadata
+	// new order is as `received`
+	cf := utils.CloneOrInit(in.CustomFields)
+	cf["status"] = "received"
+	in.CustomFields = cf
+
+	if input.Collections != nil && len(*input.Collections) > 0 {
+		_, err := customfields.PrepareCustomFields(ctx,
+			r.cfMgr,
+			*input.Collections,
+			in.CustomFields,
+			q,
+			false,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	entity, err := q.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := r.mapOrderItemEntityToDTO(entity)
+
+	// Products
+	createdProducts, err := r.orderItemProductRepo.Sync(ctx, tx, entity.OrderID, entity.ID, products)
+	if err != nil {
+		return nil, err
+	}
+	out.Products = createdProducts
+
+	// Consumable Materials
+	createdConsumableMaterials, err := r.orderItemMaterialRepo.SyncConsumable(ctx, tx, entity.OrderID, entity.ID, consumableMaterials)
+	if err != nil {
+		return nil, err
+	}
+	out.ConsumableMaterials = createdConsumableMaterials
+
+	// Loaner Materials
+	loanerMaterials := r.orderItemMaterialRepo.PrepareLoanerMaterials(in)
+	loanerMaterials = r.orderItemMaterialRepo.PrepareLoanerForCreate(loanerMaterials)
+
+	// Loaner snapshot fields
+	now := time.Now()
+
+	for _, m := range loanerMaterials {
+		if m == nil {
+			continue
+		}
+
+		m.ClinicID = order.ClinicID
+		m.ClinicName = order.ClinicName
+		m.DentistID = order.DentistID
+		m.DentistName = order.DentistName
+		m.PatientID = order.PatientID
+		m.PatientName = order.PatientName
+
+		if m.Status != nil &&
+			(*m.Status == "on_loan" || *m.Status == "partial_returned") &&
+			m.OnLoanAt == nil {
+			m.OnLoanAt = &now
+		}
+	}
+
+	createdLoanerMaterials, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
+	if err != nil {
+		return nil, err
+	}
+	out.LoanerMaterials = createdLoanerMaterials
+
+	// processes
+	if len(products) > 0 {
+		priority := utils.SafeGetString(entity.CustomFields, "priority")
+		productIDs := make([]int, 0, len(products))
+		for _, product := range products {
+			if product == nil || product.ProductID == 0 {
+				continue
+			}
+			productIDs = append(productIDs, product.ProductID)
+		}
+		if len(productIDs) > 0 {
+			if _, err := r.orderItemProcessRepo.CreateManyByProductIDs(ctx, tx, entity.ID, entity.OrderID, entity.Code, &priority, productIDs); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return out, nil
+}
+
+func (r *orderItemRepository) Update(ctx context.Context, tx *generated.Tx, order *model.OrderDTO, input *model.OrderItemUpsertDTO) (*model.OrderItemDTO, error) {
+	dto := &input.DTO
+	products := r.orderItemProductRepo.PrepareProducts(dto)
+	totalPriceProduct := r.orderItemProductRepo.CalculateTotalPrice(products)
+	consumableMaterials := r.orderItemMaterialRepo.PrepareConsumableMaterials(dto)
+	totalPriceConsumableMaterial := r.orderItemMaterialRepo.CalculateConsumableTotalPrice(consumableMaterials)
+	r.applyTotalPrice(dto, totalPriceProduct, totalPriceConsumableMaterial)
+
+	var primaryProductID int
+	if len(products) > 0 {
+		primaryProductID = products[0].ProductID
+	}
+
+	q := tx.OrderItem.UpdateOneID(dto.ID).
+		SetNillableCode(dto.Code).
+		SetNillableTotalPrice(dto.TotalPrice).
+		SetNillableDeliveryStatus(dto.DeliveryStatus).
+		SetIsCash(!dto.IsCredit).
+		SetIsCredit(dto.IsCredit)
+
+	if dto.DeliveryStatus != nil {
+		now := time.Now()
+
+		switch *dto.DeliveryStatus {
+		case "delivery_in_progress":
+			if _, exists := q.Mutation().DeliveryInProgressAt(); !exists {
+				q.SetDeliveryInProgressAt(now)
+			}
+
+		case "delivered":
+			if _, exists := q.Mutation().DeliveredAt(); !exists {
+				q.SetDeliveredAt(now)
+			}
+
+		case "returned":
+			if _, exists := q.Mutation().DeliveryReturnedAt(); !exists {
+				q.SetDeliveryReturnedAt(now)
+			}
+		}
+	}
+
+	if input.Collections != nil && len(*input.Collections) > 0 {
+		_, err := customfields.PrepareCustomFields(ctx,
+			r.cfMgr,
+			*input.Collections,
+			dto.CustomFields,
+			q,
+			false,
+		)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	entity, err := q.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := r.mapOrderItemEntityToDTO(entity)
+
+	// Products
+	createdProducts, err := r.orderItemProductRepo.Sync(ctx, tx, entity.OrderID, entity.ID, products)
+	if err != nil {
+		return nil, err
+	}
+	out.Products = createdProducts
+
+	// Consumable Materials
+	createdConsumableMaterials, err := r.orderItemMaterialRepo.SyncConsumable(ctx, tx, entity.OrderID, entity.ID, consumableMaterials)
+	if err != nil {
+		return nil, err
+	}
+	out.ConsumableMaterials = createdConsumableMaterials
+
+	// Loaner Materials
+	loanerMaterials := r.orderItemMaterialRepo.PrepareLoanerMaterials(dto)
+	// Loaner snapshot fields
+	now := time.Now()
+
+	for _, m := range loanerMaterials {
+		if m == nil {
+			continue
+		}
+
+		m.ClinicID = order.ClinicID
+		m.ClinicName = order.ClinicName
+		m.DentistID = order.DentistID
+		m.DentistName = order.DentistName
+		m.PatientID = order.PatientID
+		m.PatientName = order.PatientName
+
+		if m.Status != nil && *m.Status == "returned" && m.ReturnedAt == nil {
+			m.ReturnedAt = &now
+		}
+	}
+	createdLoanerMaterials, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
+	if err != nil {
+		return nil, err
+	}
+	out.LoanerMaterials = createdLoanerMaterials
+
+	// processes
+	if primaryProductID > 0 {
+		priority := utils.SafeGetString(entity.CustomFields, "priority")
+		oipOut, err := r.orderItemProcessRepo.UpdateManyWithProps(ctx, tx, entity.ID, func(prop *model.OrderItemProcessDTO) error {
+			cf := utils.CloneOrInit(prop.CustomFields)
+			if cf != nil {
+				if priority != "" {
+					cf["priority"] = priority
+				}
+				prop.CustomFields = cf
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+		out.OrderItemProcesses = oipOut
+	}
+
+	return out, nil
+}
+
+func (r *orderItemRepository) GetLatestOrderItemIDByOrderID(ctx context.Context, orderID int64) (int64, error) {
+	item, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(orderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		Select(orderitem.FieldID).
+		First(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return item.ID, nil
+}
+
+func (r *orderItemRepository) GetOrderIDAndOrderItemIDByCode(ctx context.Context, code string) (int64, int64, error) {
+	if code == "" {
+		return 0, 0, fmt.Errorf("code is required")
+	}
+
+	entity, err := r.db.OrderItem.
+		Query().
+		Where(
+			orderitem.CodeEQ(code),
+			orderitem.DeletedAtIsNil(),
+			orderitem.HasOrderWith(order.DeletedAtIsNil()),
+		).
+		Select(
+			orderitem.FieldID,
+			orderitem.FieldOrderID,
+		).
+		Only(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return entity.OrderID, entity.ID, nil
+}
+
+func (r *orderItemRepository) GetByID(ctx context.Context, id int64) (*model.OrderItemDTO, error) {
+	q := r.db.OrderItem.Query().
+		Where(
+			orderitem.ID(id),
+			orderitem.DeletedAtIsNil(),
+		)
+
+	entity, err := q.Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := r.mapOrderItemEntityToDTO(entity)
+
+	// Products
+	if err := r.orderItemProductRepo.Load(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	// Consumable Materials
+	if err := r.orderItemMaterialRepo.LoadConsumable(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	// Loaner Materials
+	if err := r.orderItemMaterialRepo.LoadLoaner(ctx, dto); err != nil {
+		return nil, err
+	}
+
+	return dto, nil
+}
+
+func (r *orderItemRepository) List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.OrderItemDTO], error) {
+	list, err := table.TableList(
+		ctx,
+		r.db.OrderItem.Query().
+			Where(orderitem.DeletedAtIsNil()),
+		query,
+		orderitem.Table,
+		orderitem.FieldID,
+		orderitem.FieldID,
+		func(src []*generated.OrderItem) []*model.OrderItemDTO {
+			return mapper.MapListAs[*generated.OrderItem, *model.OrderItemDTO](src)
+		},
+	)
+	if err != nil {
+		var zero table.TableListResult[model.OrderItemDTO]
+		return zero, err
+	}
+	if err := r.orderItemProductRepo.Load(ctx, list.Items...); err != nil {
+		return list, err
+	}
+	// Consumable Materials
+	if err := r.orderItemMaterialRepo.LoadConsumable(ctx, list.Items...); err != nil {
+		return list, err
+	}
+
+	// Loaner Materials
+	if err := r.orderItemMaterialRepo.LoadLoaner(ctx, list.Items...); err != nil {
+		return list, err
+	}
+	return list, nil
+}
+
+func (r *orderItemRepository) Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderItemDTO], error) {
+	res, err := dbutils.Search(
+		ctx,
+		r.db.OrderItem.Query().
+			Where(orderitem.DeletedAtIsNil()),
+		[]string{
+			dbutils.GetNormField(orderitem.FieldCode),
+		},
+		query,
+		orderitem.Table,
+		orderitem.FieldID,
+		orderitem.FieldID,
+		orderitem.Or,
+		func(src []*generated.OrderItem) []*model.OrderItemDTO {
+			return mapper.MapListAs[*generated.OrderItem, *model.OrderItemDTO](src)
+		},
+	)
+	if err != nil {
+		var zero dbutils.SearchResult[model.OrderItemDTO]
+		return zero, err
+	}
+	return res, nil
+}
+
+func (r *orderItemRepository) Delete(ctx context.Context, id int64) error {
+	tx, err := r.db.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	hasChildren, err := tx.OrderItem.
+		Query().
+		Where(
+			orderitem.ParentItemIDEQ(id),
+			orderitem.DeletedAtIsNil(),
+		).
+		Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if hasChildren {
+		return fmt.Errorf("cannot delete order item %d because it still has child order items", id)
+	}
+
+	item, err := tx.OrderItem.
+		Query().
+		Where(
+			orderitem.ID(id),
+			orderitem.DeletedAtIsNil(),
+		).
+		Select(orderitem.FieldOrderID).
+		Only(ctx)
+	if err != nil {
+		return err
+	}
+
+	remainCount, err := tx.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(item.OrderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Count(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err = tx.OrderItem.UpdateOneID(id).
+		SetDeletedAt(time.Now()).
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	if remainCount == 1 {
+		err = tx.Order.UpdateOneID(item.OrderID).
+			SetDeletedAt(time.Now()).
+			Exec(ctx)
+
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	latest, err := tx.OrderItem.
+		Query().
+		Where(
+			orderitem.OrderID(item.OrderID),
+			orderitem.DeletedAtIsNil(),
+		).
+		Order(generated.Desc(orderitem.FieldCreatedAt)).
+		Select(
+			orderitem.FieldCode,
+			orderitem.FieldCustomFields,
+			orderitem.FieldRemakeCount,
+		).
+		First(ctx)
+	if err != nil {
+		return err
+	}
+
+	rmkType := utils.SafeGetStringPtr(latest.CustomFields, "remake_type")
+	rmkCount := latest.RemakeCount
+
+	if err = tx.Order.UpdateOneID(item.OrderID).
+		SetNillableCodeLatest(latest.Code).
+		SetNillableRemakeType(rmkType).
+		SetNillableRemakeCount(&rmkCount).
+		Exec(ctx); err != nil {
+		return err
+	}
+	return nil
+}

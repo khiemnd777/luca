@@ -1,0 +1,28 @@
+server:
+  host: ${M_PERMISSION_HOST}
+  port: ${M_PERMISSION_PORT}
+  route: "/api/department"
+
+external: true
+
+delivery_qr:
+  session_ttl_minutes: 5
+  client_base_url: ${M_MAIN_CLIENT_BASE_URL}
+  proof_image_max_size_mb: 5
+
+storage:
+  photo_path: "./storage/photo"
+
+features:
+  enabled: []
+
+database:
+  provider: ${DB_PROVIDER}
+  automigrate: true
+  postgres:
+    host: ${PG_HOST}
+    port: ${PG_PORT}
+    user: ${PG_USER}
+    password: ${PG_PASSWORD}
+    name: ${PG_DBNAME}
+    sslmode: ${PG_SSL}

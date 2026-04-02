@@ -1,0 +1,23 @@
+package features
+
+import (
+	_ "github.com/khiemnd777/noah_api/modules/main/features/__relation"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/brand"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/category"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/clinic"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/customer"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/dashboard"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/dentist"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/material"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/order"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/patient"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/process"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/product"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/promotion"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/raw_material"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/restoration_type"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/section"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/staff"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/supplier"
+	_ "github.com/khiemnd777/noah_api/modules/main/features/technique"
+)

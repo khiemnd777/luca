@@ -1,0 +1,13 @@
+.DS_Store
+
+# Environment files
+.env
+.env.*
+!.env.sample
+!**/.env.sample
+
+# Local data and caches
+.data/
+**/.data/
+.gocache/
+**/.gocache/

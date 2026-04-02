@@ -1,0 +1,200 @@
+package service
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/khiemnd777/noah_api/modules/main/config"
+	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/modules/main/features/section/repository"
+	"github.com/khiemnd777/noah_api/shared/cache"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
+	"github.com/khiemnd777/noah_api/shared/module"
+	"github.com/khiemnd777/noah_api/shared/utils/table"
+)
+
+type SectionService interface {
+	Create(ctx context.Context, input model.SectionDTO) (*model.SectionDTO, error)
+	Update(ctx context.Context, input model.SectionDTO) (*model.SectionDTO, error)
+	GetByID(ctx context.Context, id int) (*model.SectionDTO, error)
+	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.SectionDTO], error)
+	ListByStaffID(ctx context.Context, staffID int, query table.TableQuery) (table.TableListResult[model.SectionDTO], error)
+	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.SectionDTO], error)
+	Delete(ctx context.Context, id int) error
+}
+
+type sectionService struct {
+	repo repository.SectionRepository
+	deps *module.ModuleDeps[config.ModuleConfig]
+}
+
+func NewSectionService(repo repository.SectionRepository, deps *module.ModuleDeps[config.ModuleConfig]) SectionService {
+	return &sectionService{repo: repo, deps: deps}
+}
+
+func kSectionByID(id int) string {
+	return fmt.Sprintf("section:id:%d", id)
+}
+
+func kSectionAll(deptID int) []string {
+	return []string{
+		kSectionListAll(deptID),
+		kSectionSearchAll(deptID),
+		"process:list:*",
+		"product_process:list:*",
+		"category_process:list:*",
+	}
+}
+
+func kSectionListAll(deptID int) string {
+	return fmt.Sprintf("section:list:dept:%d:*", deptID)
+}
+
+func kSectionSearchAll(deptID int) string {
+	return fmt.Sprintf("section:search:dept:%d:*", deptID)
+}
+
+func kSectionList(deptID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("section:list:dept:%d:l%d:p%d:o%s:d%s", deptID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kSectionStaffList(staffID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("section:staff:%d:list:l%d:p%d:o%s:d%s", staffID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kSectionSearch(deptID int, q dbutils.SearchQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("section:search:dept:%d:k%s:l%d:p%d:o%s:d%s", deptID, q.Keyword, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kProcessAll(deptID int) []string {
+	return []string{
+		kProcessListAll(deptID),
+		kProcessSearchAll(deptID),
+		kProcessSectionAll(deptID),
+		"product_process:list:*",
+		"category_process:list:*",
+	}
+}
+
+func kProcessListAll(deptID int) string {
+	return fmt.Sprintf("process:list:dpt%d:*", deptID)
+}
+
+func kProcessSearchAll(deptID int) string {
+	return fmt.Sprintf("process:search:dpt%d:*", deptID)
+}
+
+func kProcessSectionAll(deptID int) string {
+	return fmt.Sprintf("process:section:dpt%d:*", deptID)
+}
+
+func (s *sectionService) Create(ctx context.Context, input model.SectionDTO) (*model.SectionDTO, error) {
+	dto, err := s.repo.Create(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	cache.InvalidateKeys(kSectionAll(dto.DepartmentID)...)
+	if dto != nil && dto.ID > 0 {
+		cache.InvalidateKeys(kSectionByID(dto.ID), fmt.Sprintf("section:id:%d:*", dto.ID))
+	}
+	return dto, nil
+}
+
+func (s *sectionService) Update(ctx context.Context, input model.SectionDTO) (*model.SectionDTO, error) {
+	dto, err := s.repo.Update(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if dto != nil {
+		cache.InvalidateKeys(kSectionByID(dto.ID), fmt.Sprintf("section:id:%d:*", dto.ID))
+	}
+	cache.InvalidateKeys(kSectionAll(dto.DepartmentID)...)
+	return dto, nil
+}
+
+func (s *sectionService) GetByID(ctx context.Context, id int) (*model.SectionDTO, error) {
+	return cache.Get(kSectionByID(id), cache.TTLMedium, func() (*model.SectionDTO, error) {
+		return s.repo.GetByID(ctx, id)
+	})
+}
+
+func (s *sectionService) List(ctx context.Context, deptID int, q table.TableQuery) (table.TableListResult[model.SectionDTO], error) {
+	type boxed = table.TableListResult[model.SectionDTO]
+	key := kSectionList(deptID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.List(ctx, deptID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *sectionService) ListByStaffID(ctx context.Context, staffID int, q table.TableQuery) (table.TableListResult[model.SectionDTO], error) {
+	type boxed = table.TableListResult[model.SectionDTO]
+	key := kSectionStaffList(staffID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.ListByStaffID(ctx, staffID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *sectionService) Delete(ctx context.Context, id int) error {
+	st, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	if err = s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	cache.InvalidateKeys(kSectionAll(st.DepartmentID)...)
+	cache.InvalidateKeys(kSectionByID(id), fmt.Sprintf("section:id:%d:*", id))
+	return nil
+}
+
+func (s *sectionService) Search(ctx context.Context, deptID int, q dbutils.SearchQuery) (dbutils.SearchResult[model.SectionDTO], error) {
+	type boxed = dbutils.SearchResult[model.SectionDTO]
+	key := kSectionSearch(deptID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.Search(ctx, deptID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}

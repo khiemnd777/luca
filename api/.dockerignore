@@ -1,0 +1,12 @@
+.git
+.gitignore
+.DS_Store
+.gocache
+dist
+tmp
+vendor
+observability/grafana-data
+storage/photo/original
+storage/photo/medium
+docker-compose.observability.yml
+OBSERVABILITY_LOCAL.md

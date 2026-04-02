@@ -1,0 +1,68 @@
+name: ${APP_NAME}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${APP_NAME}_postgres
+    environment:
+      PG_HOST: ${PG_HOST:-localhost}
+      PG_PORT: 5432
+      POSTGRES_DB: ${PG_DBNAME}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d ${PG_DBNAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "${PG_PORT:-5431}:5432"
+    volumes:
+      - ${PGDATA_DIR}:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${APP_NAME}_redis
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    volumes:
+      - ${REDISDATA_DIR}:/data
+    ports:
+      - "${REDIS_PORT:-6378}:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${APP_NAME}_api
+    env_file:
+      - .env
+    environment:
+      APP_ENV: ${APP_ENV}
+      GOCACHE: ${GOCACHE}
+      OBSERVABLE: ${OBSERVABLE:-false}
+      OBSERVABILITY_STACK_MANAGED_EXTERNALLY: ${OBSERVABILITY_STACK_MANAGED_EXTERNALLY:-false}
+      PG_HOST: ${PG_HOST:-localhost}
+      PG_PORT: 5432
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: 6379
+      LOKI_BASE_URL: ${LOKI_BASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${PORT}:${PORT}"
+    volumes:
+      - .:/app
+      - api_gocache:${GOCACHE}
+    working_dir: /app
+    restart: unless-stopped
+
+volumes:
+  api_gocache:

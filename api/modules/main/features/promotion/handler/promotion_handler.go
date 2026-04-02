@@ -1,0 +1,210 @@
+package handler
+
+import (
+	"strings"
+
+	"github.com/gofiber/fiber/v2"
+
+	"github.com/khiemnd777/noah_api/modules/main/config"
+	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/modules/main/features/order/service"
+	"github.com/khiemnd777/noah_api/modules/main/features/promotion/engine"
+	promotionservice "github.com/khiemnd777/noah_api/modules/main/features/promotion/service"
+	"github.com/khiemnd777/noah_api/shared/app"
+	"github.com/khiemnd777/noah_api/shared/app/client_error"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
+	"github.com/khiemnd777/noah_api/shared/module"
+	"github.com/khiemnd777/noah_api/shared/utils"
+)
+
+type PromotionHandler struct {
+	svc      promotionservice.PromotionService
+	orderSvc service.OrderService
+	deps     *module.ModuleDeps[config.ModuleConfig]
+}
+
+func NewPromotionHandler(
+	svc promotionservice.PromotionService,
+	orderSvc service.OrderService,
+	deps *module.ModuleDeps[config.ModuleConfig],
+) *PromotionHandler {
+	return &PromotionHandler{svc: svc, orderSvc: orderSvc, deps: deps}
+}
+
+func (h *PromotionHandler) RegisterRoutes(router fiber.Router) {
+	app.RouterPost(router, "/:dept_id<int>/promotions/validate", h.Validate)
+	app.RouterPost(router, "/:dept_id<int>/promotions/calculate-total-price", h.CalculateTotalPrice)
+	app.RouterPost(router, "/:dept_id<int>/promotions/apply", h.Apply)
+	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/promotions", h.GetPromotionCodesInUsageByOrderID)
+}
+
+func (h *PromotionHandler) Validate(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "promotion.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	payload, err := app.ParseBody[struct {
+		PromoCode string          `json:"promo_code"`
+		Order     *model.OrderDTO `json:"order"`
+	}](c)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+	if payload.Order == nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order")
+	}
+
+	// userID, ok := utils.GetUserIDInt(c)
+	// if !ok {
+	// 	return client_error.ResponseError(c, fiber.StatusUnauthorized, nil, "unauthorized")
+	// }
+
+	result, err := h.svc.ApplyPromotion(c.UserContext(), nil, payload.Order, payload.PromoCode)
+	if err != nil {
+		if reason, ok := engine.IsPromotionApplyError(err); ok {
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"valid":  false,
+				"reason": reason,
+			})
+		}
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"valid":           true,
+		"discount_amount": result.DiscountAmount,
+		"final_price":     result.FinalPrice,
+	})
+}
+
+func (h *PromotionHandler) CalculateTotalPrice(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "promotion.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	payload, err := app.ParseBody[struct {
+		PromoCode string          `json:"promo_code"`
+		Order     *model.OrderDTO `json:"order"`
+	}](c)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+	if payload.Order == nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order")
+	}
+	if strings.TrimSpace(payload.PromoCode) == "" {
+		totalPrice := calculateOrderProductsTotalPrice(payload.Order)
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
+			"valid":           true,
+			"discount_amount": 0,
+			"final_price":     totalPrice,
+		})
+	}
+
+	// userID, ok := utils.GetUserIDInt(c)
+	// if !ok {
+	// 	return client_error.ResponseError(c, fiber.StatusUnauthorized, nil, "unauthorized")
+	// }
+
+	result, err := h.svc.ApplyPromotion(c.UserContext(), nil, payload.Order, payload.PromoCode)
+	if err != nil {
+		if reason, ok := engine.IsPromotionApplyError(err); ok {
+			totalPrice := calculateOrderProductsTotalPrice(payload.Order)
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"valid":           false,
+				"reason":          reason,
+				"discount_amount": 0,
+				"final_price":     totalPrice,
+			})
+		}
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"valid":           true,
+		"discount_amount": result.DiscountAmount,
+		"final_price":     result.FinalPrice,
+	})
+}
+
+func (h *PromotionHandler) Apply(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "promotion.update"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	payload, err := app.ParseBody[struct {
+		PromoCode string          `json:"promo_code"`
+		Order     *model.OrderDTO `json:"order"`
+	}](c)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+	if payload.Order == nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order")
+	}
+
+	// userID, ok := utils.GetUserIDInt(c)
+	// if !ok {
+	// 	return client_error.ResponseError(c, fiber.StatusUnauthorized, nil, "unauthorized")
+	// }
+
+	if payload.Order.ID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order id")
+	}
+
+	result, snapshot, err := h.svc.ApplyPromotionAndSnapshot(c.UserContext(), nil, payload.Order, payload.PromoCode)
+	if err != nil {
+		if reason, ok := engine.IsPromotionApplyError(err); ok {
+			return c.Status(fiber.StatusOK).JSON(fiber.Map{
+				"success": false,
+				"reason":  reason,
+			})
+		}
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"success":          true,
+		"applied_discount": result.DiscountAmount,
+		"promo_snapshot":   snapshot,
+	})
+}
+
+func (h *PromotionHandler) GetPromotionCodesInUsageByOrderID(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "promotion.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	orderID, _ := utils.GetParamAsInt(c, "order_id")
+	if orderID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order id")
+	}
+
+	items, err := h.svc.GetPromotionCodesInUsageByOrderID(c.UserContext(), int64(orderID))
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(items)
+}
+
+func calculateOrderProductsTotalPrice(order *model.OrderDTO) float64 {
+	if order == nil || order.LatestOrderItem == nil {
+		return 0
+	}
+
+	var total float64
+	for _, p := range order.LatestOrderItem.Products {
+		if p == nil || p.RetailPrice == nil {
+			continue
+		}
+		qty := p.Quantity
+		if qty <= 0 {
+			qty = 1
+		}
+		total += *p.RetailPrice * float64(qty)
+	}
+
+	return total
+}

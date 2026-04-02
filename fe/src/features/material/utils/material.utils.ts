@@ -1,0 +1,38 @@
+// types
+export const MATERIAL_TYPES = [
+  { label: "Tiêu hao", value: "consumable" },
+  { label: "Cho mượn", value: "loaner" },
+] as const;
+
+const MATERIAL_TYPE_MAP = MATERIAL_TYPES.reduce<Record<string, string>>(
+  (acc, cur) => {
+    acc[cur.value] = cur.label;
+    return acc;
+  },
+  {}
+);
+
+export function materialTypeLabel(value?: string | null): string {
+  if (!value) return "";
+  return MATERIAL_TYPE_MAP[value] ?? value;
+}
+
+// status
+export const MATERIAL_STATUSES = [
+  { label: "Đang cho mượn", value: "on_loan" },
+  { label: "Thu hồi 1 phần", value: "partial_returned" },
+  { label: "Đã thu hồi", value: "returned" },
+] as const;
+
+const MATERIAL_STATUS_MAP = MATERIAL_STATUSES.reduce<Record<string, string>>(
+  (acc, cur) => {
+    acc[cur.value] = cur.label;
+    return acc;
+  },
+  {}
+);
+
+export function materialStatusLabel(value?: string | null): string {
+  if (!value) return "";
+  return MATERIAL_STATUS_MAP[value] ?? value;
+}

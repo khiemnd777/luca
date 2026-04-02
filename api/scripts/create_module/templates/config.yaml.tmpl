@@ -1,0 +1,18 @@
+# Centralize concrete values in /api/.env. Generated module config only references env.
+server:
+  host: "${MODULE_HOST}"
+  port: ${MODULE_PORT}
+  route: "{{.ServerRoute}}"
+
+external: true
+
+database:
+  provider: "${DB_PROVIDER}"
+  automigrate: ${DB_AUTOMIGRATE}
+  postgres:
+    host: "${PG_HOST}"
+    port: ${PG_PORT}
+    user: "${PG_USER}"
+    password: "${PG_PASSWORD}"
+    name: "${PG_DBNAME}"
+    sslmode: "${PG_SSL}"

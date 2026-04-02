@@ -1,0 +1,107 @@
+package repository
+
+import (
+	"context"
+	"database/sql"
+
+	"github.com/khiemnd777/noah_api/modules/main/config"
+	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/module"
+)
+
+type DueTodayRepository interface {
+	DueToday(
+		ctx context.Context,
+		deptID int,
+	) ([]*model.DueTodayItem, error)
+}
+
+type dueTodayRepository struct {
+	db    *generated.Client
+	sqlDB *sql.DB
+	deps  *module.ModuleDeps[config.ModuleConfig]
+}
+
+func NewDueTodayRepository(
+	db *generated.Client,
+	sqlDB *sql.DB,
+	deps *module.ModuleDeps[config.ModuleConfig],
+) DueTodayRepository {
+	return &dueTodayRepository{
+		db:    db,
+		sqlDB: sqlDB,
+		deps:  deps,
+	}
+}
+
+func (r *dueTodayRepository) DueToday(
+	ctx context.Context,
+	deptID int,
+) ([]*model.DueTodayItem, error) {
+
+	const q = `
+SELECT
+	o.id,
+  oi.code,
+  o.dentist_name,
+  o.patient_name,
+  (oi.custom_fields->>'delivery_date')::timestamptz AS delivery_at,
+	(current_date - oi.created_at::date) 							AS age_days,
+	CASE
+	WHEN (oi.custom_fields->>'delivery_date')::timestamptz < date_trunc('day', now())
+	THEN 'overdue'
+	ELSE 'today'
+	END      											AS due_type,
+  oi.custom_fields->>'priority'	AS priority,
+	oi.custom_fields->>'status'		AS status,
+	oi.delivery_status
+FROM order_items oi
+JOIN orders o ON o.id = oi.order_id
+WHERE
+	o.department_id=$1::INT
+	AND o.deleted_at IS NULL AND oi.deleted_at IS NULL
+	AND (oi.custom_fields->>'delivery_date')::timestamptz <  date_trunc('day', now()) + interval '1 day'
+  AND oi.custom_fields->>'status' IN (
+    'received',
+    'in_progress',
+    'qc',
+    'issue',
+    'rework',
+		'completed'
+  )
+	AND oi.delivery_status != 'delivered'
+ORDER BY
+  delivery_at ASC
+LIMIT 5;
+`
+
+	rows, err := r.sqlDB.QueryContext(ctx, q, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*model.DueTodayItem
+
+	for rows.Next() {
+		var it model.DueTodayItem
+		if err := rows.Scan(
+			&it.ID,
+			&it.Code,
+			&it.Dentist,
+			&it.Patient,
+			&it.DeliveryAt,
+			&it.AgeDays,
+			&it.DueType,
+			&it.Priority,
+			&it.Status,
+			&it.DeliveryStatus,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, &it)
+	}
+
+	return result, rows.Err()
+}

@@ -1,0 +1,95 @@
+import { mapper } from "@core/mapper/auto-mapper";
+import type { FieldDef } from "@core/form/types";
+import type { FormSchema } from "@core/form/form.types";
+import { registerFormDialog } from "@core/form/form-dialog.registry";
+import { registerForm } from "@core/form/form-registry";
+import { reloadTable } from "@core/table/table-reload";
+import { create, id, update } from "@features/sample/api/sample.api";
+import type { SampleUpsertModel } from "@features/sample/model/sample.model";
+
+export function buildSampleSchema(): FormSchema {
+  const fields: FieldDef[] = [
+    {
+      name: "code",
+      label: "Mã {label}",
+      kind: "text",
+      rules: {
+        required: "Yêu cầu nhập mã {label}",
+        maxLength: 30,
+      },
+    },
+    {
+      name: "name",
+      label: "Tên {label}",
+      kind: "text",
+      rules: {
+        required: "Yêu cầu nhập tên {label}",
+        maxLength: 200,
+      },
+    },
+    {
+      name: "",
+      label: "",
+      kind: "metadata",
+      metadata: {
+        collection: "sample",
+        mode: "whole",
+      }
+    },
+  ];
+
+  return {
+    idField: "id",
+    fields,
+    submit: {
+      create: {
+        type: "fn",
+        run: async (dto, meta) => {
+          await create(dto as SampleUpsertModel);
+          return dto;
+        },
+      },
+      update: {
+        type: "fn",
+        run: async (dto, meta) => {
+          await update(dto as SampleUpsertModel);
+          return dto;
+        },
+      },
+    },
+
+    toasts: {
+      saved: ({ mode, values }) =>
+        mode === "create"
+          ? `Tạo {label} "${values?.name ?? ""}" thành công!`
+          : `Cập nhật {label} "${values?.name ?? ""}" thành công!`,
+      failed: ({ mode, values }) =>
+        mode === "create"
+          ? `Tạo {label} "${values?.name ?? ""}" thất bại, xin thử lại!`
+          : `Cập nhật {label} "${values?.name ?? ""}" thất bại, xin thử lại!`,
+    },
+
+    async initialResolver(data: any) {
+      if (data) {
+        return await id(data.id);
+      }
+      return {};
+    },
+
+    async afterSaved() {
+      reloadTable("samples");
+    },
+
+    hooks: {
+      mapToDto: (v) => mapper.map("Sample", v, "model_to_dto"),
+    },
+  };
+}
+
+registerForm("sample", buildSampleSchema);
+
+registerFormDialog("sample", buildSampleSchema, {
+  title: { create: "Thêm {label}", update: "Cập nhật {label}" },
+  confirmText: { create: "Thêm", update: "Lưu" },
+  cancelText: "Thoát",
+});

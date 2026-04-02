@@ -1,0 +1,559 @@
+package service
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/khiemnd777/noah_api/modules/main/config"
+	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/modules/main/features/order/repository"
+	"github.com/khiemnd777/noah_api/shared/cache"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
+	"github.com/khiemnd777/noah_api/shared/logger"
+	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
+	"github.com/khiemnd777/noah_api/shared/module"
+	auditlogmodel "github.com/khiemnd777/noah_api/shared/modules/auditlog/model"
+	"github.com/khiemnd777/noah_api/shared/modules/notification"
+	"github.com/khiemnd777/noah_api/shared/modules/realtime"
+	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
+	"github.com/khiemnd777/noah_api/shared/pubsub"
+	searchutils "github.com/khiemnd777/noah_api/shared/search"
+	"github.com/khiemnd777/noah_api/shared/utils"
+	"github.com/khiemnd777/noah_api/shared/utils/table"
+)
+
+type OrderService interface {
+	Create(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)
+	Update(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)
+	GenerateDeliveryNoteByOrderID(ctx context.Context, req DeliveryNotePrintRequest) ([]byte, string, error)
+	UpdateStatus(ctx context.Context, deptID, userID int, orderItemProcessID int64, status string) (*model.OrderItemDTO, error)
+	UpdateDeliveryStatus(ctx context.Context, deptID, userID int, orderID, orderItemID int64, status string) (*model.OrderItemDTO, error)
+	GetDeliveryStatus(ctx context.Context, deptID int, orderID, orderItemID int64) (*string, error)
+	GetByID(ctx context.Context, id int64) (*model.OrderDTO, error)
+	GetByOrderIDAndOrderItemID(ctx context.Context, orderID, orderItemID int64) (*model.OrderDTO, error)
+	PrepareForRemakeByOrderID(ctx context.Context, orderID int64) (*model.OrderDTO, error)
+	GetAllOrderProducts(ctx context.Context, orderID int64) ([]*model.OrderItemProductDTO, error)
+	GetAllOrderMaterials(ctx context.Context, orderID int64) ([]*model.OrderItemMaterialDTO, error)
+	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
+	ListByPromotionCodeID(ctx context.Context, deptID int, promotionCodeID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
+	GetOrdersBySectionID(ctx context.Context, sectionID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
+	InProgressList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.InProcessOrderDTO], error)
+	NewestList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.NewestOrderDTO], error)
+	CompletedList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error)
+	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error)
+	Delete(ctx context.Context, deptID int, id int64) error
+	SyncPrice(ctx context.Context, orderID int64) (float64, error)
+}
+
+type orderService struct {
+	repo  repository.OrderRepository
+	deps  *module.ModuleDeps[config.ModuleConfig]
+	cfMgr *customfields.Manager
+}
+
+func NewOrderService(repo repository.OrderRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) OrderService {
+	return &orderService{repo: repo, deps: deps, cfMgr: cfMgr}
+}
+
+// ----------------------------------------------------------------------------
+// Cache Keys
+// ----------------------------------------------------------------------------
+
+func kOrderByID(id int64) string {
+	return fmt.Sprintf("order:id:%d", id)
+}
+
+func kOrderByIDAll(id int64) string {
+	return fmt.Sprintf("order:id:%d:*", id)
+}
+
+func kOrderAll(deptID int) []string {
+	return []string{
+		kOrderListAll(deptID),
+		kOrderSearchAll(deptID),
+		kOrderSectionAll(),
+		kOrderPromotionAll(),
+		fmt.Sprintf("order:assigned:dpt%d:*", deptID),
+		"order:item:material:loaner:*",
+		fmt.Sprintf("order:list:inprogress:dpt%d:*", deptID),
+		fmt.Sprintf("order:list:newest:dpt%d:*", deptID),
+		fmt.Sprintf("order:list:completed:dpt%d:*", deptID),
+	}
+}
+
+func kOrderListAll(deptID int) string {
+	return fmt.Sprintf("order:list:dpt%d:*", deptID)
+}
+
+func kOrderSectionAll() string {
+	return "order:section:*"
+}
+
+func kOrderPromotionAll() string {
+	return "order:promotion:*"
+}
+
+func kOrderSearchAll(deptID int) string {
+	return fmt.Sprintf("order:search:dpt%d:*", deptID)
+}
+
+func kOrderList(deptID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("order:list:dpt%d:l%d:p%d:o%s:d%s", deptID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kOrderSectionList(sectionID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("order:section:%d:list:l%d:p%d:o%s:d%s", sectionID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kOrderPromotionList(deptID int, promotionCodeID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("order:promotion:dpt%d:%d:list:l%d:p%d:o%s:d%s", deptID, promotionCodeID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kOrderInProgressList(deptID int, q table.TableQuery) string {
+	return fmt.Sprintf("order:list:inprogress:dpt%d:l%d:p%d", deptID, q.Limit, q.Page)
+}
+
+func kOrderNewestList(deptID int, q table.TableQuery) string {
+	return fmt.Sprintf("order:list:newest:dpt%d:l%d:p%d", deptID, q.Limit, q.Page)
+}
+
+func kOrderCompletedList(deptID int, q table.TableQuery) string {
+	return fmt.Sprintf("order:list:completed:dpt%d:l%d:p%d", deptID, q.Limit, q.Page)
+}
+
+func kOrderSearch(deptID int, q dbutils.SearchQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("order:search:dpt%d:k%s:l%d:p%d:o%s:d%s", deptID, q.Keyword, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func (s *orderService) Create(ctx context.Context, deptID int, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
+	dto, err := s.repo.Create(ctx, deptID, userID, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if dto != nil && dto.ID > 0 {
+		cache.InvalidateKeys(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
+	}
+	cache.InvalidateKeys(kOrderAll(deptID)...)
+
+	s.upsertSearch(ctx, deptID, dto)
+
+	if dto.LeaderIDLatest != nil {
+		notification.Notify(*dto.LeaderIDLatest, userID, "order:checkin", map[string]any{
+			"leader_id":       dto.LeaderIDLatest,
+			"leader_name":     dto.LeaderNameLatest,
+			"order_item_id":   dto.LatestOrderItem.ID,
+			"order_item_code": dto.LatestOrderItem.Code,
+			"section_name":    dto.SectionNameLatest,
+			"process_name":    dto.ProcessNameLatest,
+		})
+	}
+	realtime.BroadcastAll("order:newest", nil)
+
+	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	pubsub.PublishAsync("dashboard:daily:sales", &model.SalesDailyUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:sales_summary", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:sales_daily", nil)
+
+	logger.Debug("[order_created]", "order_id", dto.ID, "created_by", userID)
+
+	// Audit log
+	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+		UserID:   userID,
+		Module:   "order",
+		Action:   "created",
+		TargetID: dto.ID,
+		Data: map[string]any{
+			"order_id":        dto.ID,
+			"order_item_id":   dto.LatestOrderItem.ID,
+			"user_id":         userID,
+			"order_code":      dto.Code,
+			"order_item_code": dto.CodeLatest,
+		},
+	})
+
+	return dto, nil
+}
+
+func (s *orderService) Update(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
+	dto, err := s.repo.Update(ctx, deptID, userID, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if dto != nil {
+		cache.InvalidateKeys(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
+	}
+	cache.InvalidateKeys(kOrderAll(deptID)...)
+
+	s.upsertSearch(ctx, deptID, dto)
+
+	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+
+	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+		UserID:   userID,
+		Module:   "order",
+		Action:   "updated",
+		TargetID: dto.ID,
+		Data: map[string]any{
+			"order_id":        dto.ID,
+			"order_item_id":   dto.LatestOrderItem.ID,
+			"user_id":         userID,
+			"order_code":      dto.Code,
+			"order_item_code": dto.CodeLatest,
+		},
+	})
+	return dto, nil
+}
+
+func (s *orderService) UpdateStatus(ctx context.Context, deptID, userID int, orderItemProcessID int64, status string) (*model.OrderItemDTO, error) {
+	out, err := s.repo.UpdateStatus(ctx, orderItemProcessID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	if out != nil {
+		cache.InvalidateKeys(
+			kOrderByID(out.OrderID),
+			kOrderByIDAll(out.OrderID),
+		)
+	}
+	cache.InvalidateKeys(kOrderAll(deptID)...)
+
+	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+
+	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+		UserID:   userID,
+		Module:   "order",
+		Action:   "updated:status:change",
+		TargetID: out.ID,
+		Data: map[string]any{
+			"order_id":        out.OrderID,
+			"order_item_id":   out.ID,
+			"user_id":         userID,
+			"order_code":      out.CodeOriginal,
+			"order_item_code": out.Code,
+			"status":          out.Status,
+		},
+	})
+
+	return out, nil
+}
+
+func (s *orderService) UpdateDeliveryStatus(ctx context.Context, deptID, userID int, orderID, orderItemID int64, status string) (*model.OrderItemDTO, error) {
+	out, err := s.repo.UpdateDeliveryStatus(ctx, orderID, orderItemID, status)
+	if err != nil {
+		return nil, err
+	}
+
+	if out != nil {
+		cache.InvalidateKeys(
+			kOrderByID(out.OrderID),
+			kOrderByIDAll(out.OrderID),
+		)
+	}
+	cache.InvalidateKeys(kOrderAll(deptID)...)
+
+	// Later: broadcast to delivery dashboard only
+	// realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+
+	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+		UserID:   userID,
+		Module:   "order",
+		Action:   "updated:delivery-status:change",
+		TargetID: out.ID,
+		Data: map[string]any{
+			"order_id":        out.OrderID,
+			"order_item_id":   out.ID,
+			"user_id":         userID,
+			"order_code":      out.CodeOriginal,
+			"order_item_code": out.Code,
+			"delivery_status": out.Status,
+		},
+	})
+
+	return out, nil
+}
+
+func (s *orderService) GetDeliveryStatus(ctx context.Context, deptID int, orderID, orderItemID int64) (*string, error) {
+	return s.repo.GetDeliveryStatus(ctx, orderID, orderItemID)
+}
+
+func (s *orderService) upsertSearch(ctx context.Context, deptID int, dto *model.OrderDTO) {
+	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "order", []any{dto.Code}, dto.CustomFields)
+
+	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
+		EntityType: "order",
+		EntityID:   int64(dto.ID),
+		Title:      *dto.Code,
+		Subtitle:   nil,
+		Keywords:   &kwPtr,
+		Content:    nil,
+		Attributes: map[string]any{},
+		OrgID:      utils.Ptr(int64(deptID)),
+		OwnerID:    nil,
+	})
+}
+
+func (s *orderService) unlinkSearch(id int64) {
+	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
+		EntityType: "order",
+		EntityID:   id,
+	})
+}
+
+func (s *orderService) GetByID(ctx context.Context, id int64) (*model.OrderDTO, error) {
+	return s.repo.GetByID(ctx, id)
+	// return cache.Get(kOrderByID(id), cache.TTLMedium, func() (*model.OrderDTO, error) {
+	// 	return s.repo.GetByID(ctx, id)
+	// })
+}
+
+func (s *orderService) GetByOrderIDAndOrderItemID(ctx context.Context, orderID, orderItemID int64) (*model.OrderDTO, error) {
+	return s.repo.GetByOrderIDAndOrderItemID(ctx, orderID, orderItemID)
+	// return cache.Get(kOrderByOrderIDAndOrderItemID(orderID, orderItemID), cache.TTLMedium, func() (*model.OrderDTO, error) {
+	// 	return s.repo.GetByOrderIDAndOrderItemID(ctx, orderID, orderItemID)
+	// })
+}
+
+func (s *orderService) PrepareForRemakeByOrderID(ctx context.Context, orderID int64) (*model.OrderDTO, error) {
+	return s.repo.PrepareForRemakeByOrderID(ctx, orderID)
+}
+
+func (s *orderService) GetAllOrderProducts(ctx context.Context, orderID int64) ([]*model.OrderItemProductDTO, error) {
+	return s.repo.GetAllOrderProducts(ctx, orderID)
+}
+
+func (s *orderService) GetAllOrderMaterials(ctx context.Context, orderID int64) ([]*model.OrderItemMaterialDTO, error) {
+	return s.repo.GetAllOrderMaterials(ctx, orderID)
+}
+
+func (s *orderService) SyncPrice(ctx context.Context, orderID int64) (float64, error) {
+	return s.repo.SyncPrice(ctx, orderID)
+}
+
+func (s *orderService) NewestList(ctx context.Context, deptID int, q table.TableQuery) (table.TableListResult[model.NewestOrderDTO], error) {
+	type boxed = table.TableListResult[model.NewestOrderDTO]
+
+	query := q
+	query.OrderBy = utils.Ptr("created_at")
+	query.Direction = "desc"
+	key := kOrderNewestList(deptID, query)
+
+	ptr, err := cache.Get(key, cache.TTLLong, func() (*boxed, error) {
+		list, err := s.repo.NewestList(ctx, deptID, query)
+		if err != nil {
+			return nil, err
+		}
+		return &list, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *orderService) CompletedList(ctx context.Context, deptID int, q table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error) {
+	type boxed = table.TableListResult[model.CompletedOrderDTO]
+
+	query := q
+	query.OrderBy = utils.Ptr("updated_at")
+	query.Direction = "desc"
+	key := kOrderCompletedList(deptID, query)
+
+	ptr, err := cache.Get(key, cache.TTLLong, func() (*boxed, error) {
+		list, err := s.repo.CompletedList(ctx, deptID, query)
+		if err != nil {
+			return nil, err
+		}
+		return &list, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *orderService) InProgressList(ctx context.Context, deptID int, q table.TableQuery) (table.TableListResult[model.InProcessOrderDTO], error) {
+	type boxed = table.TableListResult[model.InProcessOrderDTO]
+
+	query := q
+	query.OrderBy = utils.Ptr("delivery_date")
+	query.Direction = "desc"
+	key := kOrderInProgressList(deptID, query)
+
+	ptr, err := cache.Get(key, cache.TTLLong, func() (*boxed, error) {
+		list, err := s.repo.InProgressList(ctx, deptID, query)
+		if err != nil {
+			return nil, err
+		}
+		return &list, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	now := time.Now()
+	items := make([]*model.InProcessOrderDTO, 0, len(ptr.Items))
+	for _, item := range ptr.Items {
+		if item == nil {
+			items = append(items, nil)
+			continue
+		}
+		itemCopy := *item
+		itemCopy.Now = &now
+		items = append(items, &itemCopy)
+	}
+	res := *ptr
+	res.Items = items
+	return res, nil
+}
+
+func (s *orderService) List(ctx context.Context, deptID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kOrderList(deptID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.List(ctx, deptID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *orderService) ListByPromotionCodeID(ctx context.Context, deptID int, promotionCodeID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kOrderPromotionList(deptID, promotionCodeID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.ListByPromotionCodeID(ctx, deptID, promotionCodeID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *orderService) GetOrdersBySectionID(ctx context.Context, sectionID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kOrderSectionList(sectionID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.GetOrdersBySectionID(ctx, sectionID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *orderService) Delete(ctx context.Context, deptID int, id int64) error {
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return err
+	}
+	cache.InvalidateKeys(kOrderAll(deptID)...)
+	cache.InvalidateKeys(kOrderByID(id))
+
+	realtime.BroadcastAll("order:newest", nil)
+
+	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	pubsub.PublishAsync("dashboard:daily:sales", &model.SalesDailyUpsert{
+		DepartmentID: deptID,
+		StatAt:       time.Now(),
+	})
+
+	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:sales_summary", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:sales_daily", nil)
+
+	s.unlinkSearch(id)
+	return nil
+}
+
+func (s *orderService) Search(ctx context.Context, deptID int, q dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error) {
+	type boxed = dbutils.SearchResult[model.OrderDTO]
+	key := kOrderSearch(deptID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.Search(ctx, deptID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}

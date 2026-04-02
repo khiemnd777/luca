@@ -1,0 +1,22 @@
+import type { ModuleDescriptor } from "@core/module/types";
+import { registerModule } from "@core/module/registry";
+import EmergencyIcon from '@mui/icons-material/Emergency';
+import OneColumnPage from "@root/core/pages/one-column-page";
+
+const mod: ModuleDescriptor = {
+  id: "sample",
+  routes: [
+    {
+      key: "sample",
+      permissions: ["sample.view"],
+      element: <OneColumnPage />,
+      label: "Label",
+      title: "Label",
+      path: "/sample",
+      icon: <EmergencyIcon />,
+      priority: 94,
+    },
+  ],
+};
+
+registerModule(mod);

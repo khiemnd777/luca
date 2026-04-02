@@ -1,0 +1,167 @@
+package schema
+
+import (
+	"time"
+
+	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
+	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
+)
+
+type Order struct {
+	ent.Schema
+}
+
+func (Order) Fields() []ent.Field {
+	return []ent.Field{
+		field.Int64("id").
+			Immutable().
+			Unique().
+			SchemaType(map[string]string{
+				"postgres": "bigserial",
+			}),
+
+		field.Int("department_id").
+			Optional().
+			Nillable(),
+
+		field.String("code").
+			Optional().
+			Nillable(),
+
+		field.JSON("custom_fields", map[string]any{}).
+			Optional().
+			Default(map[string]any{}),
+
+		// deprecated
+		field.Int64("customer_id").
+			Nillable().
+			Optional(),
+		field.String("customer_name").
+			Nillable().
+			Optional(),
+
+		field.Int("clinic_id").
+			Nillable().
+			Optional(),
+		field.String("clinic_name").
+			Nillable().
+			Optional(),
+
+		field.Int("promotion_code_id").
+			Nillable().
+			Optional(),
+		field.String("promotion_code").
+			Nillable().
+			Optional(),
+
+		field.Int("dentist_id").
+			Optional().
+			Nillable(),
+		field.String("dentist_name").
+			Nillable().
+			Optional(),
+
+		field.Int("patient_id").
+			Optional().
+			Nillable(),
+		field.String("patient_name").
+			Nillable().
+			Optional(),
+
+		// Nhân viên giới thiệu
+		field.Int("ref_user_id").
+			Optional().
+			Nillable(),
+		field.String("ref_user_name").
+			Nillable().
+			Optional(),
+
+		// Cache & Table
+		field.String("code_latest").
+			Optional().
+			Nillable(),
+
+		field.String("status_latest").
+			Optional().
+			Nillable(),
+
+		field.String("delivery_status_latest").
+			Optional().
+			Nillable(),
+
+		field.Int("process_id_latest").
+			Optional().
+			Nillable(),
+
+		field.String("process_name_latest").
+			Optional().
+			Nillable(),
+
+		field.String("priority_latest").
+			Optional().
+			Nillable(),
+
+		// deprecated
+		field.Int("product_id").Optional(),
+		field.String("product_name").
+			Nillable().
+			Optional(),
+
+		field.Int("quantity").
+			Nillable().
+			Optional(),
+
+		field.Float("total_price").
+			Nillable().
+			Optional(),
+
+		field.Time("delivery_date").
+			Nillable().
+			Optional(),
+
+		field.String("remake_type").
+			Nillable().
+			Optional(),
+
+		field.Int("remake_count").
+			Nillable().
+			Optional(),
+
+		field.Bool("is_cash").
+			Default(true),
+
+		field.Bool("is_credit").
+			Default(false),
+
+		// times
+		field.Time("created_at").
+			Default(time.Now),
+		field.Time("updated_at").
+			Default(time.Now).
+			UpdateDefault(time.Now),
+
+		field.Time("deleted_at").
+			Optional().
+			Nillable(),
+	}
+}
+
+func (Order) Edges() []ent.Edge {
+	return []ent.Edge{
+		edge.To("items", OrderItem.Type),
+		edge.To("delivery_qr_tokens", OrderDeliveryQRToken.Type),
+		edge.To("delivery_audit_logs", OrderDeliveryAuditLog.Type),
+		edge.To("delivery_proofs", OrderDeliveryProof.Type),
+	}
+}
+
+func (Order) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("id", "deleted_at"),
+		index.Fields("code"),
+		index.Fields("code", "deleted_at").Unique(),
+		index.Fields("deleted_at"),
+	}
+}

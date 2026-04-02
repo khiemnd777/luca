@@ -1,0 +1,17 @@
+package model
+
+import "time"
+
+type MaterialDTO struct {
+	ID            int            `json:"id,omitempty"`
+	DepartmentID  *int           `json:"department_id,omitempty"`
+	Code          *string        `json:"code,omitempty"`
+	Name          *string        `json:"name,omitempty"`
+	Type          *string        `json:"type,omitempty"`
+	IsImplant     bool           `json:"is_implant,omitempty"`
+	SupplierIDs   []int          `json:"supplier_ids,omitempty"`
+	SupplierNames *string        `json:"supplier_names,omitempty"`
+	CustomFields  map[string]any `json:"custom_fields,omitempty"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+}

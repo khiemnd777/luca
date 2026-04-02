@@ -1,0 +1,44 @@
+import type { FetchTableOpts } from "@core/table/table.types";
+import type { ListResult } from "@core/types/list-result";
+import type { SampleModel, SampleUpsertModel } from "@features/sample/model/sample.model";
+import { apiClient } from "@core/network/api-client";
+import { useAuthStore } from "@store/auth-store";
+import { mapper } from "@core/mapper/auto-mapper";
+import type { SearchOpts, SearchResult } from "@core/types/search.types";
+
+export async function table(tableOpts: FetchTableOpts): Promise<ListResult<SampleModel>> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/sample/list`, tableOpts);
+  const result = mapper.map<any[], ListResult<SampleModel>>("Sample", data, "dto_to_model");
+  return result;
+}
+
+export async function search(opts: SearchOpts): Promise<SearchResult<SampleModel>> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.search<any[]>(`${departmentApiPath()}/sample/search`, opts);
+  const result = mapper.map<any[], SearchResult<SampleModel>>("Sample", data, "dto_to_model");
+  return result;
+}
+
+export async function id(id: number): Promise<SampleModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  id = id === undefined ? -1 : id;
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/sample/${id}`);
+  const result = mapper.map<any, SampleModel>("Sample", data, "dto_to_model");
+  return result;
+}
+
+export async function create(model: SampleUpsertModel): Promise<void> {
+  const { departmentApiPath } = useAuthStore.getState();
+  await apiClient.post<any>(`${departmentApiPath()}/sample`, model);
+}
+
+export async function update(model: SampleUpsertModel): Promise<void> {
+  const { departmentApiPath } = useAuthStore.getState();
+  await apiClient.put<any>(`${departmentApiPath()}/sample/${model.dto.id}`, model);
+}
+
+export async function unlink(id: number): Promise<void> {
+  const { departmentApiPath } = useAuthStore.getState();
+  await apiClient.delete<any>(`${departmentApiPath()}/sample/${id}`);
+}
