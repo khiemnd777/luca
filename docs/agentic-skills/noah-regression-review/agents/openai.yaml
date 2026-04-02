@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah Regression Review"
+  short_description: "Review Noah changes for regressions and missing checks"
+  default_prompt: "Use $noah-regression-review to review this Noah change for architectural regressions, contract drift, permission issues, stale side effects, and verification gaps."
+
+policy:
+  allow_implicit_invocation: true
