@@ -474,3 +474,13 @@ Ignore `AGENTS.md` files inside third-party dependency trees such as:
 - `node_modules/**`
 
 Only follow dependency-local `AGENTS.md` when the task explicitly requires modifying that dependency subtree itself.
+
+## Orchestration Policy
+
+- Every task must start with `noah-repo-architect`.
+- Use `noah-api-feature-workflow` whenever backend work is involved.
+- Use `noah-fe-module-workflow` whenever frontend work is involved.
+- Before completion, always run `noah-contract-sync`, `noah-auth-rbac-guard`, and `noah-regression-review`.
+- Execute end-to-end in one pass: analysis -> execution -> validation -> review -> report.
+- Do not require extra prompting from the user beyond a single-line task request.
+- Do not complete work until validation has covered FE/API contract consistency, permission safety, cache effects, and routing implications.
