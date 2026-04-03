@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah API Feature Workflow"
+  short_description: "Implement Noah backend work through feature registries"
+  default_prompt: "Use $noah-api-feature-workflow to implement this Noah backend change through the existing registry, handler, service, repository, and runtime composition patterns."
+
+policy:
+  allow_implicit_invocation: true

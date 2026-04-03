@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah Repo Architect"
+  short_description: "Classify Noah tasks and inspect the right boundaries first"
+  default_prompt: "Use $noah-repo-architect to classify this Noah task, identify the owning FE/API boundaries, and list the minimum files that must be inspected before changes."
+
+policy:
+  allow_implicit_invocation: true

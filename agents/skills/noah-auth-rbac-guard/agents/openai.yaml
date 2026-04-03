@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah Auth RBAC Guard"
+  short_description: "Preserve Noah auth and permission semantics end to end"
+  default_prompt: "Use $noah-auth-rbac-guard to verify this Noah change preserves protected routes, RBAC, hidden-route behavior, and backend authorization semantics."
+
+policy:
+  allow_implicit_invocation: true

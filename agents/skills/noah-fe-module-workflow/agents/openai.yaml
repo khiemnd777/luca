@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah FE Module Workflow"
+  short_description: "Implement Noah frontend work through the module system"
+  default_prompt: "Use $noah-fe-module-workflow to implement this Noah frontend change using the existing feature registration, route metadata, mapper, schema, table, and widget patterns."
+
+policy:
+  allow_implicit_invocation: true

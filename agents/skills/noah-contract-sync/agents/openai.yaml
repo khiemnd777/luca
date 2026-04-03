@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah Contract Sync"
+  short_description: "Keep Noah FE and API contracts updated together"
+  default_prompt: "Use $noah-contract-sync to update this Noah FE/API contract coherently across handlers, API wrappers, models, mappers, permissions, and invalidation behavior."
+
+policy:
+  allow_implicit_invocation: true
