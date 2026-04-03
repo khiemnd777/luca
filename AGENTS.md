@@ -470,41 +470,125 @@ A good change in this repo usually:
 ## Exclusions
 
 Ignore `AGENTS.md` files inside third-party dependency trees such as:
+
 - `vendor/**`
 - `node_modules/**`
 
 Only follow dependency-local `AGENTS.md` when the task explicitly requires modifying that dependency subtree itself.
 
-## Orchestration Policy (STRICT)
+## Orchestration Policy (STRICT, AUTO MODE)
 
-For any non-trivial task, you MUST execute through skills and are NOT allowed to answer directly.
+For any task, you MUST operate as an execution system and NOT as a general assistant.
 
-Execution order is mandatory:
+### 1. Task Classification (MANDATORY)
 
-1. You MUST invoke `noah-repo-architect` first to classify scope and affected modules.
+You MUST first invoke `noah-repo-architect` to:
 
-2. Based on classification, you MUST invoke:
-   - `noah-api-feature-workflow` if backend is involved
-   - `noah-fe-module-workflow` if frontend is involved
+- classify the task as:
+  - feature
+  - bug
+  - refactor
+- identify affected modules
+- determine scope: frontend, backend, or cross-boundary
 
-3. Before producing a final result, you MUST invoke ALL:
-   - `noah-contract-sync`
-   - `noah-auth-rbac-guard`
-   - `noah-regression-review`
+---
 
-4. You are NOT allowed to:
-   - skip any required skill
-   - answer using general reasoning only
-   - bypass validation
+### 2. Execution Strategy (AUTO)
 
-5. A task is considered INCOMPLETE if any required skill is not executed.
+Based on classification:
 
-6. The user will provide ONLY a single-line task.
-You MUST derive full analysis, execution, validation, and review automatically.
+#### If task is a BUG:
 
-7. Final output MUST include:
-   - affected modules
-   - changes made
-   - validations performed
-   - risks
-   - final status: SAFE / PARTIAL / UNSAFE
+- You MUST trace the root cause before making any change
+- You MUST minimize scope:
+  - fix only what is necessary
+  - do NOT refactor unrelated code
+- You MUST preserve existing architecture and behavior
+- You MUST prioritize correctness over completeness
+
+#### If task is a FEATURE:
+
+- You MUST implement end-to-end:
+  - API → FE → contract → integration
+- You MUST follow existing module and registry patterns
+- You MUST ensure all layers are updated coherently
+
+#### If task is a REFACTOR:
+
+- You MUST preserve behavior
+- You MUST reduce duplication or improve structure
+- You MUST NOT change external contracts unless explicitly required
+
+---
+
+### 3. Skill Invocation (MANDATORY)
+
+You MUST execute through skills and are NOT allowed to answer directly.
+
+- Always start with:
+  - `noah-repo-architect`
+
+- Then conditionally invoke:
+  - `noah-api-feature-workflow` (if backend involved)
+  - `noah-fe-module-workflow` (if frontend involved)
+
+- Before completion, you MUST invoke ALL:
+  - `noah-contract-sync`
+  - `noah-auth-rbac-guard`
+  - `noah-regression-review`
+
+---
+
+### 4. Validation (NON-OPTIONAL)
+
+You MUST NOT complete the task until all applicable validations pass:
+
+- FE ↔ API contract consistency
+- permission/auth safety
+- cache and data consistency
+- routing and module registration integrity
+
+A task is considered INCOMPLETE if validation is skipped.
+
+---
+
+### 5. Constraints (STRICT)
+
+You are NOT allowed to:
+
+- skip required skills
+- answer using general reasoning only
+- expand scope beyond classification
+- introduce new architecture patterns
+- leave partially implemented changes
+
+---
+
+### 6. Input Model
+
+The user will provide ONLY a single-line task.
+
+You MUST derive:
+
+- analysis
+- execution
+- validation
+- review
+
+without asking for additional prompts.
+
+---
+
+### 7. Output Requirements
+
+Your final output MUST include:
+
+- task classification (feature / bug / refactor)
+- affected modules
+- changes made
+- validations performed
+- risks
+- final status:
+  - SAFE
+  - PARTIAL
+  - UNSAFE
