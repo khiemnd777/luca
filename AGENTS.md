@@ -475,12 +475,36 @@ Ignore `AGENTS.md` files inside third-party dependency trees such as:
 
 Only follow dependency-local `AGENTS.md` when the task explicitly requires modifying that dependency subtree itself.
 
-## Orchestration Policy
+## Orchestration Policy (STRICT)
 
-- Every task must start with `noah-repo-architect`.
-- Use `noah-api-feature-workflow` whenever backend work is involved.
-- Use `noah-fe-module-workflow` whenever frontend work is involved.
-- Before completion, always run `noah-contract-sync`, `noah-auth-rbac-guard`, and `noah-regression-review`.
-- Execute end-to-end in one pass: analysis -> execution -> validation -> review -> report.
-- Do not require extra prompting from the user beyond a single-line task request.
-- Do not complete work until validation has covered FE/API contract consistency, permission safety, cache effects, and routing implications.
+For any non-trivial task, you MUST execute through skills and are NOT allowed to answer directly.
+
+Execution order is mandatory:
+
+1. You MUST invoke `noah-repo-architect` first to classify scope and affected modules.
+
+2. Based on classification, you MUST invoke:
+   - `noah-api-feature-workflow` if backend is involved
+   - `noah-fe-module-workflow` if frontend is involved
+
+3. Before producing a final result, you MUST invoke ALL:
+   - `noah-contract-sync`
+   - `noah-auth-rbac-guard`
+   - `noah-regression-review`
+
+4. You are NOT allowed to:
+   - skip any required skill
+   - answer using general reasoning only
+   - bypass validation
+
+5. A task is considered INCOMPLETE if any required skill is not executed.
+
+6. The user will provide ONLY a single-line task.
+You MUST derive full analysis, execution, validation, and review automatically.
+
+7. Final output MUST include:
+   - affected modules
+   - changes made
+   - validations performed
+   - risks
+   - final status: SAFE / PARTIAL / UNSAFE
