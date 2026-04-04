@@ -165,6 +165,8 @@ export function OrderProductItemList({
             isEditable={true}
             allowEditToggle={!!item.isCloneable}
             isRemovable={!item.isCloneable}
+            showItemLabel={false}
+            actionsPlacement="aside"
             onChange={onChange}
             onRemove={onRemove}
             formName="order-product-item"

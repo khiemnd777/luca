@@ -93,7 +93,7 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
       kind: "number",
       size: "small",
       defaultValue: 1,
-      group: "line2",
+      group: "line1",
       rules: {
         required: "Vui lòng nhập số lượng",
         min: 1,
@@ -121,11 +121,7 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
     groups: [
       {
         name: "line1",
-        col: 1,
-      },
-      {
-        name: "line2",
-        col: 1,
+        col: 2,
       },
       {
         name: "line3",

@@ -98,7 +98,7 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
       label: "Số lượng",
       kind: "number",
       size: "small",
-      group: "line2",
+      group: "line1",
       defaultValue: 1,
       rules: {
         required: "Vui lòng nhập số lượng",
@@ -110,7 +110,7 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
       label: "Giá bán lẻ",
       kind: "currency",
       size: "small",
-      group: "line2",
+      group: "line1",
       rules: {
         min: 0,
       },
@@ -137,11 +137,7 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
     groups: [
       {
         name: "line1",
-        col: 1,
-      },
-      {
-        name: "line2",
-        col: 2,
+        col: 3,
       },
       {
         name: "line3",

@@ -105,7 +105,7 @@ export function buildOrderProductItemSchema(): FormSchema {
       kind: "number",
       size: "small",
       defaultValue: 1,
-      group: "line2",
+      group: "line1",
       rules: {
         required: "Vui lòng nhập số lượng",
         min: 1,
@@ -116,7 +116,7 @@ export function buildOrderProductItemSchema(): FormSchema {
       label: "Giá bán lẻ",
       kind: "currency",
       size: "small",
-      group: "line2",
+      group: "line1",
       rules: {
         min: 0,
       },
@@ -186,11 +186,7 @@ export function buildOrderProductItemSchema(): FormSchema {
     groups: [
       {
         name: "line1",
-        col: 1,
-      },
-      {
-        name: "line2",
-        col: 2,
+        col: 3,
       },
       {
         name: "line3",
