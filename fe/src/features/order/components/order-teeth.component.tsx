@@ -1,9 +1,10 @@
 import * as React from "react";
-import { Button } from "@mui/material";
+import { Button, Stack, Typography } from "@mui/material";
 import TeethLayout from "../components/teeth";
 import { ConfirmDialog } from "@shared/components/dialog/confirm-dialog";
 import { TOOTH_SPRITES } from "../components/teeth/tooth-sprite-map";
 import type { ToothCode } from "../components/teeth/tooth-sprite-map";
+import { lowerToothCodes, upperToothCodes } from "../components/teeth/teeth-chart";
 
 export type OrderTeethProps = {
   value?: string | null;
@@ -69,6 +70,17 @@ function formatToothPositions(nums: number[]) {
   return ranges.join(",");
 }
 
+function formatToothPositionsByJaw(value?: string | null) {
+  const positions = parseToothPositions(value);
+  const upperSet = new Set<number>(upperToothCodes);
+  const lowerSet = new Set<number>(lowerToothCodes);
+
+  return {
+    upper: formatToothPositions(positions.filter((code) => upperSet.has(code))),
+    lower: formatToothPositions(positions.filter((code) => lowerSet.has(code))),
+  };
+}
+
 export default function OrderTeeth({
   value,
   onChange,
@@ -79,6 +91,11 @@ export default function OrderTeeth({
     () => (value == null ? undefined : parseToothPositions(value)),
     [value]
   );
+  const formattedByJaw = React.useMemo(
+    () => formatToothPositionsByJaw(value),
+    [value]
+  );
+  const hasSelection = Boolean(formattedByJaw.upper || formattedByJaw.lower);
 
   const handleOpen = React.useCallback(() => {
     setDraftSelection(selected ?? []);
@@ -95,8 +112,28 @@ export default function OrderTeeth({
 
   return (
     <>
-      <Button variant="text" onClick={handleOpen}>
-        Vị trí răng: {value || "Chọn"}
+      <Button
+        variant="text"
+        onClick={handleOpen}
+        sx={{ justifyContent: "flex-start", textAlign: "left" }}
+      >
+        {hasSelection ? (
+          <Stack spacing={0.25}>
+            <Typography variant="body2" component="div" fontWeight={600}>
+              Vị trí răng:
+            </Typography>
+            <Typography variant="body2" component="div">
+              Hàm trên: {formattedByJaw.upper || "–"}
+            </Typography>
+            <Typography variant="body2" component="div">
+              Hàm dưới: {formattedByJaw.lower || "–"}
+            </Typography>
+          </Stack>
+        ) : (
+          <Typography variant="body2" component="div" fontWeight={600}>
+            Vị trí răng: Chọn
+          </Typography>
+        )}
       </Button>
       <ConfirmDialog
         open={openDialog}
