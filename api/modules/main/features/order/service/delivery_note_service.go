@@ -251,7 +251,7 @@ func htmlToPDF(htmlBytes []byte) ([]byte, error) {
 
 	// Prefer Chrome/Chromium via chromedp (best CSS + full control).
 	if browserBin, ok := lookupHeadlessBrowser(); ok {
-		pdf, err := renderPDFWithChromedp(browserBin, htmlPath, printOptionsA4())
+		pdf, err := renderPDFWithChromedp(browserBin, htmlPath, printOptionsA5())
 		if err == nil {
 			return pdf, nil
 		}
@@ -276,7 +276,7 @@ func htmlToPDF(htmlBytes []byte) ([]byte, error) {
 }
 
 type pdfPrintOptions struct {
-	// A4 in inches (CDP uses inches). A4: 8.27 x 11.69 in
+	// A5 in inches (CDP uses inches). A5: 5.83 x 8.27 in
 	PaperWidthIn  float64
 	PaperHeightIn float64
 
@@ -293,19 +293,19 @@ type pdfPrintOptions struct {
 	WaitForNetworkIdleMs int
 }
 
-func printOptionsA4() pdfPrintOptions {
+func printOptionsA5() pdfPrintOptions {
 	// mm -> inches: mm / 25.4
 	mm := func(v float64) float64 { return v / 25.4 }
 
 	return pdfPrintOptions{
-		PaperWidthIn:  8.27,
-		PaperHeightIn: 11.69,
+		PaperWidthIn:  5.83,
+		PaperHeightIn: 8.27,
 
-		// match your wkhtml margins: top/bottom 14mm, left/right 10mm
-		MarginTopIn:    mm(14),
-		MarginRightIn:  mm(10),
-		MarginBottomIn: mm(14),
-		MarginLeftIn:   mm(10),
+		// Keep margins compact enough for A5 while preserving print-safe whitespace.
+		MarginTopIn:    mm(8),
+		MarginRightIn:  mm(6),
+		MarginBottomIn: mm(8),
+		MarginLeftIn:   mm(6),
 
 		PrintBackground:     true,
 		DisplayHeaderFooter: false, // IMPORTANT: prevents Chrome from injecting date/title/url
@@ -429,12 +429,12 @@ func renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir string) ([]byte, error
 	args := []string{
 		"--enable-local-file-access",
 		"--encoding", "utf-8",
-		"--page-size", "A4",
+		"--page-size", "A5",
 		"--orientation", "Portrait",
-		"--margin-top", "14mm",
-		"--margin-right", "10mm",
-		"--margin-bottom", "14mm",
-		"--margin-left", "10mm",
+		"--margin-top", "8mm",
+		"--margin-right", "6mm",
+		"--margin-bottom", "8mm",
+		"--margin-left", "6mm",
 		"--disable-smart-shrinking",
 		htmlPath,
 		pdfPath,

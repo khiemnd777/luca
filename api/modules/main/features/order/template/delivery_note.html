@@ -6,8 +6,8 @@
   <title>Phiếu Giao Hàng</title>
   <style>
     @page {
-      size: A4 portrait;
-      margin: 14mm 10mm 14mm 10mm;
+      size: A5 portrait;
+      margin: 8mm 6mm 8mm 6mm;
     }
 
     * { box-sizing: border-box; }
@@ -15,8 +15,8 @@
     body {
       margin: 0;
       color: #111;
-      font-size: 13px;
-      line-height: 1.35;
+      font-size: 10px;
+      line-height: 1.25;
       font-family: "Noto Sans", "DejaVu Sans", "Arial Unicode MS", Arial, sans-serif;
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
@@ -30,8 +30,8 @@
       display: flex;
       align-items: flex-start;
       width: 100%;
-      gap: 10px;
-      margin-bottom: 10px;
+      gap: 6px;
+      margin-bottom: 6px;
     }
 
     .header-left,
@@ -41,7 +41,7 @@
     }
 
     .header-right {
-      font-size: 12px;
+      font-size: 9px;
     }
 
     .header-right-content {
@@ -49,7 +49,7 @@
       align-items: flex-start;
       justify-content: space-between;
       width: 100%;
-      gap: 8px;
+      gap: 6px;
     }
 
     .header-contact,
@@ -68,43 +68,43 @@
     }
 
     .logo {
-      max-height: 52px;
-      max-width: 180px;
+      max-height: 38px;
+      max-width: 120px;
       object-fit: contain;
     }
 
     .title {
       text-align: center;
-      font-size: 28px;
+      font-size: 19px;
       font-weight: 800;
       text-transform: uppercase;
-      margin: 10px 0 14px;
-      letter-spacing: 0.5px;
+      margin: 6px 0 8px;
+      letter-spacing: 0.3px;
     }
 
     .order-info {
       display: table;
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
     }
 
     .order-col {
       display: table-cell;
       width: 50%;
       vertical-align: top;
-      padding-right: 10px;
+      padding-right: 6px;
     }
 
     .order-col:last-child {
       padding-right: 0;
-      padding-left: 10px;
+      padding-left: 6px;
     }
 
     .field-row {
       display: table;
       width: 100%;
-      margin: 3px 0;
+      margin: 2px 0;
     }
 
     .field-label,
@@ -114,8 +114,12 @@
     }
 
     .field-label {
-      width: 120px;
+      width: 78px;
       font-weight: 700;
+    }
+
+    .field-value {
+      word-break: break-word;
     }
 
     .clinic-name {
@@ -126,9 +130,10 @@
     table.items {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
+      margin-top: 6px;
       border: 1px solid #111;
       page-break-inside: auto;
+      table-layout: fixed;
     }
 
     .items thead {
@@ -142,8 +147,9 @@
     .items th,
     .items td {
       border: 1px solid #111;
-      padding: 6px;
-      vertical-align: middle;
+      padding: 4px 3px;
+      vertical-align: top;
+      word-break: break-word;
     }
 
     .items th {
@@ -164,23 +170,23 @@
       font-weight: 800;
     }
     .qr-code-img {
-      width: 62px;
-      height: 62px;
+      width: 42px;
+      height: 42px;
       object-fit: contain;
       display: inline-block;
     }
 
     .sections {
-      margin-top: 12px;
+      margin-top: 8px;
     }
 
     .check-section {
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
 
     .check-title {
       font-weight: 800;
-      margin-bottom: 4px;
+      margin-bottom: 3px;
     }
 
     .check-grid {
@@ -194,24 +200,24 @@
 
     .check-cell {
       display: table-cell;
-      width: 33.33%;
-      padding: 2px 6px 2px 0;
+      width: 50%;
+      padding: 2px 4px 2px 0;
       vertical-align: top;
     }
 
     .checkbox {
       display: inline-block;
-      width: 15px;
+      width: 13px;
       text-align: center;
       border: 1px solid #111;
-      margin-right: 6px;
-      font-size: 11px;
-      line-height: 13px;
-      height: 15px;
+      margin-right: 4px;
+      font-size: 10px;
+      line-height: 11px;
+      height: 13px;
     }
 
     .footer-sign {
-      margin-top: 20px;
+      margin-top: 10px;
       display: table;
       width: 100%;
     }
@@ -225,7 +231,7 @@
 
     .sign-title {
       font-weight: 800;
-      margin-bottom: 56px;
+      margin-bottom: 34px;
     }
 
     .sign-line {
@@ -281,10 +287,10 @@
         <thead>
           <tr>
             <th style="width: 7%;">Stt</th>
-            <th style="width: 46%;">Mô tả hàng hoá</th>
+            <th style="width: 41%;">Mô tả hàng hoá</th>
             <th style="width: 12%;">Số lượng</th>
-            <th style="width: 17%;">Đơn giá</th>
-            <th style="width: 18%;">Thành tiền</th>
+            <th style="width: 18%;">Đơn giá</th>
+            <th style="width: 22%;">Thành tiền</th>
           </tr>
         </thead>
         <tbody>
@@ -339,13 +345,10 @@
         <div class="check-grid">
           {{ $last := sub1 (len .Attachments.Items) }}
           {{ range $idx, $it := .Attachments.Items }}
-            {{ if eq (mod $idx 3) 0 }}<div class="check-row">{{ end }}
+            {{ if eq (mod $idx 2) 0 }}<div class="check-row">{{ end }}
               <div class="check-cell"><span class="checkbox">{{ checked $it.Checked }}</span>{{ $it.Name }}</div>
-            {{ if or (eq (mod $idx 3) 2) (eq $idx $last) }}
-              {{ if eq (mod $idx 3) 0 }}
-                <div class="check-cell"></div>
-                <div class="check-cell"></div>
-              {{ else if eq (mod $idx 3) 1 }}
+            {{ if or (eq (mod $idx 2) 1) (eq $idx $last) }}
+              {{ if eq (mod $idx 2) 0 }}
                 <div class="check-cell"></div>
               {{ end }}
             </div>{{ end }}
@@ -358,13 +361,10 @@
         <div class="check-grid">
           {{ $lastImpl := sub1 (len .ImplantAccessories.Items) }}
           {{ range $idx, $it := .ImplantAccessories.Items }}
-            {{ if eq (mod $idx 3) 0 }}<div class="check-row">{{ end }}
+            {{ if eq (mod $idx 2) 0 }}<div class="check-row">{{ end }}
               <div class="check-cell"><span class="checkbox">{{ checked $it.Checked }}</span>{{ $it.Name }}</div>
-            {{ if or (eq (mod $idx 3) 2) (eq $idx $lastImpl) }}
-              {{ if eq (mod $idx 3) 0 }}
-                <div class="check-cell"></div>
-                <div class="check-cell"></div>
-              {{ else if eq (mod $idx 3) 1 }}
+            {{ if or (eq (mod $idx 2) 1) (eq $idx $lastImpl) }}
+              {{ if eq (mod $idx 2) 0 }}
                 <div class="check-cell"></div>
               {{ end }}
             </div>{{ end }}
