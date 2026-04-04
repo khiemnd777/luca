@@ -1,9 +1,10 @@
+import { Button } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
 import { ToothSprite } from "./tooth-sprite";
 import type { ToothCode } from "./tooth-sprite-map";
 
-const upper: ToothCode[] = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
-const lower: ToothCode[] = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+export const upperToothCodes: ToothCode[] = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
+export const lowerToothCodes: ToothCode[] = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
 
 function rectsIntersect(a: DOMRect, b: DOMRect) {
   return !(
@@ -40,6 +41,27 @@ export function TeethChart({
   const mouseDownTarget = useRef<EventTarget | null>(null);
 
   const scaleFn = (v: number) => v * scale;
+
+  const handleSelectAll = (codes: ToothCode[]) => {
+    const next = new Set<ToothCode>(selected);
+    codes.forEach((code) => next.add(code));
+    setSelected(next);
+    onChange?.([...next]);
+  };
+
+  const handleClearSelection = (codes: ToothCode[]) => {
+    const next = new Set<ToothCode>(selected);
+    codes.forEach((code) => next.delete(code));
+    setSelected(next);
+    onChange?.([...next]);
+  };
+
+  const isAllSelected = (codes: ToothCode[]) =>
+    codes.every((code) => selected.has(code));
+
+  const stopChartMouseEvent = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation();
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -241,9 +263,31 @@ export function TeethChart({
           gap: scaleFn(14),
         }}
       >
-        {upper.map((code) => (
+        {upperToothCodes.map((code) => (
           <ToothColumn key={code} code={code} labelPosition="bottom" />
         ))}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          marginTop: scaleFn(8),
+        }}
+      >
+        <Button
+          size="small"
+          variant="outlined"
+          onMouseDown={stopChartMouseEvent}
+          onMouseUp={stopChartMouseEvent}
+          onClick={() =>
+            isAllSelected(upperToothCodes)
+              ? handleClearSelection(upperToothCodes)
+              : handleSelectAll(upperToothCodes)
+          }
+        >
+          {isAllSelected(upperToothCodes) ? "Xóa" : "Toàn bộ"}
+        </Button>
       </div>
 
       {/* spacer */}
@@ -258,9 +302,31 @@ export function TeethChart({
           gap: scaleFn(14),
         }}
       >
-        {lower.map((code) => (
+        {lowerToothCodes.map((code) => (
           <ToothColumn key={code} code={code} labelPosition="top" />
         ))}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          marginTop: scaleFn(8),
+        }}
+      >
+        <Button
+          size="small"
+          variant="outlined"
+          onMouseDown={stopChartMouseEvent}
+          onMouseUp={stopChartMouseEvent}
+          onClick={() =>
+            isAllSelected(lowerToothCodes)
+              ? handleClearSelection(lowerToothCodes)
+              : handleSelectAll(lowerToothCodes)
+          }
+        >
+          {isAllSelected(lowerToothCodes) ? "Xóa" : "Toàn bộ"}
+        </Button>
       </div>
 
       {/* Selection box */}
