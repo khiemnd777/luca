@@ -131,6 +131,8 @@ export function OrderLoanerMaterialItemList({
           isEditable={true}
           allowEditToggle={!!item.isCloneable}
           isRemovable={!item.isCloneable}
+          showItemLabel={false}
+          actionsPlacement="aside"
           formName={frmName ?? "order-loaner-material-item"}
           normalize={normalizeItem}
           extractPatch={(vals) => normalizeItem(vals as any)}

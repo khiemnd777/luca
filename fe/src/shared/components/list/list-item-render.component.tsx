@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  Box,
   Card,
   CardContent,
   CardHeader,
@@ -35,6 +36,8 @@ export type ListItemRenderProps<T> = {
   renderActions?: (item: T, index: number) => React.ReactNode;
   allowEditToggle?: boolean;
   onEditToggle?: (editing: boolean) => void;
+  showItemLabel?: boolean;
+  actionsPlacement?: "header" | "aside";
 };
 
 export function ListItemRender<T>({
@@ -55,6 +58,8 @@ export function ListItemRender<T>({
   renderActions,
   allowEditToggle,
   onEditToggle,
+  showItemLabel = true,
+  actionsPlacement = "header",
 }: ListItemRenderProps<T>) {
   const formRef = React.useRef<AutoFormRef | null>(null);
   const lastItemIdRef = React.useRef<any>(null);
@@ -150,49 +155,80 @@ export function ListItemRender<T>({
   }, [extractPatch, buildSignature, onChange, onBlurCommit]);
 
   const isReadOnly = !canEdit || (allowEditToggle && !isEditing);
+  const actions = renderActions ? (
+    renderActions(item, index)
+  ) : (
+    <Stack direction="row" spacing={0.5} alignItems="center">
+      {allowEditToggle && canEdit && (
+        <IconButton
+          size="small"
+          onClick={handleToggleEdit}
+          aria-label={isEditing ? "View" : "Edit"}
+          title={isEditing ? "View" : "Edit"}
+        >
+          {isEditing ? (
+            <VisibilityRoundedIcon fontSize="small" />
+          ) : (
+            <EditRoundedIcon fontSize="small" />
+          )}
+        </IconButton>
+      )}
+      {canRemove && (
+        <IconButton color="error" size="small" onClick={onRemove} aria-label="Remove" title="Remove">
+          <DeleteOutlineRounded fontSize="small" />
+        </IconButton>
+      )}
+    </Stack>
+  );
+  const showHeader = actionsPlacement === "header" && (showItemLabel || !!renderActions || canRemove || (allowEditToggle && canEdit));
 
   return (
     <Card variant="outlined" sx={{ mb: 1 }} onBlurCapture={handleBlur}>
-      <CardHeader
-        title={
-          <Typography variant="subtitle2" fontWeight={600}>
-            {labelName} #{index + 1}
-          </Typography>
-        }
-        action={
-          renderActions ? (
-            renderActions(item, index)
-          ) : (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              {allowEditToggle && canEdit && (
-                <IconButton
-                  size="small"
-                  onClick={handleToggleEdit}
-                  aria-label={isEditing ? "View" : "Edit"}
-                  title={isEditing ? "View" : "Edit"}
-                >
-                  {isEditing ? (
-                    <VisibilityRoundedIcon fontSize="small" />
-                  ) : (
-                    <EditRoundedIcon fontSize="small" />
-                  )}
-                </IconButton>
-              )}
-              {canRemove && (
-                <IconButton color="error" size="small" onClick={onRemove} aria-label="Remove" title="Remove">
-                  <DeleteOutlineRounded fontSize="small" />
-                </IconButton>
-              )}
-            </Stack>
-          )
-        }
-      />
-      <CardContent sx={{ pt: 0, pointerEvents: isReadOnly ? "none" : "auto", opacity: isReadOnly ? 0.8 : 1 }}>
-        <AutoForm
-          ref={formRef}
-          name={formName}
-          initial={mountInitialRef.current}
+      {showHeader && (
+        <CardHeader
+          title={
+            showItemLabel ? (
+              <Typography variant="subtitle2" fontWeight={600}>
+                {labelName} #{index + 1}
+              </Typography>
+            ) : undefined
+          }
+          action={actions}
         />
+      )}
+      <CardContent
+        sx={{
+          pt: showHeader ? 0 : 2,
+          pointerEvents: isReadOnly ? "none" : "auto",
+          opacity: isReadOnly ? 0.8 : 1,
+        }}
+      >
+        {actionsPlacement === "aside" ? (
+          <Box
+            sx={{
+              display: "flex",
+              gap: 1,
+              alignItems: "flex-start",
+            }}
+          >
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <AutoForm
+                ref={formRef}
+                name={formName}
+                initial={mountInitialRef.current}
+              />
+            </Box>
+            <Box sx={{ pt: 0.5, flexShrink: 0, pointerEvents: "auto" }}>
+              {actions}
+            </Box>
+          </Box>
+        ) : (
+          <AutoForm
+            ref={formRef}
+            name={formName}
+            initial={mountInitialRef.current}
+          />
+        )}
       </CardContent>
     </Card>
   );
