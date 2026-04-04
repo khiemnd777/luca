@@ -1,11 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGetDeliveryNoteTemplate_Cached(t *testing.T) {
@@ -59,6 +61,44 @@ func TestBuildQRCodeImageURL_EscapesPayload(t *testing.T) {
 	out := BuildQRCodeImageURL("https://example.com/delivery/qr/a b", 160)
 	if !strings.Contains(out, "data=https%3A%2F%2Fexample.com%2Fdelivery%2Fqr%2Fa+b") {
 		t.Fatalf("unexpected QR image URL: %s", out)
+	}
+}
+
+func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
+	tpl, err := getDeliveryNoteTemplate()
+	if err != nil {
+		t.Fatalf("getDeliveryNoteTemplate: %v", err)
+	}
+
+	viewData := buildDeliveryNoteViewData(DeliveryNote{
+		Company: DeliveryNoteCompany{Name: "Test Company"},
+		Order: DeliveryNoteOrder{
+			Number: "ORD-001",
+			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
+		},
+		Attachments: DeliveryNoteAttachments{
+			Items: []DeliveryNoteAttachmentItem{{ID: 1, Name: "Bộ chứng từ", Checked: true}},
+		},
+		ImplantAccessories: DeliveryNoteImplantAccessories{
+			Items: []DeliveryNoteImplantAccessoryItem{{ID: 1, Name: "Tay vặn", Checked: true}},
+		},
+		PaymentMethod: DeliveryNotePaymentMethod{
+			TienMat: true,
+			CongNo:  true,
+		},
+	})
+
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, viewData); err != nil {
+		t.Fatalf("execute delivery note template: %v", err)
+	}
+
+	rendered := html.String()
+	if strings.Contains(rendered, "3. Thanh toán") {
+		t.Fatal("expected payment section title to be removed from rendered delivery note")
+	}
+	if strings.Contains(rendered, "Tiền mặt") || strings.Contains(rendered, "Công nợ") {
+		t.Fatal("expected payment method labels to be removed from rendered delivery note")
 	}
 }
 
