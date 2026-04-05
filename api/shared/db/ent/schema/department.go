@@ -27,7 +27,12 @@ func (Department) Fields() []ent.Field {
 		field.String("logo").
 			Optional().
 			Nillable().
-			Comment("Logo (URL)"),
+			Comment("Logo vuông (URL)"),
+
+		field.String("logo_rect").
+			Optional().
+			Nillable().
+			Comment("Logo chữ nhật (URL)"),
 
 		field.String("address").
 			Optional().

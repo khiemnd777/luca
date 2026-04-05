@@ -4,12 +4,23 @@ import { useDisplayUrl } from "@core/photo/use-display-url";
 type Props = {
   src?: string | undefined | null;
   name?: string | null;
-  size?: number;          // cạnh vuông (px)
+  size?: number;
+  width?: number | string;
+  height?: number | string;
   radius?: number | string;
 };
 
-export function Logo({ src, name, size = 40, radius = 10 }: Props) {
+export function Logo({
+  src,
+  name,
+  size = 40,
+  width,
+  height,
+  radius = 10,
+}: Props) {
   const displayLogoUrl = useDisplayUrl(src);
+  const resolvedWidth = width ?? size;
+  const resolvedHeight = height ?? size;
   const initials =
     (name?.trim()?.split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join("") || "🏷️");
 
@@ -20,13 +31,13 @@ export function Logo({ src, name, size = 40, radius = 10 }: Props) {
         src={displayLogoUrl}
         alt={name ?? "logo"}
         sx={{
-          width: size,
-          height: size,
+          width: resolvedWidth,
+          height: resolvedHeight,
           borderRadius: radius,
           objectFit: "contain",
+          objectPosition: "left center",
           bgcolor: "background.paper",
           border: (t) => `1px solid ${t.palette.divider}`,
-          // p: 0.5,
           display: "block",
         }}
       />
@@ -37,8 +48,8 @@ export function Logo({ src, name, size = 40, radius = 10 }: Props) {
   return (
     <Box
       sx={{
-        width: size,
-        height: size,
+        width: resolvedWidth,
+        height: resolvedHeight,
         borderRadius: radius,
         bgcolor: "primary.main",
         color: "primary.contrastText",

@@ -393,7 +393,10 @@ func (s *orderService) resolveDeliveryNoteCompany(ctx context.Context, orderDTO 
 
 	return DeliveryNoteCompany{
 		Name:     deptEntity.Name,
-		LogoPath: s.resolveDepartmentLogoPath(utils.DerefString(deptEntity.Logo)),
+		LogoPath: s.resolveDepartmentLogoPath(firstNonEmpty(
+			utils.DerefString(deptEntity.LogoRect),
+			utils.DerefString(deptEntity.Logo),
+		)),
 		Address:  utils.DerefString(deptEntity.Address),
 		Phone:    utils.DerefString(deptEntity.PhoneNumber),
 	}

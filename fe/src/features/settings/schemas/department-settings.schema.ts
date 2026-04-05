@@ -40,12 +40,22 @@ export function buildDepartmentSettingsSchema(): FormSchema {
     },
     {
       name: "logo",
-      label: "Logo",
+      label: "Logo vuông",
       kind: "imageupload",
       accept: "image/*",
       maxFiles: 1,
       multipleFiles: false,
       helperText: "PNG/JPG ≤ 2MB. Khuyến nghị hình vuông.",
+      uploader: uploadImages,
+    },
+    {
+      name: "logoRect",
+      label: "Logo chữ nhật",
+      kind: "imageupload",
+      accept: "image/*",
+      maxFiles: 1,
+      multipleFiles: false,
+      helperText: "PNG/JPG ≤ 2MB. Dùng cho sidebar desktop và phiếu giao hàng.",
       uploader: uploadImages,
     },
     {

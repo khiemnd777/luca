@@ -207,11 +207,11 @@ export function BasePageV1({ children }: { children: React.ReactNode }) {
       >
         {/* Top: Logo + toggle */}
         <Stack
-          direction={collapsed ? "column" : "row"}
+          direction="row"
           alignItems="center"
-          justifyContent={collapsed ? "center" : "flex-start"}
-          spacing={collapsed ? 0 : 1.5}
-          px={collapsed ? 0 : 1.5}
+          justifyContent="flex-start"
+          spacing={1}
+          px={1.5}
           py={1}
           sx={{
             position: "relative",
@@ -220,27 +220,24 @@ export function BasePageV1({ children }: { children: React.ReactNode }) {
             }),
           }}
         >
-          {/* Logo */}
-          <Logo src={department?.logo} name={department?.name} size={40} radius={"10px"} />
-
-          {/* Text (ẩn khi collapse) */}
-          {!collapsed && (
-            <Typography
-              variant="h6"
-              fontWeight={700}
-              noWrap
-              sx={{ flex: 1, ml: 1 }}
-            >
-              {department?.name}
-            </Typography>
-          )}
+          <Box sx={{ flex: 1, minWidth: 0, display: "flex", justifyContent: collapsed ? "center" : "flex-start" }}>
+            <Logo
+              src={collapsed ? (department?.logo ?? department?.logoRect) : (department?.logoRect ?? department?.logo)}
+              name={department?.name}
+              width={collapsed ? 40 : "100%"}
+              height={40}
+              radius={"10px"}
+            />
+          </Box>
 
           {/* Toggle button */}
           <Box
             sx={{
+              flexShrink: 0,
               position: collapsed ? "absolute" : "static",
               right: collapsed ? -20 : 0,
               top: collapsed ? 10 : "auto",
+              zIndex: collapsed ? 10 : "auto",
             }}
           >
             <Tooltip title={collapsed ? "Expand" : "Collapse"}>

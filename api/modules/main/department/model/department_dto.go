@@ -8,6 +8,7 @@ type DepartmentDTO struct {
 	Active          bool      `json:"active,omitempty"`
 	Name            string    `json:"name,omitempty"`
 	Logo            *string   `json:"logo,omitempty"`
+	LogoRect        *string   `json:"logo_rect,omitempty"`
 	Address         *string   `json:"address,omitempty"`
 	PhoneNumber     *string   `json:"phone_number,omitempty"`
 	ParentID        *int      `json:"parent_id,omitempty"`

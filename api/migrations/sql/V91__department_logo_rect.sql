@@ -1,0 +1,2 @@
+ALTER TABLE departments
+ADD COLUMN IF NOT EXISTS logo_rect TEXT;

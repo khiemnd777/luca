@@ -5,6 +5,7 @@ export interface DeparmentModel {
   active?: boolean;
   name: string;
   logo?: string | null;
+  logoRect?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
   parentId?: number | null;
