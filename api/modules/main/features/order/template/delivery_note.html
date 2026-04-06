@@ -6,8 +6,8 @@
   <title>Phiếu Giao Hàng</title>
   <style>
     @page {
-      size: A5 portrait;
-      margin: 8mm 6mm 8mm 6mm;
+      size: {{.PaperSize}} portrait;
+      margin: {{.PageMargin}};
     }
 
     * { box-sizing: border-box; }

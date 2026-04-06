@@ -1,6 +1,7 @@
 import toast from "react-hot-toast";
 import {
   printDeliveryNote,
+  type DeliveryNotePaperSize,
   type DeliveryNotePrintRequest,
   type PrintPdfBlob,
 } from "./order_print.api";
@@ -81,3 +82,4 @@ export async function downloadDeliveryNote(
 }
 
 export type { DeliveryNotePrintRequest };
+export type { DeliveryNotePaperSize };

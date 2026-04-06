@@ -21,8 +21,11 @@ export interface DeliveryNotePaymentMethod {
   [key: string]: unknown;
 }
 
+export type DeliveryNotePaperSize = "A4" | "A5";
+
 export interface DeliveryNotePrintRequest {
   order_id: number;
+  paper_size?: DeliveryNotePaperSize;
   company?: DeliveryNoteCompany;
   attachments?: DeliveryNoteAttachments;
   implant_accessories?: DeliveryNoteImplantAccessories;

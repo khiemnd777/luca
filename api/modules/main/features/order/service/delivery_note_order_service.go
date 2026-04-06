@@ -23,6 +23,7 @@ import (
 
 type DeliveryNotePrintRequest struct {
 	OrderID            int64                           `json:"order_id"`
+	PaperSize          string                          `json:"paper_size,omitempty"`
 	Company            *DeliveryNoteCompany            `json:"company,omitempty"`
 	Attachments        *DeliveryNoteAttachments        `json:"attachments,omitempty"`
 	ImplantAccessories *DeliveryNoteImplantAccessories `json:"implant_accessories,omitempty"`
@@ -32,6 +33,10 @@ type DeliveryNotePrintRequest struct {
 func (s *orderService) GenerateDeliveryNoteByOrderID(ctx context.Context, req DeliveryNotePrintRequest) ([]byte, string, error) {
 	if req.OrderID <= 0 {
 		return nil, "", fmt.Errorf("invalid order_id")
+	}
+	paperSize, err := normalizeDeliveryNotePaperSize(req.PaperSize)
+	if err != nil {
+		return nil, "", err
 	}
 
 	startedAt := time.Now()
@@ -108,7 +113,7 @@ func (s *orderService) GenerateDeliveryNoteByOrderID(ctx context.Context, req De
 	logoDuration = time.Since(logoStartedAt)
 
 	renderStartedAt := time.Now()
-	pdf, err := GenerateDeliveryNotePDF(note)
+	pdf, err := GenerateDeliveryNotePDF(note, paperSize)
 	if err != nil {
 		return nil, "", err
 	}
@@ -392,13 +397,13 @@ func (s *orderService) resolveDeliveryNoteCompany(ctx context.Context, orderDTO 
 	}
 
 	return DeliveryNoteCompany{
-		Name:     deptEntity.Name,
+		Name: deptEntity.Name,
 		LogoPath: s.resolveDepartmentLogoPath(firstNonEmpty(
 			utils.DerefString(deptEntity.LogoRect),
 			utils.DerefString(deptEntity.Logo),
 		)),
-		Address:  utils.DerefString(deptEntity.Address),
-		Phone:    utils.DerefString(deptEntity.PhoneNumber),
+		Address: utils.DerefString(deptEntity.Address),
+		Phone:   utils.DerefString(deptEntity.PhoneNumber),
 	}
 }
 

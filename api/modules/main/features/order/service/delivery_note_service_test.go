@@ -10,6 +10,33 @@ import (
 	"time"
 )
 
+func TestNormalizeDeliveryNotePaperSize_DefaultsToA5(t *testing.T) {
+	got, err := normalizeDeliveryNotePaperSize("")
+	if err != nil {
+		t.Fatalf("normalizeDeliveryNotePaperSize returned error: %v", err)
+	}
+	if got != deliveryNotePaperSizeA5 {
+		t.Fatalf("expected %s, got %s", deliveryNotePaperSizeA5, got)
+	}
+}
+
+func TestNormalizeDeliveryNotePaperSize_AcceptsA4(t *testing.T) {
+	got, err := normalizeDeliveryNotePaperSize("a4")
+	if err != nil {
+		t.Fatalf("normalizeDeliveryNotePaperSize returned error: %v", err)
+	}
+	if got != deliveryNotePaperSizeA4 {
+		t.Fatalf("expected %s, got %s", deliveryNotePaperSizeA4, got)
+	}
+}
+
+func TestNormalizeDeliveryNotePaperSize_RejectsInvalidValue(t *testing.T) {
+	_, err := normalizeDeliveryNotePaperSize("letter")
+	if err == nil {
+		t.Fatal("expected error for unsupported paper size")
+	}
+}
+
 func TestGetDeliveryNoteTemplate_Cached(t *testing.T) {
 	tpl1, err := getDeliveryNoteTemplate()
 	if err != nil {
@@ -86,7 +113,7 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 			TienMat: true,
 			CongNo:  true,
 		},
-	})
+	}, deliveryNotePaperSizeA4)
 
 	var html bytes.Buffer
 	if err := tpl.Execute(&html, viewData); err != nil {
@@ -99,6 +126,9 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 	}
 	if strings.Contains(rendered, "Tiền mặt") || strings.Contains(rendered, "Công nợ") {
 		t.Fatal("expected payment method labels to be removed from rendered delivery note")
+	}
+	if !strings.Contains(rendered, "size: A4 portrait;") {
+		t.Fatal("expected selected paper size to be rendered into template css")
 	}
 }
 

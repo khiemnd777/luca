@@ -27,6 +27,11 @@ import (
 
 const deliveryNoteDateFormat = "02/01/2006 15:04"
 
+const (
+	deliveryNotePaperSizeA5 = "A5"
+	deliveryNotePaperSizeA4 = "A4"
+)
+
 var (
 	deliveryNoteTemplateOnce sync.Once
 	deliveryNoteTemplate     *template.Template
@@ -103,6 +108,8 @@ type DeliveryNotePaymentMethod struct {
 }
 
 type deliveryNoteTemplateData struct {
+	PaperSize          string
+	PageMargin         string
 	Company            DeliveryNoteCompany
 	Order              deliveryNoteOrderView
 	Items              []deliveryNoteItemView
@@ -135,9 +142,13 @@ type deliveryNoteItemView struct {
 }
 
 // GenerateDeliveryNotePDF renders delivery note HTML and converts it to PDF bytes.
-func GenerateDeliveryNotePDF(data DeliveryNote) ([]byte, error) {
+func GenerateDeliveryNotePDF(data DeliveryNote, paperSize string) ([]byte, error) {
 	if strings.TrimSpace(data.Order.Number) == "" {
 		return nil, errors.New("order number is required")
+	}
+	normalizedPaperSize, err := normalizeDeliveryNotePaperSize(paperSize)
+	if err != nil {
+		return nil, err
 	}
 
 	tpl, err := getDeliveryNoteTemplate()
@@ -145,14 +156,14 @@ func GenerateDeliveryNotePDF(data DeliveryNote) ([]byte, error) {
 		return nil, err
 	}
 
-	viewData := buildDeliveryNoteViewData(data)
+	viewData := buildDeliveryNoteViewData(data, normalizedPaperSize)
 
 	var htmlBuf bytes.Buffer
 	if err := tpl.Execute(&htmlBuf, viewData); err != nil {
 		return nil, fmt.Errorf("render delivery note html: %w", err)
 	}
 
-	pdfBytes, err := htmlToPDF(htmlBuf.Bytes())
+	pdfBytes, err := htmlToPDF(htmlBuf.Bytes(), normalizedPaperSize)
 	if err != nil {
 		return nil, fmt.Errorf("convert delivery note to pdf: %w", err)
 	}
@@ -191,10 +202,14 @@ func getDeliveryNoteTemplate() (*template.Template, error) {
 	return deliveryNoteTemplate, nil
 }
 
-func buildDeliveryNoteViewData(data DeliveryNote) deliveryNoteTemplateData {
+func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNoteTemplateData {
 	items := make([]deliveryNoteItemView, 0, len(data.Items))
 	totalQty := 0.0
 	totalAmount := 0.0
+	pageMargin := "8mm 6mm 8mm 6mm"
+	if paperSize == deliveryNotePaperSizeA4 {
+		pageMargin = "10mm 8mm 10mm 8mm"
+	}
 
 	for _, it := range data.Items {
 		lineTotal := it.Quantity * it.UnitPrice
@@ -214,7 +229,9 @@ func buildDeliveryNoteViewData(data DeliveryNote) deliveryNoteTemplateData {
 	}
 
 	return deliveryNoteTemplateData{
-		Company: data.Company,
+		PaperSize:  paperSize,
+		PageMargin: pageMargin,
+		Company:    data.Company,
 		Order: deliveryNoteOrderView{
 			Number:          data.Order.Number,
 			BS:              data.Order.BS,
@@ -237,7 +254,12 @@ func buildDeliveryNoteViewData(data DeliveryNote) deliveryNoteTemplateData {
 	}
 }
 
-func htmlToPDF(htmlBytes []byte) ([]byte, error) {
+func htmlToPDF(htmlBytes []byte, paperSize string) ([]byte, error) {
+	options, err := printOptionsForPaperSize(paperSize)
+	if err != nil {
+		return nil, err
+	}
+
 	tmpDir, err := os.MkdirTemp("", "delivery-note-*")
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
@@ -251,14 +273,14 @@ func htmlToPDF(htmlBytes []byte) ([]byte, error) {
 
 	// Prefer Chrome/Chromium via chromedp (best CSS + full control).
 	if browserBin, ok := lookupHeadlessBrowser(); ok {
-		pdf, err := renderPDFWithChromedp(browserBin, htmlPath, printOptionsA5())
+		pdf, err := renderPDFWithChromedp(browserBin, htmlPath, options)
 		if err == nil {
 			return pdf, nil
 		}
 		// If chromedp fails, fallback to wkhtmltopdf (more stable in some environments).
 		// NOTE: Keep original error for troubleshooting.
 		if wkhtmlBin, ok2 := lookupWkhtmltopdf(); ok2 {
-			pdf2, err2 := renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir)
+			pdf2, err2 := renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir, options)
 			if err2 == nil {
 				return pdf2, nil
 			}
@@ -269,13 +291,15 @@ func htmlToPDF(htmlBytes []byte) ([]byte, error) {
 
 	// Fallback to wkhtmltopdf if no Chrome found.
 	if wkhtmlBin, ok := lookupWkhtmltopdf(); ok {
-		return renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir)
+		return renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir, options)
 	}
 
 	return nil, errors.New("no supported PDF engine found; install chromium/chrome or wkhtmltopdf, or set DELIVERY_NOTE_BROWSER_BIN")
 }
 
 type pdfPrintOptions struct {
+	PaperSizeName string
+
 	// A5 in inches (CDP uses inches). A5: 5.83 x 8.27 in
 	PaperWidthIn  float64
 	PaperHeightIn float64
@@ -298,6 +322,7 @@ func printOptionsA5() pdfPrintOptions {
 	mm := func(v float64) float64 { return v / 25.4 }
 
 	return pdfPrintOptions{
+		PaperSizeName: deliveryNotePaperSizeA5,
 		PaperWidthIn:  5.83,
 		PaperHeightIn: 8.27,
 
@@ -314,6 +339,55 @@ func printOptionsA5() pdfPrintOptions {
 
 		// If HTML loads images/fonts, waiting reduces flakiness.
 		WaitForNetworkIdleMs: 300,
+	}
+}
+
+func printOptionsA4() pdfPrintOptions {
+	mm := func(v float64) float64 { return v / 25.4 }
+
+	return pdfPrintOptions{
+		PaperSizeName: deliveryNotePaperSizeA4,
+		PaperWidthIn:  8.27,
+		PaperHeightIn: 11.69,
+
+		MarginTopIn:    mm(10),
+		MarginRightIn:  mm(8),
+		MarginBottomIn: mm(10),
+		MarginLeftIn:   mm(8),
+
+		PrintBackground:      true,
+		DisplayHeaderFooter:  false,
+		PreferCSSPageSize:    true,
+		Scale:                1.0,
+		WaitForNetworkIdleMs: 300,
+	}
+}
+
+func printOptionsForPaperSize(paperSize string) (pdfPrintOptions, error) {
+	normalizedPaperSize, err := normalizeDeliveryNotePaperSize(paperSize)
+	if err != nil {
+		return pdfPrintOptions{}, err
+	}
+
+	switch normalizedPaperSize {
+	case deliveryNotePaperSizeA4:
+		return printOptionsA4(), nil
+	default:
+		return printOptionsA5(), nil
+	}
+}
+
+func normalizeDeliveryNotePaperSize(paperSize string) (string, error) {
+	normalizedPaperSize := strings.ToUpper(strings.TrimSpace(paperSize))
+	if normalizedPaperSize == "" {
+		return deliveryNotePaperSizeA5, nil
+	}
+
+	switch normalizedPaperSize {
+	case deliveryNotePaperSizeA4, deliveryNotePaperSizeA5:
+		return normalizedPaperSize, nil
+	default:
+		return "", fmt.Errorf("invalid paper_size")
 	}
 }
 
@@ -423,18 +497,22 @@ func getDeliveryNoteBrowserAllocator(browserBin string) (context.Context, error)
 	return deliveryNoteBrowserAllocator, nil
 }
 
-func renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir string) ([]byte, error) {
+func renderPDFWithWkhtmltopdf(wkhtmlBin, htmlPath, tmpDir string, opt pdfPrintOptions) ([]byte, error) {
 	pdfPath := filepath.Join(tmpDir, "delivery_note.pdf")
+
+	mm := func(v float64) string {
+		return fmt.Sprintf("%.2fmm", v*25.4)
+	}
 
 	args := []string{
 		"--enable-local-file-access",
 		"--encoding", "utf-8",
-		"--page-size", "A5",
+		"--page-size", opt.PaperSizeName,
 		"--orientation", "Portrait",
-		"--margin-top", "8mm",
-		"--margin-right", "6mm",
-		"--margin-bottom", "8mm",
-		"--margin-left", "6mm",
+		"--margin-top", mm(opt.MarginTopIn),
+		"--margin-right", mm(opt.MarginRightIn),
+		"--margin-bottom", mm(opt.MarginBottomIn),
+		"--margin-left", mm(opt.MarginLeftIn),
 		"--disable-smart-shrinking",
 		htmlPath,
 		pdfPath,
