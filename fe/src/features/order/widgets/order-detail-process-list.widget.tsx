@@ -20,6 +20,7 @@ import { AutoForm } from "@root/core/form/auto-form";
 import { IfPermission } from "@root/core/auth/if-permission";
 import { SafeButton } from "@root/shared/components/button/safe-button";
 import { useAsync } from "@root/core/hooks/use-async";
+import { buildProductProcessLabel, buildProductLabel } from "../utils/order.utils";
 
 export function OrderDetailProcessesListWidget() {
   const { orderId, orderItemId } = useParams();
@@ -85,9 +86,16 @@ export function OrderDetailProcessesListWidget() {
               <ListItemText
                 sx={{ mb: 1 }}
                 primary={
-                  <Typography fontWeight={600}>
-                    {it.processName ?? "—"}
-                  </Typography>
+                  <Stack spacing={0.5}>
+                    <Typography fontWeight={600}>
+                      {buildProductProcessLabel(it) || "—"}
+                    </Typography>
+                    {buildProductLabel(it) ? (
+                      <Typography variant="caption" color="text.secondary">
+                        Sản phẩm: {buildProductLabel(it)}
+                      </Typography>
+                    ) : null}
+                  </Stack>
                 }
                 secondary={
                   <Stack spacing={0.5}>

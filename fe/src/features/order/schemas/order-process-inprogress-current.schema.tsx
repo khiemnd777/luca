@@ -8,6 +8,7 @@ import { parseIntSafe } from "@root/shared/utils/number.utils";
 import { assign } from "../api/order-item-process.api";
 import { getContrastText } from "@root/shared/utils/color.utils";
 import { invalidate } from "@root/core/hooks/use-async";
+import { buildProductLabel } from "../utils/order.utils";
 
 export function buildOrderProcessInProgressCurrentSchema(): FormSchema {
   const fields: FieldDef[] = [
@@ -27,6 +28,11 @@ export function buildOrderProcessInProgressCurrentSchema(): FormSchema {
 
         return (
           <Stack spacing={0.5}>
+            {buildProductLabel(values) ? (
+              <Typography variant="caption" color="text.secondary">
+                Sản phẩm: {buildProductLabel(values)}
+              </Typography>
+            ) : null}
             <Typography variant="caption" color="text.secondary">
               {field.label}
             </Typography>

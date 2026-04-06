@@ -19,7 +19,10 @@ const columns: GridColDef<OrderItemProcessInProgressProcessModel>[] = [
     headerName: "Process",
     flex: 1,
     minWidth: 140,
-    valueGetter: (_, row) => row.processName ?? "",
+    valueGetter: (_, row) => {
+      const productLabel = [row.productCode, row.productName].filter(Boolean).join(" - ");
+      return productLabel ? `${productLabel} > ${row.processName ?? ""}` : row.processName ?? "";
+    },
   },
   {
     field: "startedAt",

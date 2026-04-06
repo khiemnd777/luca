@@ -10,7 +10,7 @@ func init() {
 	policy.Register1("orderitem_process", policy.Config1{
 		RefTable:  "order_item_processes",
 		RefIDCol:  "id",
-		RefFields: []string{"id", "process_name", "section_name", "color"},
+		RefFields: []string{"id", "product_id", "product_code", "product_name", "process_name", "section_name", "color"},
 
 		Permissions: []string{"order.view"},
 		CachePrefix: "order:process",
@@ -31,9 +31,9 @@ func init() {
 	policy.RegisterRefSearch("orderitem_process", policy.ConfigSearch{
 		RefTable:     "order_item_processes",
 		Alias:        "p",
-		NormFields:   []string{"p.process_name_norm", "p.section_name_norm"},
-		RefFields:    []string{"id", "process_name", "section_name", "color"},
-		SelectFields: []string{"p.id", "p.process_name", "p.section_name", "p.color"},
+		NormFields:   []string{"p.product_code_norm", "p.product_name_norm", "p.process_name_norm", "p.section_name_norm"},
+		RefFields:    []string{"id", "product_id", "product_code", "product_name", "process_name", "section_name", "color"},
+		SelectFields: []string{"p.id", "p.product_id", "p.product_code", "p.product_name", "p.process_name", "p.section_name", "p.color"},
 		Permissions:  []string{"order.search"},
 		CachePrefix:  "order:process",
 	})

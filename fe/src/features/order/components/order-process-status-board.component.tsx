@@ -18,6 +18,7 @@ import { priorityColor } from "@root/shared/utils/order.utils";
 import ResponsiveStatusBoard from "@root/shared/components/status-board/responsive-status-board";
 import { Section } from "@root/shared/components/ui/section";
 import { OrderProcessInProgressDialog } from "./order-process-inprogress-dialog.component";
+import { buildProductLabel, buildProductProcessLabel } from "../utils/order.utils";
 
 export function OrderProcessesStatusBoard() {
   const { orderId, orderItemId } = useParams();
@@ -88,8 +89,13 @@ export function OrderProcessesStatusBoard() {
             )}
             <Stack direction="row" alignItems="left" spacing={1}>
               <FactCheckIcon fontSize="small" />
-              <Typography fontWeight={700}>{o.processName}</Typography>
+              <Typography fontWeight={700}>{buildProductProcessLabel(o)}</Typography>
             </Stack>
+            {buildProductLabel(o) ? (
+              <Typography variant="caption" color="text.secondary">
+                {buildProductLabel(o)}
+              </Typography>
+            ) : null}
             <Stack direction="row" alignItems="left" spacing={1}>
               {o.assignedName &&
                 <Chip size="small" label={o.assignedName} />

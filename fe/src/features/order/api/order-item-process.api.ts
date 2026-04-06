@@ -1,7 +1,7 @@
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
-import type { OrderItemProcessInProgressModel } from "../model/order-item-process-inprogress.model";
+import type { OrderItemProcessInProgressModel, OrderItemProcessTargetModel } from "../model/order-item-process-inprogress.model";
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
 import type { OrderItemProcessModel, OrderItemProcessUpsertModel } from "../model/order-item-process.model";
 import type { FetchTableOpts } from "@root/core/table/table.types";
@@ -61,8 +61,7 @@ export async function update(orderId: number, orderItemId: number, orderItemProc
 export async function prepareCheckInOrOut(orderId: number, orderItemId: number): Promise<OrderItemProcessInProgressModel> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-in-out/prepare`);
-  const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
-  return result;
+  return mapPreparedInProgress(data);
 }
 
 export async function prepareCheckInOrOutByCode(code: string): Promise<OrderItemProcessInProgressModel> {
@@ -72,14 +71,13 @@ export async function prepareCheckInOrOutByCode(code: string): Promise<OrderItem
       code,
     }
   });
-  const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
-  return result;
+  return mapPreparedInProgress(data);
 }
 
-export async function checkInOrOut(payload: OrderItemProcessModel): Promise<OrderItemProcessInProgressModel> {
+export async function checkInOrOut(payload: OrderItemProcessInProgressModel): Promise<OrderItemProcessInProgressModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const orderId = (payload as any).order_id;
-  const orderItemId = (payload as any).order_item_id;
+  const orderId = payload.orderId;
+  const orderItemId = payload.orderItemId;
   const { data } = await apiClient.post<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-in-out`, payload);
   const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
   return result;
@@ -118,9 +116,25 @@ export async function getInProgressesByOrderItemId(orderId: number, orderItemId:
   return result;
 }
 
-export async function getCheckoutLatest(orderId: number, orderItemId: number): Promise<OrderItemProcessInProgressProcessModel> {
+export async function getCheckoutLatest(orderId: number, orderItemId: number, productId?: number | null): Promise<OrderItemProcessInProgressProcessModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-out/latest`);
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-out/latest`, {
+    params: productId ? { product_id: productId } : undefined,
+  });
   const result = mapper.map<any, OrderItemProcessInProgressProcessModel>("OrderItemProcessInProgressProcess", data, "dto_to_model");
   return result;
+}
+
+function mapPreparedInProgress(data: any): OrderItemProcessInProgressModel {
+  const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
+  const availableTargets = Array.isArray(data?.available_targets)
+    ? data.available_targets.map((item: any) =>
+        mapper.map<any, OrderItemProcessTargetModel>("OrderItemProcessInProgress", item, "dto_to_model"),
+      )
+    : null;
+
+  return {
+    ...result,
+    availableTargets,
+  };
 }

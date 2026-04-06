@@ -113,7 +113,12 @@ func (h *OrderItemProcessHandler) GetCheckoutLatest(c *fiber.Ctx) error {
 		return err
 	}
 
-	dto, svcErr := h.svc.GetCheckoutLatest(c.UserContext(), int64(orderItemID))
+	var productID *int
+	if pid := utils.GetQueryAsInt(c, "product_id"); pid > 0 {
+		productID = &pid
+	}
+
+	dto, svcErr := h.svc.GetCheckoutLatest(c.UserContext(), int64(orderItemID), productID)
 	if svcErr != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, svcErr, svcErr.Error())
 	}

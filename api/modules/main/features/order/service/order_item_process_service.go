@@ -71,6 +71,7 @@ type OrderItemProcessService interface {
 	GetCheckoutLatest(
 		ctx context.Context,
 		orderItemID int64,
+		productID *int,
 	) (*model.OrderItemProcessInProgressAndProcessDTO, error)
 
 	PrepareCheckInOrOut(
@@ -252,9 +253,13 @@ func (s *orderItemProcessService) GetInProgressesByStaffTimeline(
 	})
 }
 
-func (s *orderItemProcessService) GetCheckoutLatest(ctx context.Context, orderItemID int64) (*model.OrderItemProcessInProgressAndProcessDTO, error) {
-	return cache.Get(fmt.Sprintf("order:process:checkout:latest:oid:%d", orderItemID), cache.TTLShort, func() (*model.OrderItemProcessInProgressAndProcessDTO, error) {
-		return s.inprogressRepo.GetCheckoutLatest(ctx, nil, orderItemID)
+func (s *orderItemProcessService) GetCheckoutLatest(ctx context.Context, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error) {
+	cacheKey := fmt.Sprintf("order:process:checkout:latest:oid:%d", orderItemID)
+	if productID != nil {
+		cacheKey = fmt.Sprintf("%s:pid:%d", cacheKey, *productID)
+	}
+	return cache.Get(cacheKey, cache.TTLShort, func() (*model.OrderItemProcessInProgressAndProcessDTO, error) {
+		return s.inprogressRepo.GetCheckoutLatest(ctx, nil, orderItemID, productID)
 	})
 }
 
@@ -299,6 +304,9 @@ func (s *orderItemProcessService) CheckInOrOut(
 
 	if orderItemID > 0 {
 		keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d", orderItemID))
+		if dto.ProductID != nil {
+			keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d:pid:%d", orderItemID, *dto.ProductID))
+		}
 	}
 
 	keys = append(keys, fmt.Sprintf("order:process:inprogress:id%d", dto.ID))
@@ -328,6 +336,9 @@ func (s *orderItemProcessService) CheckInOrOut(
 			"leader_name":     dto.NextLeaderName,
 			"order_item_id":   dto.OrderItemID,
 			"order_item_code": dto.OrderItemCode,
+			"product_id":      dto.ProductID,
+			"product_code":    dto.ProductCode,
+			"product_name":    dto.ProductName,
 			"section_name":    dto.NextSectionName,
 			"process_name":    dto.NextProcessName,
 		})
@@ -358,6 +369,9 @@ func (s *orderItemProcessService) CheckInOrOut(
 				"order_id":         dto.OrderID,
 				"order_item_id":    dto.OrderItemID,
 				"order_item_code":  dto.OrderItemCode,
+				"product_id":       dto.ProductID,
+				"product_code":     dto.ProductCode,
+				"product_name":     dto.ProductName,
 				"section_name":     dto.SectionName,
 				"process_name":     dto.ProcessName,
 				"is_final_process": true,
@@ -421,6 +435,9 @@ func (s *orderItemProcessService) CheckInOrOut(
 				"order_item_id":     dto.OrderItemID,
 				"user_id":           userID,
 				"order_item_code":   dto.OrderItemCode,
+				"product_id":        dto.ProductID,
+				"product_code":      dto.ProductCode,
+				"product_name":      dto.ProductName,
 				"section_id":        dto.SectionID,
 				"section_name":      dto.SectionName,
 				"process_id":        dto.ProcessID,
@@ -443,6 +460,9 @@ func (s *orderItemProcessService) CheckInOrOut(
 				"order_item_id":   dto.OrderItemID,
 				"user_id":         userID,
 				"order_item_code": dto.OrderItemCode,
+				"product_id":      dto.ProductID,
+				"product_code":    dto.ProductCode,
+				"product_name":    dto.ProductName,
 				"section_id":      dto.SectionID,
 				"section_name":    dto.SectionName,
 				"process_id":      dto.ProcessID,
@@ -474,6 +494,9 @@ func (s *orderItemProcessService) Assign(ctx context.Context, deptID, userID int
 
 	if dto.OrderItemID > 0 {
 		keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d", dto.OrderItemID))
+		if dto.ProductID != nil {
+			keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d:pid:%d", dto.OrderItemID, *dto.ProductID))
+		}
 	}
 
 	keys = append(keys, fmt.Sprintf("order:process:inprogress:id%d", dto.ID))
@@ -503,6 +526,9 @@ func (s *orderItemProcessService) Assign(ctx context.Context, deptID, userID int
 			"order_item_id":   dto.OrderItemID,
 			"user_id":         userID,
 			"order_item_code": dto.OrderItemCode,
+			"product_id":      dto.ProductID,
+			"product_code":    dto.ProductCode,
+			"product_name":    dto.ProductName,
 			"section_id":      dto.SectionID,
 			"section_name":    dto.SectionName,
 			"process_id":      dto.ProcessID,

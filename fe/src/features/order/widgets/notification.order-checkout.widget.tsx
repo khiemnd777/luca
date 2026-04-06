@@ -11,6 +11,8 @@ type OrderCheckoutNotificationData = {
   leaderName?: string;
   orderItemId?: number | string;
   orderItemCode?: string;
+  productCode?: string;
+  productName?: string;
   sectionName?: string;
   processName?: string;
   href?: string;
@@ -27,6 +29,10 @@ const OrderCheckoutNotificationRenderer: NotificationRenderer<
 
   if (data?.orderItemCode) {
     bodyLines.push(`Mã: ${data.orderItemCode}`);
+  }
+
+  if (data?.productCode || data?.productName) {
+    bodyLines.push(`Sản phẩm: ${[data.productCode, data.productName].filter(Boolean).join(" - ")}`);
   }
 
   if (data?.processName) {

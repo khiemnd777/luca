@@ -4,3 +4,22 @@ export const generateTitle = (currentCode: string | undefined, latestCode: strin
   latestCode = latestCode ?? "";
   return latestCode ? `Mã: ${latestCode}${originalCodeLabel}` : "";
 };
+
+export const buildProductProcessLabel = (item?: {
+  productCode?: string | null;
+  productName?: string | null;
+  processName?: string | null;
+}) => {
+  const productLabel = [item?.productCode, item?.productName].filter(Boolean).join(" - ");
+  if (productLabel && item?.processName) {
+    return `${productLabel} > ${item.processName}`;
+  }
+  return productLabel || item?.processName || "";
+};
+
+export const buildProductLabel = (item?: {
+  productCode?: string | null;
+  productName?: string | null;
+}) => {
+  return [item?.productCode, item?.productName].filter(Boolean).join(" - ");
+};

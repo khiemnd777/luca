@@ -4,6 +4,9 @@ export interface OrderItemProcessModel {
   orderItemId?: number | null;
 
   orderCode?: string | null;
+  productId?: number | null;
+  productCode?: string | null;
+  productName?: string | null;
   processName?: string | null;
   sectionName?: string | null;
   color?: string | null;
@@ -24,4 +27,3 @@ export interface OrderItemProcessUpsertModel {
   dto: OrderItemProcessModel;
   collections?: (string | undefined)[];
 }
-

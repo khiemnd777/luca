@@ -28,7 +28,9 @@ export function normalizeTimelineInput(items: OrderItemProcessInProgressProcessM
   const lanes = new Map<string, OrderItemProcessInProgressProcessModel[]>();
 
   for (const item of sorted) {
-    const key = item.processName?.trim() || "Process";
+    const productLabel = [item.productCode, item.productName].filter(Boolean).join(" - ");
+    const processLabel = item.processName?.trim() || "Process";
+    const key = productLabel ? `${productLabel} > ${processLabel}` : processLabel;
     const group = lanes.get(key) ?? [];
     group.push(item);
     lanes.set(key, group);

@@ -3,6 +3,9 @@ export interface OrderItemProcessInProgressProcessModel {
   orderId?: number | null;
   orderItemId?: number | null;
   orderItemCode?: string | null;
+  productId?: number | null;
+  productCode?: string | null;
+  productName?: string | null;
   checkInNote?: string | null;
   checkOutNote?: string | null;
   assignedId?: number | null;

@@ -32,6 +32,18 @@ func (OrderItemProcess) Fields() []ent.Field {
 			Nillable().
 			Optional(),
 
+		field.Int("product_id").
+			Nillable().
+			Optional(),
+
+		field.String("product_code").
+			Nillable().
+			Optional(),
+
+		field.String("product_name").
+			Nillable().
+			Optional(),
+
 		field.String("process_name").
 			Nillable().
 			Optional(),
@@ -99,7 +111,9 @@ func (OrderItemProcess) Edges() []ent.Edge {
 func (OrderItemProcess) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("order_item_id", "step_number"),
+		index.Fields("order_item_id", "product_id", "step_number"),
 		index.Fields("order_id", "step_number"),
+		index.Fields("product_id", "step_number"),
 		index.Fields("assigned_id", "step_number"),
 	}
 }

@@ -7,6 +7,9 @@ type OrderItemProcessDTO struct {
 	OrderID      *int64     `json:"order_id,omitempty"`
 	OrderItemID  int64      `json:"order_item_id,omitempty"`
 	OrderCode    *string    `json:"order_code,omitempty"`
+	ProductID    *int       `json:"product_id,omitempty"`
+	ProductCode  *string    `json:"product_code,omitempty"`
+	ProductName  *string    `json:"product_name,omitempty"`
 	ProcessName  *string    `json:"process_name,omitempty"`
 	StepNumber   int        `json:"step_number,omitempty"`
 	StartedAt    *time.Time `json:"started_at,omitempty"`

@@ -6,7 +6,7 @@ import { SafeButton } from "@shared/components/button/safe-button";
 import { AutoForm } from "@core/form/auto-form";
 import type { AutoFormRef } from "@root/core/form/form.types";
 import { useAsync } from "@root/core/hooks/use-async";
-import { CircularProgress, Stack, Typography } from "@mui/material";
+import { CircularProgress, MenuItem, Stack, TextField, Typography } from "@mui/material";
 import { getCheckoutLatest, prepareCheckInOrOutByCode } from "../api/order-item-process.api";
 import type { OrderItemProcessInProgressModel } from "../model/order-item-process-inprogress.model";
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
@@ -19,12 +19,14 @@ import { useIsMobile } from "@root/shared/utils/media.utils";
 import { AutoFormButtons } from "@root/core/form/auto-form-buttons";
 import { off, on } from "@root/core/module/event-bus";
 import toast from "react-hot-toast";
+import { buildProductProcessLabel } from "../utils/order.utils";
 
 export function OrderProcessCheckCodeWidget() {
   const [orderCode, setOrderCode] = React.useState<string | undefined>("");
   const frmProcessCheckInOrOutRef = React.useRef<AutoFormRef>(null);
   const formCheckCodeRef = React.useRef<AutoFormRef>(null);
   const isMobile = useIsMobile();
+  const [selectedTargetKey, setSelectedTargetKey] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     const handler = (nextCode: string) => {
@@ -48,23 +50,41 @@ export function OrderProcessCheckCodeWidget() {
     }
   }, [preparedDataError]);
 
+  React.useEffect(() => {
+    if (!preparedData) {
+      setSelectedTargetKey(null);
+      return;
+    }
+
+    const defaultTarget = preparedData.availableTargets?.[0];
+    const target = defaultTarget ?? preparedData;
+    setSelectedTargetKey(buildTargetKey(target));
+  }, [preparedData]);
+
+  const currentTarget = React.useMemo(() => {
+    if (!preparedData) return null;
+    const targets = preparedData.availableTargets ?? [];
+    if (targets.length === 0) return preparedData;
+    return targets.find((item) => buildTargetKey(item) === selectedTargetKey) ?? targets[0];
+  }, [preparedData, selectedTargetKey]);
+
   const { data: checkoutLatestData, loading: loadingCheckoutLatest } =
     useAsync<OrderItemProcessInProgressProcessModel | null>(() => {
-      if (!preparedData?.orderId || !preparedData?.orderItemId) {
+      if (!currentTarget?.orderId || !currentTarget?.orderItemId) {
         return Promise.resolve(null);
       }
-      return getCheckoutLatest(preparedData.orderId, preparedData.orderItemId);
-    }, [preparedData?.orderId, preparedData?.orderItemId], {
-      key: `order-process-check-code-latest:${preparedData?.orderId ?? ""}:${preparedData?.orderItemId ?? ""}`,
+      return getCheckoutLatest(currentTarget.orderId, currentTarget.orderItemId, currentTarget.productId);
+    }, [currentTarget?.orderId, currentTarget?.orderItemId, currentTarget?.productId], {
+      key: `order-process-check-code-latest:${currentTarget?.orderId ?? ""}:${currentTarget?.orderItemId ?? ""}:${currentTarget?.productId ?? ""}`,
     });
 
-  const isCheckout = Boolean(preparedData?.id);
+  const isCheckout = Boolean(currentTarget?.id);
   const header = "Hiện tại";
 
   const title = React.useMemo(() => {
-    const codeTitle = preparedData?.orderItemCode;
+    const codeTitle = currentTarget?.orderItemCode;
     return codeTitle ? `Mã: ${codeTitle}` : "Đơn hàng";
-  }, [preparedData?.orderItemCode]);
+  }, [currentTarget?.orderItemCode]);
 
   return (
     <>
@@ -82,6 +102,27 @@ export function OrderProcessCheckCodeWidget() {
             )}
           </Section>
           <Spacer />
+          {preparedData?.availableTargets && preparedData.availableTargets.length > 1 ? (
+            <>
+              <SectionCard title="Chọn sản phẩm">
+                <TextField
+                  fullWidth
+                  select
+                  size="small"
+                  label="Sản phẩm / công đoạn"
+                  value={selectedTargetKey ?? ""}
+                  onChange={(event) => setSelectedTargetKey(event.target.value)}
+                >
+                  {preparedData.availableTargets.map((target) => (
+                    <MenuItem key={buildTargetKey(target)} value={buildTargetKey(target)}>
+                      {buildProductProcessLabel(target)}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              </SectionCard>
+              <Spacer />
+            </>
+          ) : null}
           <SectionCard
             title={header}
             extra={
@@ -106,7 +147,7 @@ export function OrderProcessCheckCodeWidget() {
               <AutoForm
                 name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
                 ref={frmProcessCheckInOrOutRef}
-                initial={preparedData ?? {}}
+                initial={currentTarget ?? {}}
               />
             )}
           </SectionCard>
@@ -137,6 +178,14 @@ export function OrderProcessCheckCodeWidget() {
       )}
     </>
   );
+}
+
+function buildTargetKey(target?: {
+  id?: number | null;
+  processId?: number | null;
+  productId?: number | null;
+}) {
+  return `${target?.id ?? 0}:${target?.processId ?? 0}:${target?.productId ?? 0}`;
 }
 
 registerSlot({

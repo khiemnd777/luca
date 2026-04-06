@@ -8,6 +8,7 @@ import { parseIntSafe } from "@root/shared/utils/number.utils";
 import type { OrderItemProcessUpsertModel } from "../model/order-item-process.model";
 import { checkInOrOut } from "../api/order-item-process.api";
 import { navigate } from "@root/core/navigation/navigate";
+import { buildProductProcessLabel } from "../utils/order.utils";
 
 const buildRelationSearchSingleField = (
   name: string,
@@ -60,7 +61,7 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       kind: "searchsingle",
       label: "Công đoạn hiện tại",
       name: "processId",
-      getOptionLabel: (d: any) => `${d?.sectionName ? `${d?.sectionName} > ` : ""}${d?.processName ?? ""}`,
+      getOptionLabel: (d: any) => buildProductProcessLabel(d),
       async hydrateById(idValue: number | string) {
         if (!idValue) return null;
         return await rel1("orderitem_process", Number(idValue));
@@ -95,10 +96,18 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       "Công đoạn tiếp theo",
       "Chọn công đoạn",
       "orderitem_process",
-      (d: any) => d?.processName ?? "",
-      (d: any) => `${d?.sectionName ? `${d?.sectionName} > ` : ""}${d?.processName ?? ""}`,
+      (d: any) => buildProductProcessLabel(d),
+      (d: any) => {
+        const processLabel = d?.sectionName ? `${d?.sectionName} > ${d?.processName ?? ""}` : d?.processName ?? "";
+        const productProcessLabel = buildProductProcessLabel(d);
+        return productProcessLabel || processLabel;
+      },
       "step_number",
-      (ctx) => [`order_item_id=${ctx?.values.orderItemId}`, `order_id=${ctx?.values.orderId}`],
+      (ctx) => [
+        `order_item_id=${ctx?.values.orderItemId}`,
+        `order_id=${ctx?.values.orderId}`,
+        ...(ctx?.values.productId ? [`product_id=${ctx.values.productId}`] : []),
+      ],
     ),
     {
       name: "checkOutNote",

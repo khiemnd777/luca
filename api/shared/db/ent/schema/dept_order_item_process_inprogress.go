@@ -56,6 +56,15 @@ func (OrderItemProcessInProgress) Fields() []ent.Field {
 		field.Int64("order_id").
 			Nillable().
 			Optional(),
+		field.Int("product_id").
+			Optional().
+			Nillable(),
+		field.String("product_code").
+			Optional().
+			Nillable(),
+		field.String("product_name").
+			Optional().
+			Nillable(),
 
 		// assignee
 		field.Int64("assigned_id").
@@ -96,6 +105,7 @@ func (OrderItemProcessInProgress) Edges() []ent.Edge {
 func (OrderItemProcessInProgress) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("order_item_id", "created_at"),
+		index.Fields("order_item_id", "product_id", "created_at"),
 		index.Fields("process_id", "completed_at"),
 		index.Fields("process_id"),
 	}

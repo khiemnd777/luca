@@ -129,6 +129,12 @@ type orderItemProcessRepository struct {
 	cfMgr *customfields.Manager
 }
 
+type orderItemProductContext struct {
+	ProductID   int
+	ProductCode *string
+	ProductName *string
+}
+
 func NewOrderItemProcessRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) OrderItemProcessRepository {
 	return &orderItemProcessRepository{db: db, deps: deps, cfMgr: cfMgr}
 }
@@ -160,71 +166,66 @@ func (r *orderItemProcessRepository) CreateManyByProductIDs(
 		uniqueProductIDs = append(uniqueProductIDs, pid)
 	}
 
+	productContexts, err := r.getProductContexts(ctx, uniqueProductIDs)
+	if err != nil {
+		logger.Error(fmt.Sprintf("[ERROR] %v", err))
+		return nil, err
+	}
+
 	processMap, err := r.getRawProcessesByProductIDs(ctx, uniqueProductIDs)
 	if err != nil {
 		logger.Error(fmt.Sprintf("[ERROR] %v", err))
 		return nil, err
 	}
 
-	seenProcessIDs := make(map[int]struct{})
-	uniqueProcesses := make([]*model.ProcessDTO, 0)
-	processCounts := make(map[int]int, len(processMap))
-	totalProcesses := 0
+	inputs := make([]*model.OrderItemProcessUpsertDTO, 0)
+	col := []string{"order-item-process"}
 
 	for _, pid := range uniqueProductIDs {
 		processes := processMap[pid]
-		processCounts[pid] = len(processes)
-		totalProcesses += len(processes)
-
-		for _, p := range processes {
+		productCtx := productContexts[pid]
+		for i, p := range processes {
 			if p == nil {
 				continue
 			}
-			if _, ok := seenProcessIDs[p.ID]; ok {
-				continue
+
+			cf := utils.CloneOrInit(p.CustomFields)
+			if _, ok := cf["status"]; !ok {
+				cf["status"] = "waiting"
 			}
-			seenProcessIDs[p.ID] = struct{}{}
-			uniqueProcesses = append(uniqueProcesses, p)
+			if _, ok := cf["priority"]; !ok && priority != nil {
+				cf["priority"] = *priority
+			}
+
+			var pname *string
+			if p.Name != nil {
+				pname = p.Name
+			}
+
+			inputs = append(inputs, &model.OrderItemProcessUpsertDTO{
+				DTO: model.OrderItemProcessDTO{
+					OrderID:      &orderID,
+					OrderItemID:  orderItemID,
+					OrderCode:    orderCode,
+					ProductID:    utils.Ptr(pid),
+					ProductCode:  productCtx.ProductCode,
+					ProductName:  productCtx.ProductName,
+					Color:        p.Color,
+					SectionName:  p.SectionName,
+					SectionID:    p.SectionID,
+					LeaderID:     p.LeaderID,
+					LeaderName:   p.LeaderName,
+					ProcessName:  pname,
+					StepNumber:   i + 1,
+					CustomFields: cf,
+				},
+				Collections: &col,
+			})
 		}
 	}
 
-	if len(uniqueProcesses) == 0 {
+	if len(inputs) == 0 {
 		return []*model.OrderItemProcessDTO{}, nil
-	}
-
-	inputs := make([]*model.OrderItemProcessUpsertDTO, 0, len(uniqueProcesses))
-	col := []string{"order-item-process"}
-
-	for i, p := range uniqueProcesses {
-		cf := utils.CloneOrInit(p.CustomFields)
-		if _, ok := cf["status"]; !ok {
-			cf["status"] = "waiting"
-		}
-		if _, ok := cf["priority"]; !ok && priority != nil {
-			cf["priority"] = *priority
-		}
-
-		var pname *string
-		if p.Name != nil {
-			pname = p.Name
-		}
-
-		inputs = append(inputs, &model.OrderItemProcessUpsertDTO{
-			DTO: model.OrderItemProcessDTO{
-				OrderID:      &orderID,
-				OrderItemID:  orderItemID,
-				OrderCode:    orderCode,
-				Color:        p.Color,
-				SectionName:  p.SectionName,
-				SectionID:    p.SectionID,
-				LeaderID:     p.LeaderID,
-				LeaderName:   p.LeaderName,
-				ProcessName:  pname,
-				StepNumber:   i + 1,
-				CustomFields: cf,
-			},
-			Collections: &col,
-		})
 	}
 
 	out, err := r.CreateMany(ctx, tx, inputs)
@@ -291,6 +292,10 @@ func (r *orderItemProcessRepository) Create(ctx context.Context, tx *generated.T
 		Create().
 		SetOrderItemID(dto.OrderItemID).
 		SetNillableOrderID(dto.OrderID).
+		SetNillableOrderCode(dto.OrderCode).
+		SetNillableProductID(dto.ProductID).
+		SetNillableProductCode(dto.ProductCode).
+		SetNillableProductName(dto.ProductName).
 		SetNillableProcessName(dto.ProcessName).
 		SetStepNumber(dto.StepNumber).
 		SetNillableAssignedID(dto.AssignedID).
@@ -402,6 +407,10 @@ func (r *orderItemProcessRepository) Update(
 	q := tx.OrderItemProcess.
 		UpdateOne(existing).
 		SetNillableOrderID(dto.OrderID).
+		SetNillableOrderCode(dto.OrderCode).
+		SetNillableProductID(dto.ProductID).
+		SetNillableProductCode(dto.ProductCode).
+		SetNillableProductName(dto.ProductName).
 		SetNillableAssignedID(dto.AssignedID).
 		SetNillableAssignedName(dto.AssignedName).
 		SetNillableNote(dto.Note).
@@ -520,6 +529,7 @@ func (r *orderItemProcessRepository) GetProcessesByOrderItemID(
 			orderitemprocess.OrderItemID(orderItemID),
 		).
 		Order(
+			orderitemprocess.ByProductName(sql.OrderAsc()),
 			orderitemprocess.ByStepNumber(
 				sql.OrderAsc(),
 			),
@@ -550,6 +560,7 @@ func (r *orderItemProcessRepository) GetProcessesByAssignedID(
 			orderitemprocess.AssignedID(assignedID),
 		).
 		Order(
+			orderitemprocess.ByProductName(sql.OrderAsc()),
 			orderitemprocess.ByStepNumber(
 				sql.OrderAsc(),
 			),
@@ -609,6 +620,7 @@ func (r *orderItemProcessRepository) GetProcessesByOrderID(
 			orderitemprocess.OrderID(orderID),
 		).
 		Order(
+			orderitemprocess.ByProductName(sql.OrderAsc()),
 			orderitemprocess.ByStepNumber(
 				sql.OrderAsc(),
 			),
@@ -906,4 +918,33 @@ func (r *orderItemProcessRepository) GetRawProcessesByProductID1(
 
 	dtos := mapper.MapListAs[*generated.Process, *model.ProcessDTO](processes)
 	return dtos, nil
+}
+
+func (r *orderItemProcessRepository) getProductContexts(
+	ctx context.Context,
+	productIDs []int,
+) (map[int]orderItemProductContext, error) {
+	if len(productIDs) == 0 {
+		return map[int]orderItemProductContext{}, nil
+	}
+
+	items, err := r.db.Product.
+		Query().
+		Where(product.IDIn(productIDs...)).
+		Select(product.FieldID, product.FieldCode, product.FieldName).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make(map[int]orderItemProductContext, len(items))
+	for _, item := range items {
+		out[item.ID] = orderItemProductContext{
+			ProductID:   item.ID,
+			ProductCode: item.Code,
+			ProductName: item.Name,
+		}
+	}
+
+	return out, nil
 }

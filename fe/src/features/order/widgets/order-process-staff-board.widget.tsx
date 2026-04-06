@@ -16,6 +16,7 @@ import { openFormDialog } from "@root/core/form/form-dialog.service";
 import { useAuth } from "@root/core/auth/use-auth";
 import { priorityColor } from "@root/shared/utils/order.utils";
 import ResponsiveStatusBoard from "@root/shared/components/status-board/responsive-status-board";
+import { buildProductLabel, buildProductProcessLabel } from "../utils/order.utils";
 
 export function OrderProcessBoardWidget() {
   const { user: authUser } = useAuth();
@@ -62,7 +63,12 @@ export function OrderProcessBoardWidget() {
         renderCard={(_id, _status, o) => (
           <Stack spacing={1}>
             <Typography fontWeight={700}>{o.orderCode}</Typography>
-            <Typography fontWeight={700}>{o.processName}</Typography>
+            <Typography fontWeight={700}>{buildProductProcessLabel(o)}</Typography>
+            {buildProductLabel(o) ? (
+              <Typography variant="caption" color="text.secondary">
+                {buildProductLabel(o)}
+              </Typography>
+            ) : null}
             <Stack direction="row" alignItems="left" spacing={1}>
               {o.assignedName &&
                 <Chip size="small" label={o.assignedName} />

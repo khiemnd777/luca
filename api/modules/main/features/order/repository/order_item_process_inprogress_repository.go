@@ -12,6 +12,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocess"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocessinprogress"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/predicate"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/section"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/sectionprocess"
 	"github.com/khiemnd777/noah_api/shared/mapper"
@@ -27,7 +28,7 @@ type OrderItemProcessInProgressRepository interface {
 	CheckIn(ctx context.Context, tx *generated.Tx, orderItemID int64, orderID *int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
 	CheckOut(ctx context.Context, tx *generated.Tx, orderItemID int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
 	GetLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressDTO, error)
-	GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressAndProcessDTO, error)
+	GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error)
 	GetInProgressesByOrderItemID(ctx context.Context, tx *generated.Tx, orderItemID int64) ([]*model.OrderItemProcessInProgressAndProcessDTO, error)
 	GetInProgressesByProcessID(ctx context.Context, tx *generated.Tx, processID int64) ([]*model.OrderItemProcessInProgressAndProcessDTO, error)
 	GetInProgressByID(ctx context.Context, tx *generated.Tx, inProgressID int64) (*model.OrderItemProcessInProgressAndProcessDTO, error)
@@ -54,6 +55,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByProcessID(ctx co
 			orderitemprocessinprogress.FieldID,
 			orderitemprocessinprogress.FieldCheckInNote,
 			orderitemprocessinprogress.FieldCheckOutNote,
+			orderitemprocessinprogress.FieldProductID,
+			orderitemprocessinprogress.FieldProductCode,
+			orderitemprocessinprogress.FieldProductName,
 			orderitemprocessinprogress.FieldAssignedID,
 			orderitemprocessinprogress.FieldAssignedName,
 			orderitemprocessinprogress.FieldStartedAt,
@@ -80,6 +84,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByProcessID(ctx co
 		}
 		out = append(out, &model.OrderItemProcessInProgressAndProcessDTO{
 			ID:           item.ID,
+			ProductID:    item.ProductID,
+			ProductCode:  item.ProductCode,
+			ProductName:  item.ProductName,
 			CheckInNote:  item.CheckInNote,
 			CheckOutNote: item.CheckOutNote,
 			AssignedID:   item.AssignedID,
@@ -106,6 +113,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByOrderItemID(ctx 
 			orderitemprocessinprogress.FieldOrderID,
 			orderitemprocessinprogress.FieldOrderItemID,
 			orderitemprocessinprogress.FieldOrderItemCode,
+			orderitemprocessinprogress.FieldProductID,
+			orderitemprocessinprogress.FieldProductCode,
+			orderitemprocessinprogress.FieldProductName,
 			orderitemprocessinprogress.FieldCheckInNote,
 			orderitemprocessinprogress.FieldCheckOutNote,
 			orderitemprocessinprogress.FieldAssignedID,
@@ -137,6 +147,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByOrderItemID(ctx 
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
 			OrderItemCode: item.OrderItemCode,
+			ProductID:     item.ProductID,
+			ProductCode:   item.ProductCode,
+			ProductName:   item.ProductName,
 			CheckInNote:   item.CheckInNote,
 			CheckOutNote:  item.CheckOutNote,
 			AssignedID:    item.AssignedID,
@@ -177,6 +190,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressByID(ctx context.Con
 
 	return &model.OrderItemProcessInProgressAndProcessDTO{
 		ID:           entity.ID,
+		ProductID:    entity.ProductID,
+		ProductCode:  entity.ProductCode,
+		ProductName:  entity.ProductName,
 		CheckInNote:  entity.CheckInNote,
 		CheckOutNote: entity.CheckOutNote,
 		AssignedID:   entity.AssignedID,
@@ -246,51 +262,99 @@ func (r *orderItemProcessInProgressRepository) PrepareCheckInOrOut(ctx context.C
 		}()
 	}
 
-	processes, err := r.getProcesses(ctx, tx, orderItemID)
+	targets, err := r.prepareTargets(ctx, tx, orderItemID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("no processes found for order item %d", orderItemID)
+	}
+
+	selected := r.selectPrepareTarget(targets)
+	selected.AvailableTargets = targets
+	return selected, nil
+}
+
+func (r *orderItemProcessInProgressRepository) prepareTargets(
+	ctx context.Context,
+	tx *generated.Tx,
+	orderItemID int64,
+	orderID *int64,
+) ([]*model.OrderItemProcessInProgressTargetDTO, error) {
+	processes, err := r.getProcesses(ctx, tx, orderItemID, nil)
 	if err != nil {
 		return nil, err
 	}
 	if len(processes) == 0 {
-		err = fmt.Errorf("no processes found for order item %d", orderItemID)
+		return []*model.OrderItemProcessInProgressTargetDTO{}, nil
+	}
+
+	orderItemEntity, err := tx.OrderItem.
+		Query().
+		Where(orderitem.IDEQ(orderItemID)).
+		Select(orderitem.FieldCode).
+		Only(ctx)
+	if err != nil {
 		return nil, err
 	}
 
-	latest, err := r.latestEntity(ctx, tx, orderItemID)
-	if err != nil && !generated.IsNotFound(err) {
-		return nil, err
+	grouped := r.groupProcesses(processes)
+	targets := make([]*model.OrderItemProcessInProgressTargetDTO, 0, len(grouped))
+
+	for _, group := range grouped {
+		if len(group) == 0 {
+			continue
+		}
+
+		productID := group[0].ProductID
+		latest, latestErr := r.latestEntity(ctx, tx, orderItemID, productID)
+		if latestErr != nil && !generated.IsNotFound(latestErr) {
+			return nil, latestErr
+		}
+
+		target, buildErr := r.buildPrepareTarget(group, latest, orderID, orderItemEntity.Code)
+		if buildErr != nil {
+			return nil, buildErr
+		}
+		targets = append(targets, target)
 	}
 
-	// Checkout
+	return targets, nil
+}
+
+func (r *orderItemProcessInProgressRepository) buildPrepareTarget(
+	processes []*generated.OrderItemProcess,
+	latest *generated.OrderItemProcessInProgress,
+	orderID *int64,
+	orderItemCode *string,
+) (*model.OrderItemProcessInProgressTargetDTO, error) {
+	if len(processes) == 0 {
+		return nil, fmt.Errorf("processes are required")
+	}
+
+	// Checkout target for the product currently in progress.
 	if latest != nil && latest.CompletedAt == nil {
 		currentProcessID := processes[0].ID
 		if latest.ProcessID != nil {
 			currentProcessID = *latest.ProcessID
 		}
-		nextProcessID := r.nextProcessID(processes, currentProcessID)
 		targetProcess := r.findProcess(processes, currentProcessID)
 		if targetProcess == nil {
-			err = fmt.Errorf("process %d not found for order item %d", currentProcessID, latest.OrderItemID)
-			return nil, err
+			return nil, fmt.Errorf("process %d not found for order item %d", currentProcessID, latest.OrderItemID)
 		}
 
-		orderItemEntity, err := tx.OrderItem.
-			Query().
-			Where(orderitem.IDEQ(orderItemID)).
-			Select(orderitem.FieldCode).
-			Only(ctx)
-		if err != nil {
-			return nil, err
-		}
-		orderItemCode := orderItemEntity.Code
-
-		return &model.OrderItemProcessInProgressDTO{
+		return &model.OrderItemProcessInProgressTargetDTO{
 			ID:            latest.ID,
 			ProcessID:     &currentProcessID,
 			PrevProcessID: latest.PrevProcessID,
-			NextProcessID: nextProcessID,
+			NextProcessID: r.nextProcessID(processes, currentProcessID),
 			OrderItemID:   latest.OrderItemID,
 			OrderID:       r.pickOrderID(latest.OrderID, targetProcess),
 			OrderItemCode: orderItemCode,
+			ProductID:     targetProcess.ProductID,
+			ProductCode:   targetProcess.ProductCode,
+			ProductName:   targetProcess.ProductName,
+			ProcessName:   targetProcess.ProcessName,
 			AssignedID:    targetProcess.AssignedID,
 			AssignedName:  targetProcess.AssignedName,
 			SectionName:   targetProcess.SectionName,
@@ -299,11 +363,10 @@ func (r *orderItemProcessInProgressRepository) PrepareCheckInOrOut(ctx context.C
 			CheckOutNote:  latest.CheckOutNote,
 			StartedAt:     latest.StartedAt,
 			CompletedAt:   latest.CompletedAt,
-			UpdatedAt:     latest.UpdatedAt,
+			Mode:          "check_out",
 		}, nil
 	}
 
-	// Checkin
 	targetProcessID := processes[0].ID
 	var prevProcessID *int64
 
@@ -320,31 +383,59 @@ func (r *orderItemProcessInProgressRepository) PrepareCheckInOrOut(ctx context.C
 
 	targetProcess := r.findProcess(processes, targetProcessID)
 	if targetProcess == nil {
-		err = fmt.Errorf("process %d not found for order item %d", targetProcessID, orderItemID)
-		return nil, err
+		return nil, fmt.Errorf("process %d not found for order item %d", targetProcessID, processes[0].OrderItemID)
 	}
 
-	orderItemEntity, err := tx.OrderItem.
-		Query().
-		Where(orderitem.IDEQ(orderItemID)).
-		Select(orderitem.FieldCode).
-		Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	orderItemCode := orderItemEntity.Code
-
-	return &model.OrderItemProcessInProgressDTO{
+	return &model.OrderItemProcessInProgressTargetDTO{
 		ProcessID:     &targetProcessID,
 		PrevProcessID: prevProcessID,
-		OrderItemID:   orderItemID,
+		OrderItemID:   targetProcess.OrderItemID,
 		OrderID:       r.pickOrderID(orderID, targetProcess),
 		OrderItemCode: orderItemCode,
+		ProductID:     targetProcess.ProductID,
+		ProductCode:   targetProcess.ProductCode,
+		ProductName:   targetProcess.ProductName,
+		ProcessName:   targetProcess.ProcessName,
 		AssignedID:    targetProcess.AssignedID,
 		AssignedName:  targetProcess.AssignedName,
 		SectionName:   targetProcess.SectionName,
 		SectionID:     targetProcess.SectionID,
+		Mode:          "check_in",
 	}, nil
+}
+
+func (r *orderItemProcessInProgressRepository) selectPrepareTarget(
+	targets []*model.OrderItemProcessInProgressTargetDTO,
+) *model.OrderItemProcessInProgressDTO {
+	selected := targets[0]
+	for _, target := range targets {
+		if target != nil && target.Mode == "check_out" {
+			selected = target
+			break
+		}
+	}
+
+	return &model.OrderItemProcessInProgressDTO{
+		ID:            selected.ID,
+		ProcessID:     selected.ProcessID,
+		ProcessName:   selected.ProcessName,
+		PrevProcessID: selected.PrevProcessID,
+		NextProcessID: selected.NextProcessID,
+		OrderItemID:   selected.OrderItemID,
+		OrderID:       selected.OrderID,
+		OrderItemCode: selected.OrderItemCode,
+		ProductID:     selected.ProductID,
+		ProductCode:   selected.ProductCode,
+		ProductName:   selected.ProductName,
+		AssignedID:    selected.AssignedID,
+		AssignedName:  selected.AssignedName,
+		CheckInNote:   selected.CheckInNote,
+		CheckOutNote:  selected.CheckOutNote,
+		StartedAt:     selected.StartedAt,
+		CompletedAt:   selected.CompletedAt,
+		SectionName:   selected.SectionName,
+		SectionID:     selected.SectionID,
+	}
 }
 
 func (r *orderItemProcessInProgressRepository) Assign(
@@ -441,6 +532,10 @@ func (r *orderItemProcessInProgressRepository) Assign(
 		SetNillableNextProcessID(current.NextProcessID).
 		SetOrderItemID(current.OrderItemID).
 		SetNillableOrderID(current.OrderID).
+		SetNillableOrderItemCode(current.OrderItemCode).
+		SetNillableProductID(current.ProductID).
+		SetNillableProductCode(current.ProductCode).
+		SetNillableProductName(current.ProductName).
 		SetNillableAssignedID(assignedID).
 		SetNillableAssignedName(assignedName).
 		SetNillableSectionName(current.SectionName).
@@ -522,6 +617,10 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 			SetNillableNextLeaderID(leaderID).
 			SetNillableNextLeaderName(leaderName).
 			SetNillableOrderID(checkInOrOutData.OrderID).
+			SetNillableOrderItemCode(checkInOrOutData.OrderItemCode).
+			SetNillableProductID(checkInOrOutData.ProductID).
+			SetNillableProductCode(checkInOrOutData.ProductCode).
+			SetNillableProductName(checkInOrOutData.ProductName).
 			SetNillableCheckOutNote(checkInOrOutData.CheckOutNote).
 			SetCompletedAt(completedAt).
 			Save(ctx)
@@ -563,13 +662,24 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 	proc, err := r.processClient(tx).
 		Query().
 		Where(orderitemprocess.IDEQ(*checkInOrOutData.ProcessID)).
-		Select(orderitemprocess.FieldSectionName).
+		Select(
+			orderitemprocess.FieldProcessName,
+			orderitemprocess.FieldSectionName,
+			orderitemprocess.FieldSectionID,
+			orderitemprocess.FieldProductID,
+			orderitemprocess.FieldProductCode,
+			orderitemprocess.FieldProductName,
+		).
 		Only(ctx)
 	if err != nil {
 		return nil, nil, nil, nil, err
 	}
 	checkInOrOutData.SectionName = proc.SectionName
 	checkInOrOutData.SectionID = proc.SectionID
+	checkInOrOutData.ProductID = proc.ProductID
+	checkInOrOutData.ProductCode = proc.ProductCode
+	checkInOrOutData.ProductName = proc.ProductName
+	checkInOrOutData.ProcessName = proc.ProcessName
 
 	// ---	Checkin
 	startedAt := time.Now()
@@ -580,6 +690,9 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 		SetOrderItemID(checkInOrOutData.OrderItemID).
 		SetNillableOrderID(checkInOrOutData.OrderID).
 		SetNillableOrderItemCode(checkInOrOutData.OrderItemCode).
+		SetNillableProductID(checkInOrOutData.ProductID).
+		SetNillableProductCode(checkInOrOutData.ProductCode).
+		SetNillableProductName(checkInOrOutData.ProductName).
 		SetNillableAssignedID(checkInOrOutData.AssignedID).
 		SetNillableAssignedName(checkInOrOutData.AssignedName).
 		SetNillableSectionName(checkInOrOutData.SectionName).
@@ -634,41 +747,36 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 }
 
 func (r *orderItemProcessInProgressRepository) CheckIn(ctx context.Context, tx *generated.Tx, orderItemID int64, orderID *int64, note *string) (*model.OrderItemProcessInProgressDTO, error) {
-	processes, err := r.getProcesses(ctx, tx, orderItemID)
+	prepared, err := r.PrepareCheckInOrOut(ctx, tx, orderItemID, orderID)
 	if err != nil {
 		return nil, err
 	}
-	if len(processes) == 0 {
-		return nil, fmt.Errorf("no processes found for order item %d", orderItemID)
-	}
-
-	latest, err := r.latestEntity(ctx, tx, orderItemID)
-	if err != nil && !generated.IsNotFound(err) {
+	prepared.CheckInNote = note
+	_, _, _, _, err = r.CheckInOrOut(ctx, prepared)
+	if err != nil {
 		return nil, err
 	}
-
-	return r.checkinWithData(ctx, tx, latest, processes, orderItemID, orderID, note)
+	return prepared, nil
 }
 
 func (r *orderItemProcessInProgressRepository) CheckOut(ctx context.Context, tx *generated.Tx, orderItemID int64, note *string) (*model.OrderItemProcessInProgressDTO, error) {
-	processes, err := r.getProcesses(ctx, tx, orderItemID)
+	prepared, err := r.PrepareCheckInOrOut(ctx, tx, orderItemID, nil)
 	if err != nil {
 		return nil, err
 	}
-	if len(processes) == 0 {
-		return nil, fmt.Errorf("no processes found for order item %d", orderItemID)
+	prepared.CheckOutNote = note
+	if prepared.ID == 0 {
+		return nil, fmt.Errorf("no checkout target found for order item %d", orderItemID)
 	}
-
-	latest, err := r.latestEntity(ctx, tx, orderItemID)
+	_, _, _, _, err = r.CheckInOrOut(ctx, prepared)
 	if err != nil {
 		return nil, err
 	}
-
-	return r.checkoutWithData(ctx, tx, latest, processes, note)
+	return prepared, nil
 }
 
 func (r *orderItemProcessInProgressRepository) GetLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressDTO, error) {
-	entity, err := r.latestEntity(ctx, tx, orderItemID)
+	entity, err := r.latestEntity(ctx, tx, orderItemID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -676,19 +784,27 @@ func (r *orderItemProcessInProgressRepository) GetLatest(ctx context.Context, tx
 	return dto, nil
 }
 
-func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressAndProcessDTO, error) {
+func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error) {
+	predicates := []predicate.OrderItemProcessInProgress{
+		orderitemprocessinprogress.OrderItemID(orderItemID),
+		orderitemprocessinprogress.CompletedAtNotNil(),
+	}
+	if productID != nil {
+		predicates = append(predicates, orderitemprocessinprogress.ProductIDEQ(*productID))
+	}
+
 	entity, err := r.inprogressClient(tx).
 		Query().
-		Where(
-			orderitemprocessinprogress.OrderItemID(orderItemID),
-			orderitemprocessinprogress.CompletedAtNotNil(),
-		).
+		Where(predicates...).
 		Order(orderitemprocessinprogress.ByCreatedAt(sql.OrderDesc())).
 		Select(
 			orderitemprocessinprogress.FieldID,
 			orderitemprocessinprogress.FieldOrderID,
 			orderitemprocessinprogress.FieldOrderItemID,
 			orderitemprocessinprogress.FieldOrderItemCode,
+			orderitemprocessinprogress.FieldProductID,
+			orderitemprocessinprogress.FieldProductCode,
+			orderitemprocessinprogress.FieldProductName,
 			orderitemprocessinprogress.FieldCheckInNote,
 			orderitemprocessinprogress.FieldCheckOutNote,
 			orderitemprocessinprogress.FieldAssignedID,
@@ -722,6 +838,9 @@ func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Con
 		OrderID:       entity.OrderID,
 		OrderItemID:   entity.OrderItemID,
 		OrderItemCode: entity.OrderItemCode,
+		ProductID:     entity.ProductID,
+		ProductCode:   entity.ProductCode,
+		ProductName:   entity.ProductName,
 		CheckInNote:   entity.CheckInNote,
 		CheckOutNote:  entity.CheckOutNote,
 		AssignedID:    entity.AssignedID,
@@ -735,10 +854,17 @@ func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Con
 	}, nil
 }
 
-func (r *orderItemProcessInProgressRepository) latestEntity(ctx context.Context, tx *generated.Tx, orderItemID int64) (*generated.OrderItemProcessInProgress, error) {
+func (r *orderItemProcessInProgressRepository) latestEntity(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*generated.OrderItemProcessInProgress, error) {
+	predicates := []predicate.OrderItemProcessInProgress{
+		orderitemprocessinprogress.OrderItemID(orderItemID),
+	}
+	if productID != nil {
+		predicates = append(predicates, orderitemprocessinprogress.ProductIDEQ(*productID))
+	}
+
 	q := r.inprogressClient(tx).
 		Query().
-		Where(orderitemprocessinprogress.OrderItemID(orderItemID)).
+		Where(predicates...).
 		Order(orderitemprocessinprogress.ByCreatedAt(sql.OrderDesc()))
 
 	entity, err := q.First(ctx)
@@ -748,12 +874,51 @@ func (r *orderItemProcessInProgressRepository) latestEntity(ctx context.Context,
 	return entity, nil
 }
 
-func (r *orderItemProcessInProgressRepository) getProcesses(ctx context.Context, tx *generated.Tx, orderItemID int64) ([]*generated.OrderItemProcess, error) {
+func (r *orderItemProcessInProgressRepository) getProcesses(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) ([]*generated.OrderItemProcess, error) {
+	predicates := []predicate.OrderItemProcess{
+		orderitemprocess.OrderItemID(orderItemID),
+	}
+	if productID != nil {
+		predicates = append(predicates, orderitemprocess.ProductIDEQ(*productID))
+	}
+
 	q := r.processClient(tx).
 		Query().
-		Where(orderitemprocess.OrderItemID(orderItemID)).
-		Order(orderitemprocess.ByStepNumber(sql.OrderAsc()))
+		Where(predicates...).
+		Order(
+			orderitemprocess.ByProductName(sql.OrderAsc()),
+			orderitemprocess.ByStepNumber(sql.OrderAsc()),
+		)
 	return q.All(ctx)
+}
+
+func (r *orderItemProcessInProgressRepository) groupProcesses(
+	processes []*generated.OrderItemProcess,
+) [][]*generated.OrderItemProcess {
+	groups := make([][]*generated.OrderItemProcess, 0)
+	indexByKey := map[string]int{}
+
+	for _, process := range processes {
+		if process == nil {
+			continue
+		}
+
+		key := "legacy"
+		if process.ProductID != nil {
+			key = fmt.Sprintf("product:%d", *process.ProductID)
+		}
+
+		groupIdx, ok := indexByKey[key]
+		if !ok {
+			groupIdx = len(groups)
+			indexByKey[key] = groupIdx
+			groups = append(groups, []*generated.OrderItemProcess{})
+		}
+
+		groups[groupIdx] = append(groups[groupIdx], process)
+	}
+
+	return groups
 }
 
 func (r *orderItemProcessInProgressRepository) nextProcessID(processes []*generated.OrderItemProcess, currentID int64) *int64 {
@@ -1213,6 +1378,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByAssignedID(
 					orderitemprocessinprogress.FieldOrderID,
 					orderitemprocessinprogress.FieldOrderItemID,
 					orderitemprocessinprogress.FieldOrderItemCode,
+					orderitemprocessinprogress.FieldProductID,
+					orderitemprocessinprogress.FieldProductCode,
+					orderitemprocessinprogress.FieldProductName,
 					orderitemprocessinprogress.FieldCheckInNote,
 					orderitemprocessinprogress.FieldCheckOutNote,
 					orderitemprocessinprogress.FieldAssignedID,
@@ -1249,6 +1417,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByAssignedID(
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
 			OrderItemCode: item.OrderItemCode,
+			ProductID:     item.ProductID,
+			ProductCode:   item.ProductCode,
+			ProductName:   item.ProductName,
 			CheckInNote:   item.CheckInNote,
 			CheckOutNote:  item.CheckOutNote,
 			AssignedID:    item.AssignedID,
@@ -1289,6 +1460,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByStaffTimeline(
 			orderitemprocessinprogress.FieldOrderID,
 			orderitemprocessinprogress.FieldOrderItemID,
 			orderitemprocessinprogress.FieldOrderItemCode,
+			orderitemprocessinprogress.FieldProductID,
+			orderitemprocessinprogress.FieldProductCode,
+			orderitemprocessinprogress.FieldProductName,
 			orderitemprocessinprogress.FieldCheckInNote,
 			orderitemprocessinprogress.FieldCheckOutNote,
 			orderitemprocessinprogress.FieldAssignedID,
@@ -1321,6 +1495,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByStaffTimeline(
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
 			OrderItemCode: item.OrderItemCode,
+			ProductID:     item.ProductID,
+			ProductCode:   item.ProductCode,
+			ProductName:   item.ProductName,
 			CheckInNote:   item.CheckInNote,
 			CheckOutNote:  item.CheckOutNote,
 			AssignedID:    item.AssignedID,

@@ -7,6 +7,9 @@ type OrderItemProcessInProgressAndProcessDTO struct {
 	OrderID       *int64     `json:"order_id,omitempty"`
 	OrderItemID   int64      `json:"order_item_id,omitempty"`
 	OrderItemCode *string    `json:"order_item_code,omitempty"`
+	ProductID     *int       `json:"product_id,omitempty"`
+	ProductCode   *string    `json:"product_code,omitempty"`
+	ProductName   *string    `json:"product_name,omitempty"`
 	CheckInNote   *string    `json:"check_in_note,omitempty"`
 	CheckOutNote  *string    `json:"check_out_note,omitempty"`
 	AssignedID    *int64     `json:"assigned_id,omitempty"`
