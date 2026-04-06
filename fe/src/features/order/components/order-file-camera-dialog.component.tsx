@@ -1,4 +1,5 @@
 import * as React from "react";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import {
   Alert,
   Box,
@@ -114,6 +115,7 @@ export function OrderFileCameraDialog({
           {error ? <Alert severity="warning">{error}</Alert> : null}
           <Box
             sx={{
+              position: "relative",
               minHeight: 280,
               borderRadius: 1,
               overflow: "hidden",
@@ -123,25 +125,46 @@ export function OrderFileCameraDialog({
               justifyContent: "center",
             }}
           >
+            <Box
+              ref={videoRef}
+              component="video"
+              autoPlay
+              playsInline
+              muted
+              sx={{
+                width: "100%",
+                maxHeight: "70vh",
+                minHeight: 280,
+                display: "block",
+                objectFit: "contain",
+              }}
+            />
             {loading ? (
-              <CircularProgress />
-            ) : (
               <Box
-                ref={videoRef}
-                component="video"
-                autoPlay
-                playsInline
-                muted
-                sx={{ width: "100%", maxHeight: "70vh", objectFit: "contain" }}
-              />
-            )}
+                sx={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  bgcolor: "rgba(0, 0, 0, 0.35)",
+                }}
+              >
+                <CircularProgress />
+              </Box>
+            ) : null}
           </Box>
           <canvas ref={canvasRef} hidden />
         </Stack>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Đóng</Button>
-        <Button variant="contained" onClick={handleCapture} disabled={loading}>
+        <Button
+          variant="contained"
+          startIcon={<PhotoCameraOutlinedIcon />}
+          onClick={handleCapture}
+          disabled={loading}
+        >
           Chụp
         </Button>
       </DialogActions>

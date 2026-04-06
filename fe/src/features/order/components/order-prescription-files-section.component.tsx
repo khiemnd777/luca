@@ -1,4 +1,6 @@
 import * as React from "react";
+import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
+import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import {
   Button,
   CircularProgress,
@@ -260,9 +262,11 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
             {canMutate ? (
               <>
                 <Button variant="outlined" onClick={() => setCameraOpen(true)}>
+                  <PhotoCameraOutlinedIcon sx={{ mr: 1 }} />
                   Chụp hình
                 </Button>
                 <Button variant="outlined" onClick={() => inputRef.current?.click()}>
+                  <UploadFileOutlinedIcon sx={{ mr: 1 }} />
                   Chọn files
                 </Button>
                 {props.mode === "immediate" ? (

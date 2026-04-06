@@ -1,7 +1,9 @@
 import * as React from "react";
 import {
   Box,
+  Button,
   Dialog,
+  DialogActions,
   DialogContent,
   DialogTitle,
   Typography,
@@ -73,6 +75,9 @@ export function OrderPrescriptionFileViewer({
     <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
       <DialogTitle>{fileName ?? "Xem file"}</DialogTitle>
       <DialogContent dividers>{body}</DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Đóng</Button>
+      </DialogActions>
     </Dialog>
   );
 }
