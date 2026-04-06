@@ -13,6 +13,11 @@ import { OrderLoanerMaterialItemList } from "../components/order-material-loaner
 import PromotionValidateButton from "../components/order-promotion-validate-button.component";
 import { normalizeOrderPaymentFlags } from "./payment-flags";
 import { TotalPriceWithPromotionV2 } from "../components/order-total-price-with-promotion.component";
+import {
+  OrderPrescriptionFilesSection,
+  applyCreatedOrderToPrescriptionScope,
+} from "../components/order-prescription-files-section.component";
+import { syncDeferredPrescriptionFiles } from "../utils/order-prescription-file.sync";
 
 export function buildNewOrderSchema(): FormSchema {
   let previousClinicId: string | number | null = null;
@@ -465,6 +470,32 @@ export function buildNewOrderSchema(): FormSchema {
         />
       ),
     },
+    {
+      kind: "custom",
+      name: "__prescriptionFiles",
+      label: "Phiếu chỉ định",
+      group: "prescription-files",
+      fullWidth: true,
+      render: ({ values, ctx }) => {
+        const scopeKey = String(values.__prescriptionFilesScopeKey ?? ctx?.formSessionId ?? "order-new");
+        if (ctx && values.__prescriptionFilesScopeKey !== scopeKey) {
+          ctx.setValue("__prescriptionFilesScopeKey", scopeKey);
+        }
+
+        return (
+          <OrderPrescriptionFilesSection
+            mode="deferred"
+            scopeKey={scopeKey}
+            orderId={typeof values.id === "number" ? values.id : undefined}
+            canMutate
+            setOrderValues={(patch) => {
+              if (!ctx) return;
+              Object.entries(patch).forEach(([key, value]) => ctx.setValue(key, value));
+            }}
+          />
+        );
+      },
+    },
   ];
 
   return {
@@ -513,6 +544,11 @@ export function buildNewOrderSchema(): FormSchema {
         label: "Thành tiền:",
         col: 1,
       },
+      {
+        name: "prescription-files",
+        label: "Phiếu chỉ định:",
+        col: 1,
+      },
     ],
     modeResolver: (_) => {
       return "create";
@@ -521,9 +557,24 @@ export function buildNewOrderSchema(): FormSchema {
       create: {
         type: "fn",
         run: async (dto) => {
-          console.log(dto);
-          await create(dto as OrderUpsertModel);
-          return dto;
+          const scopeKey = String((dto as any).__prescriptionFilesScopeKey ?? "");
+          const model = dto as OrderUpsertModel;
+          const hasExistingOrder = typeof model.dto?.id === "number" && model.dto.id > 0;
+
+          const result = hasExistingOrder
+            ? await update(model).then(() => id(model.dto.id))
+            : await create(model);
+
+          if (scopeKey && result?.id) {
+            applyCreatedOrderToPrescriptionScope(scopeKey, {
+              id: result.id,
+              code: result.code,
+              codeLatest: result.codeLatest,
+            });
+            await syncDeferredPrescriptionFiles(scopeKey, result.id);
+          }
+
+          return result;
         },
       },
       update: {
@@ -558,7 +609,10 @@ export function buildNewOrderSchema(): FormSchema {
     },
 
     hooks: {
-      mapToDto: (v) => mapper.map("Order", normalizeOrderPaymentFlags(v), "model_to_dto"),
+      mapToDto: (v) => ({
+        ...mapper.map("Order", normalizeOrderPaymentFlags(v), "model_to_dto"),
+        __prescriptionFilesScopeKey: v.__prescriptionFilesScopeKey,
+      }),
     },
   };
 }

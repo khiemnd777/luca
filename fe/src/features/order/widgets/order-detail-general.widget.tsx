@@ -20,10 +20,13 @@ import { AuditLogListInfinite } from "@core/auditlog";
 import { apiClient } from "@core/network/api-client";
 import type { OrderModel } from "../model/order.model";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
+import { useAuthStore } from "@store/auth-store";
+import { OrderPrescriptionFilesSection } from "../components/order-prescription-files-section.component";
 
 export function OrderDetailBodyWidget() {
   const { orderId } = useParams();
   const frmOrderEditRef = React.useRef<AutoFormRef>(null);
+  const canUpdateOrder = useAuthStore((state) => state.hasPermission("order.update"));
 
   const { data: detail, loading } = useAsync<OrderModel | null>(() => {
     if (!orderId) return Promise.resolve(null);
@@ -124,6 +127,22 @@ export function OrderDetailBodyWidget() {
                   <SectionCard title={title ?? ""}>
                     <OrderDetailDeliveryStatusBoard
                       orderId={orderId ? Number(orderId) : undefined}
+                    />
+                  </SectionCard>
+                </Box>
+              ),
+            },
+            {
+              label: "Phiếu chỉ định",
+              value: "prescription-files",
+              content: (
+                <Box>
+                  <SectionCard title={title ?? ""}>
+                    <OrderPrescriptionFilesSection
+                      mode="immediate"
+                      scopeKey={`order-detail:${orderTargetId ?? "new"}:prescription-files`}
+                      orderId={orderTargetId}
+                      canMutate={canUpdateOrder}
                     />
                   </SectionCard>
                 </Box>

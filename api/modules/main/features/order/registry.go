@@ -48,6 +48,11 @@ func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.Modu
 	ordItemProcessHandler := handler.NewOrderItemProcessHandler(ordItemProcessSvc, deps)
 	ordItemProcessHandler.RegisterRoutes(router)
 
+	orderFileRepo := repository.NewOrderFileRepository(deps.Ent.(*generated.Client))
+	orderFileSvc := service.NewOrderFileService(orderFileRepo, ordItemRepo, deps)
+	orderFileHandler := handler.NewOrderFileHandler(orderFileSvc, deps)
+	orderFileHandler.RegisterRoutes(router)
+
 	return nil
 }
 
