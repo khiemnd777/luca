@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   Button,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
@@ -26,6 +27,7 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
   const [downloading, setDownloading] = React.useState(false);
   const [open, setOpen] = React.useState(false);
   const [paperSize, setPaperSize] = React.useState<DeliveryNotePaperSize>("A5");
+  const [showAmounts, setShowAmounts] = React.useState(true);
 
   const handleOpen = React.useCallback(() => {
     if (!orderId) {
@@ -55,12 +57,13 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
       await downloadDeliveryNote({
         order_id: Number(orderId),
         paper_size: paperSize,
+        show_amounts: showAmounts,
       });
       setOpen(false);
     } finally {
       setDownloading(false);
     }
-  }, [orderId, paperSize]);
+  }, [orderId, paperSize, showAmounts]);
 
   return (
     <IfPermission permissions={["order.view"]}>
@@ -96,6 +99,16 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
                 />
               </RadioGroup>
             </FormControl>
+            <FormControlLabel
+              sx={{ mt: 1 }}
+              control={(
+                <Checkbox
+                  checked={showAmounts}
+                  onChange={(event) => setShowAmounts(event.target.checked)}
+                />
+              )}
+              label="Hiển thị số tiền trên phiếu giao hàng"
+            />
           </DialogContent>
           <DialogActions>
             <Button onClick={handleClose} disabled={downloading}>

@@ -943,6 +943,8 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
         multiple={multiple}
         maxFiles={f.maxFiles}
         accept={f.accept ?? "image/*"}
+        imagePreviewAspectRatio={f.imagePreviewAspectRatio}
+        imagePreviewHeight={f.imagePreviewHeight}
         uploader={f.uploader}
         value={val}
         onChange={(newVal) => setValue(f.name, newVal)}

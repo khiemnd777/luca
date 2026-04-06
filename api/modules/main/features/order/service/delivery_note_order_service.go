@@ -24,6 +24,7 @@ import (
 type DeliveryNotePrintRequest struct {
 	OrderID            int64                           `json:"order_id"`
 	PaperSize          string                          `json:"paper_size,omitempty"`
+	ShowAmounts        *bool                           `json:"show_amounts,omitempty"`
 	Company            *DeliveryNoteCompany            `json:"company,omitempty"`
 	Attachments        *DeliveryNoteAttachments        `json:"attachments,omitempty"`
 	ImplantAccessories *DeliveryNoteImplantAccessories `json:"implant_accessories,omitempty"`
@@ -160,6 +161,7 @@ func buildDeliveryNoteFromOrder(
 		},
 		Attachments:        attachments,
 		ImplantAccessories: implantAccessories,
+		ShowAmounts:        resolveDeliveryNoteShowAmounts(req.ShowAmounts),
 	}
 
 	if req.Company != nil {
@@ -232,6 +234,14 @@ func buildDeliveryNoteFromOrder(
 	}
 
 	return note, nil
+}
+
+func resolveDeliveryNoteShowAmounts(showAmounts *bool) bool {
+	if showAmounts == nil {
+		return true
+	}
+
+	return *showAmounts
 }
 
 func pickOrderDate(dto *model.OrderDTO) time.Time {

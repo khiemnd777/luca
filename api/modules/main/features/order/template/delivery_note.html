@@ -299,10 +299,15 @@
         <thead>
           <tr>
             <th style="width: 7%;">Stt</th>
-            <th style="width: 41%;">Mô tả hàng hoá</th>
-            <th style="width: 12%;">Số lượng</th>
-            <th style="width: 18%;">Đơn giá</th>
-            <th style="width: 22%;">Thành tiền</th>
+            {{ if .ShowAmounts }}
+              <th style="width: 41%;">Mô tả hàng hoá</th>
+              <th style="width: 12%;">Số lượng</th>
+              <th style="width: 18%;">Đơn giá</th>
+              <th style="width: 22%;">Thành tiền</th>
+            {{ else }}
+              <th style="width: 68%;">Mô tả hàng hoá</th>
+              <th style="width: 25%;">Số lượng</th>
+            {{ end }}
           </tr>
         </thead>
         <tbody>
@@ -311,30 +316,36 @@
             <td class="center">{{ add1 $idx }}</td>
             <td>{{ $it.Description }}</td>
             <td class="right">{{ number $it.Quantity }}</td>
-            <td class="right">{{ currency $it.UnitPrice }}</td>
-            <td class="right">{{ currency $it.LineTotal }}</td>
+            {{ if $.ShowAmounts }}
+              <td class="right">{{ currency $it.UnitPrice }}</td>
+              <td class="right">{{ currency $it.LineTotal }}</td>
+            {{ end }}
           </tr>
           {{ end }}
         </tbody>
         <tfoot>
         <tr class="total-row">
-          <td colspan="2" class="center">TỔNG CỘNG</td>
+          <td colspan="{{ .TotalLabelColSpan }}" class="center">TỔNG CỘNG</td>
           <td class="right">{{ number .TotalQuantity }}</td>
-          <td></td>
-          <td class="right">{{ currency .TotalAmount }}</td>
+          {{ if .ShowAmounts }}
+            <td></td>
+            <td class="right">{{ currency .TotalAmount }}</td>
+          {{ end }}
         </tr>
-        <tr class="total-row">
-          <td colspan="4" class="center">MÃ KHUYẾN MÃI</td>
-          <td class="right">{{ if .PromotionCode }}{{ .PromotionCode }}{{ else }}-{{ end }}</td>
-        </tr>
-        <tr class="total-row">
-          <td colspan="4" class="center">GIẢM GIÁ</td>
-          <td class="right">{{ currency .DiscountAmount }}</td>
-        </tr>
-        <tr class="total-row">
-          <td colspan="4" class="center">THÀNH TIỀN</td>
-          <td class="right">{{ currency .FinalAmount }}</td>
-        </tr>
+        {{ if .ShowAmounts }}
+          <tr class="total-row">
+            <td colspan="{{ sub1 .ItemColumnCount }}" class="center">MÃ KHUYẾN MÃI</td>
+            <td class="right">{{ if .PromotionCode }}{{ .PromotionCode }}{{ else }}-{{ end }}</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="{{ sub1 .ItemColumnCount }}" class="center">GIẢM GIÁ</td>
+            <td class="right">{{ currency .DiscountAmount }}</td>
+          </tr>
+          <tr class="total-row">
+            <td colspan="{{ sub1 .ItemColumnCount }}" class="center">THÀNH TIỀN</td>
+            <td class="right">{{ currency .FinalAmount }}</td>
+          </tr>
+        {{ end }}
         <!-- <tr class="total-row">
           <td colspan="4" class="center">MÃ QR</td>
           <td class="right">

@@ -48,6 +48,7 @@ type DeliveryNote struct {
 	Company            DeliveryNoteCompany            `json:"company"`
 	Order              DeliveryNoteOrder              `json:"order"`
 	Items              []DeliveryNoteItem             `json:"items"`
+	ShowAmounts        bool                           `json:"show_amounts"`
 	PromotionCode      string                         `json:"promotion_code"`
 	DiscountAmount     float64                        `json:"discount_amount"`
 	FinalAmount        float64                        `json:"final_amount"`
@@ -113,6 +114,9 @@ type deliveryNoteTemplateData struct {
 	Company            DeliveryNoteCompany
 	Order              deliveryNoteOrderView
 	Items              []deliveryNoteItemView
+	ShowAmounts        bool
+	ItemColumnCount    int
+	TotalLabelColSpan  int
 	PromotionCode      string
 	DiscountAmount     float64
 	FinalAmount        float64
@@ -207,8 +211,14 @@ func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNote
 	totalQty := 0.0
 	totalAmount := 0.0
 	pageMargin := "8mm 6mm 8mm 6mm"
+	itemColumnCount := 3
+	totalLabelColSpan := 2
 	if paperSize == deliveryNotePaperSizeA4 {
 		pageMargin = "10mm 8mm 10mm 8mm"
+	}
+	if data.ShowAmounts {
+		itemColumnCount = 5
+		totalLabelColSpan = 2
 	}
 
 	for _, it := range data.Items {
@@ -240,6 +250,9 @@ func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNote
 			ClinicName:      strings.ToUpper(strings.TrimSpace(data.Order.ClinicName)),
 			ShippingAddress: data.Order.ShippingAddress,
 		},
+		ShowAmounts:        data.ShowAmounts,
+		ItemColumnCount:    itemColumnCount,
+		TotalLabelColSpan:  totalLabelColSpan,
 		Items:              items,
 		PromotionCode:      strings.TrimSpace(data.PromotionCode),
 		DiscountAmount:     data.DiscountAmount,

@@ -55,6 +55,8 @@ export function buildDepartmentSettingsSchema(): FormSchema {
       accept: "image/*",
       maxFiles: 1,
       multipleFiles: false,
+      imagePreviewAspectRatio: "16 / 6",
+      imagePreviewHeight: 96,
       helperText: "PNG/JPG ≤ 2MB. Dùng cho sidebar desktop và phiếu giao hàng.",
       uploader: uploadImages,
     },

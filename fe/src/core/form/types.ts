@@ -179,6 +179,8 @@ export type FieldDef = {
   uploader?: (files: File[]) => Promise<string[]>;                          // trả về URLs sau upload
   maxFiles?: number;
   multipleFiles?: boolean;                                                  // nếu không set, suy ra từ rules.required hoặc defaultValue
+  imagePreviewAspectRatio?: string;
+  imagePreviewHeight?: number;
 
   // password
   passwordRules?: PasswordRules;

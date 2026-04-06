@@ -24,6 +24,8 @@ export type ImageUploadFieldProps = {
   multiple?: boolean;            // default: true
   maxFiles?: number;
   accept?: string;               // default: "image/*"
+  imagePreviewAspectRatio?: string;
+  imagePreviewHeight?: number;
 
   /**
    * Nếu cung cấp → component:
@@ -62,6 +64,8 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
     multiple = true,
     maxFiles = Infinity,
     accept = "image/*",
+    imagePreviewAspectRatio = "1 / 1",
+    imagePreviewHeight = 96,
     uploader,
     value,
     onChange,
@@ -240,8 +244,9 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
 
       <Box
         sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
           gap: 1,
           mt: 1,
         }}
@@ -249,13 +254,27 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
         {/* 1) URL thật */}
         {showUrls &&
           urls.map((u, i) => (
-            <Thumb key={`url-${i}-${u}`} src={u} alt={`image-${i}`} onRemove={() => removeAt(i, true)} />
+            <Thumb
+              key={`url-${i}-${u}`}
+              src={u}
+              alt={`image-${i}`}
+              onRemove={() => removeAt(i, true)}
+              aspectRatio={imagePreviewAspectRatio}
+              height={imagePreviewHeight}
+            />
           ))}
 
         {/* 2) Không có uploader → preview từ File trong value */}
         {!uploader &&
           filePreviewsNoUploader.map((u, i) => (
-            <Thumb key={`file-${i}`} src={u} alt={`file-${i}`} onRemove={() => removeAt(i, false)} />
+            <Thumb
+              key={`file-${i}`}
+              src={u}
+              alt={`file-${i}`}
+              onRemove={() => removeAt(i, false)}
+              aspectRatio={imagePreviewAspectRatio}
+              height={imagePreviewHeight}
+            />
           ))}
 
         {/* 3) Có uploader → preview optimistic kèm progress */}
@@ -267,6 +286,8 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
               alt={it.file.name}
               onRemove={() => removeAt(i, false)}
               progress={it.progress}
+              aspectRatio={imagePreviewAspectRatio}
+              height={imagePreviewHeight}
             />
           ))}
       </Box>
@@ -293,11 +314,15 @@ function Thumb({
   alt,
   onRemove,
   progress,
+  aspectRatio = "1 / 1",
+  height = 96,
 }: {
   src: string;
   alt?: string;
   onRemove: () => void;
   progress?: number;
+  aspectRatio?: string;
+  height?: number;
 }) {
   const uploading = typeof progress === "number" && progress >= 0 && progress < 100;
   const resolved = useDisplayUrl(src);
@@ -319,13 +344,16 @@ function Thumb({
     <Box
       sx={{
         position: "relative",
-        width: "100%",
-        aspectRatio: "1 / 1",
+        flex: "0 0 auto",
+        width: "auto",
+        height,
+        aspectRatio,
         borderRadius: 1,
         overflow: "hidden",
         bgcolor: "background.default",
         border: "1px dashed",
         borderColor: "divider",
+        maxWidth: "100%",
       }}
     >
       <img

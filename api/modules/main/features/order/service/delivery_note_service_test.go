@@ -103,6 +103,14 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 			Number: "ORD-001",
 			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
 		},
+		ShowAmounts: true,
+		Items: []DeliveryNoteItem{
+			{
+				Description: "Rang su",
+				Quantity:    2,
+				UnitPrice:   100000,
+			},
+		},
 		Attachments: DeliveryNoteAttachments{
 			Items: []DeliveryNoteAttachmentItem{{ID: 1, Name: "Bộ chứng từ", Checked: true}},
 		},
@@ -129,6 +137,62 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "size: A4 portrait;") {
 		t.Fatal("expected selected paper size to be rendered into template css")
+	}
+	if !strings.Contains(rendered, "Đơn giá") || !strings.Contains(rendered, "Thành tiền") {
+		t.Fatal("expected amount columns to be rendered when show amounts is enabled")
+	}
+	if !strings.Contains(rendered, "GIẢM GIÁ") || !strings.Contains(rendered, "THÀNH TIỀN") {
+		t.Fatal("expected amount summary rows to be rendered when show amounts is enabled")
+	}
+}
+
+func TestDeliveryNoteTemplate_HidesAmountColumnsAndTotals(t *testing.T) {
+	tpl, err := getDeliveryNoteTemplate()
+	if err != nil {
+		t.Fatalf("getDeliveryNoteTemplate: %v", err)
+	}
+
+	viewData := buildDeliveryNoteViewData(DeliveryNote{
+		Company: DeliveryNoteCompany{Name: "Test Company"},
+		Order: DeliveryNoteOrder{
+			Number: "ORD-002",
+			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
+		},
+		ShowAmounts: false,
+		Items: []DeliveryNoteItem{
+			{
+				Description: "Rang su",
+				Quantity:    2,
+				UnitPrice:   100000,
+			},
+		},
+	}, deliveryNotePaperSizeA5)
+
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, viewData); err != nil {
+		t.Fatalf("execute delivery note template: %v", err)
+	}
+
+	rendered := html.String()
+	if strings.Contains(rendered, "Đơn giá") || strings.Contains(rendered, "Thành tiền") {
+		t.Fatal("expected amount columns to be removed when show amounts is disabled")
+	}
+	if strings.Contains(rendered, "GIẢM GIÁ") || strings.Contains(rendered, "THÀNH TIỀN") || strings.Contains(rendered, "MÃ KHUYẾN MÃI") {
+		t.Fatal("expected amount summary rows to be removed when show amounts is disabled")
+	}
+	if !strings.Contains(rendered, "TỔNG CỘNG") {
+		t.Fatal("expected total quantity row to remain when show amounts is disabled")
+	}
+}
+
+func TestResolveDeliveryNoteShowAmounts_DefaultsToTrue(t *testing.T) {
+	if !resolveDeliveryNoteShowAmounts(nil) {
+		t.Fatal("expected nil show_amounts to default to true")
+	}
+
+	disabled := false
+	if resolveDeliveryNoteShowAmounts(&disabled) {
+		t.Fatal("expected explicit false show_amounts to be preserved")
 	}
 }
 
