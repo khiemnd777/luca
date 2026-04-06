@@ -16,6 +16,7 @@ import { OrderProcessesStatusBoard } from "../components/order-process-status-bo
 import { generateTitle } from "../utils/order.utils";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
+import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 
 function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
@@ -34,6 +35,10 @@ function OrderDetailHistoricalGeneralWidget() {
     () => generateTitle(detail?.code, detail?.latestOrderItem?.code),
     [detail?.code, detail?.latestOrderItem?.code]
   );
+  const orderTargetId = React.useMemo(() => {
+    const value = detail?.id ?? (orderId ? Number(orderId) : undefined);
+    return typeof value === "number" && !Number.isNaN(value) ? value : undefined;
+  }, [detail?.id, orderId]);
 
   return (
     <>
@@ -81,7 +86,10 @@ function OrderDetailHistoricalGeneralWidget() {
               value: "qr",
               content: (
                 <Box>
-                  <SectionCard title={title ?? ""}>
+                  <SectionCard
+                    title={title ?? ""}
+                    extra={orderTargetId ? <OrderDetailPrintQRSlipButton orderId={orderTargetId} /> : null}
+                  >
                     <AutoForm name="order-qr" initial={detail} />
                   </SectionCard>
                 </Box>

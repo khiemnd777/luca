@@ -135,6 +135,30 @@ func (s *orderService) GenerateDeliveryNoteByOrderID(ctx context.Context, req De
 	return pdf, fileName, nil
 }
 
+func (s *orderService) GenerateQRSlipA5ByOrderID(ctx context.Context, orderID int64) ([]byte, string, error) {
+	if orderID <= 0 {
+		return nil, "", fmt.Errorf("invalid order_id")
+	}
+
+	orderDTO, err := s.repo.GetByID(ctx, orderID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	slip, err := buildQRSlipA5FromOrder(ctx, s, orderDTO, int(orderID))
+	if err != nil {
+		return nil, "", err
+	}
+
+	pdf, err := GenerateQRSlipA5PDF(slip)
+	if err != nil {
+		return nil, "", err
+	}
+
+	fileName := fmt.Sprintf("phieu-qr-%s-a5.pdf", strings.ReplaceAll(slip.Order.Number, "/", "-"))
+	return pdf, fileName, nil
+}
+
 func buildDeliveryNoteFromOrder(
 	orderDTO *model.OrderDTO,
 	products []*model.OrderItemProductDTO,
@@ -234,6 +258,45 @@ func buildDeliveryNoteFromOrder(
 	}
 
 	return note, nil
+}
+
+func buildQRSlipA5FromOrder(ctx context.Context, s *orderService, orderDTO *model.OrderDTO, orderID int) (QRSlipA5, error) {
+	if orderDTO == nil {
+		return QRSlipA5{}, fmt.Errorf("order not found")
+	}
+
+	orderCode := strings.TrimSpace(utils.DerefString(orderDTO.Code))
+	if orderCode == "" {
+		orderCode = strings.TrimSpace(utils.DerefString(orderDTO.CodeLatest))
+	}
+	if orderCode == "" {
+		return QRSlipA5{}, fmt.Errorf("order code is empty")
+	}
+
+	deliveryQRSvc := NewOrderDeliveryQRService(s.deps.Ent.(*generated.Client), s.deps)
+	rawToken, err := deliveryQRSvc.GenerateDeliveryQRToken(ctx, orderID)
+	if err != nil {
+		if errors.Is(err, model.ErrOrderAlreadyDelivered) {
+			return QRSlipA5{}, err
+		}
+		return QRSlipA5{}, err
+	}
+
+	qrValue := BuildDeliveryQRStartURL(s.deps.Config.DeliveryQR.ClientBaseURL, rawToken)
+	if strings.TrimSpace(qrValue) == "" {
+		return QRSlipA5{}, fmt.Errorf("qr value is empty")
+	}
+
+	return QRSlipA5{
+		Order: QRSlipA5Order{
+			Number:      orderCode,
+			ClinicName:  strings.TrimSpace(utils.DerefString(orderDTO.ClinicName)),
+			PatientName: strings.TrimSpace(utils.DerefString(orderDTO.PatientName)),
+			DentistName: strings.TrimSpace(utils.DerefString(orderDTO.DentistName)),
+		},
+		QRCode:         qrValue,
+		QRCodeImageURL: BuildQRCodeImageURL(qrValue, 720),
+	}, nil
 }
 
 func resolveDeliveryNoteShowAmounts(showAmounts *bool) bool {

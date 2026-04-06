@@ -27,6 +27,7 @@ type OrderService interface {
 	Create(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)
 	Update(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)
 	GenerateDeliveryNoteByOrderID(ctx context.Context, req DeliveryNotePrintRequest) ([]byte, string, error)
+	GenerateQRSlipA5ByOrderID(ctx context.Context, orderID int64) ([]byte, string, error)
 	UpdateStatus(ctx context.Context, deptID, userID int, orderItemProcessID int64, status string) (*model.OrderItemDTO, error)
 	UpdateDeliveryStatus(ctx context.Context, deptID, userID int, orderID, orderItemID int64, status string) (*model.OrderItemDTO, error)
 	GetDeliveryStatus(ctx context.Context, deptID int, orderID, orderItemID int64) (*string, error)

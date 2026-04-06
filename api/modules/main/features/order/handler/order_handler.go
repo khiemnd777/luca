@@ -45,6 +45,7 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>/sync-price", h.SyncPrice)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/item/:order_item_id<int>/delivery-status", h.GetDeliveryStatus)
 	app.RouterPost(router, "/:dept_id<int>/order/print", h.PrintDeliveryNote)
+	app.RouterPost(router, "/:dept_id<int>/order/print-qr-slip", h.PrintQRSlipA5)
 	app.RouterPost(router, "/:dept_id<int>/order", h.Create)
 	app.RouterPut(router, "/:dept_id<int>/order/:id<int>", h.Update)
 	app.RouterPut(router, "/:dept_id<int>/order/:id<int>/process/:order_item_process_id<int>/change-status/:status", h.UpdateStatus)
@@ -400,6 +401,29 @@ func (h *OrderHandler) PrintDeliveryNote(c *fiber.Ctx) error {
 	}
 
 	pdf, fileName, err := h.svc.GenerateDeliveryNoteByOrderID(c.UserContext(), *payload)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	c.Set(fiber.HeaderContentType, "application/pdf")
+	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+	return c.Status(fiber.StatusOK).Send(pdf)
+}
+
+func (h *OrderHandler) PrintQRSlipA5(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	payload, err := app.ParseBody[service.DeliveryNotePrintRequest](c)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+	if payload.OrderID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid order_id")
+	}
+
+	pdf, fileName, err := h.svc.GenerateQRSlipA5ByOrderID(c.UserContext(), payload.OrderID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

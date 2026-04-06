@@ -54,6 +54,23 @@ func TestGetDeliveryNoteTemplate_Cached(t *testing.T) {
 	}
 }
 
+func TestGetQRSlipA5Template_Cached(t *testing.T) {
+	tpl1, err := getQRSlipA5Template()
+	if err != nil {
+		t.Fatalf("getQRSlipA5Template first call: %v", err)
+	}
+	tpl2, err := getQRSlipA5Template()
+	if err != nil {
+		t.Fatalf("getQRSlipA5Template second call: %v", err)
+	}
+	if tpl1 == nil || tpl2 == nil {
+		t.Fatal("expected non-nil templates")
+	}
+	if tpl1 != tpl2 {
+		t.Fatal("expected cached qr slip template instance to be reused")
+	}
+}
+
 func TestConvertImageToBase64_WithFileSchemePNG(t *testing.T) {
 	tmpDir := t.TempDir()
 	imgPath := filepath.Join(tmpDir, "logo.png")
@@ -193,6 +210,64 @@ func TestResolveDeliveryNoteShowAmounts_DefaultsToTrue(t *testing.T) {
 	disabled := false
 	if resolveDeliveryNoteShowAmounts(&disabled) {
 		t.Fatal("expected explicit false show_amounts to be preserved")
+	}
+}
+
+func TestBuildQRSlipA5HeaderLine_UsesExpectedFields(t *testing.T) {
+	got := buildQRSlipA5HeaderLine(QRSlipA5Order{
+		Number:      "ORD-003",
+		ClinicName:  "Smile Lab",
+		PatientName: "Nguyen Van A",
+		DentistName: "BS Tran",
+	})
+
+	wantParts := []string{
+		"Mã đơn: ORD-003",
+		"Phòng khám: Smile Lab",
+		"Bệnh nhân: Nguyen Van A",
+		"Bác sĩ: BS Tran",
+	}
+	for _, part := range wantParts {
+		if !strings.Contains(got, part) {
+			t.Fatalf("expected header line to contain %q, got %q", part, got)
+		}
+	}
+}
+
+func TestQRSlipA5Template_RendersSingleLineHeaderAndImage(t *testing.T) {
+	tpl, err := getQRSlipA5Template()
+	if err != nil {
+		t.Fatalf("getQRSlipA5Template: %v", err)
+	}
+
+	viewData := buildQRSlipA5ViewData(QRSlipA5{
+		Order: QRSlipA5Order{
+			Number:      "ORD-004",
+			ClinicName:  "Smile Lab",
+			PatientName: "Nguyen Van B",
+			DentistName: "BS Le",
+		},
+		QRCode:         "https://example.com/qr",
+		QRCodeImageURL: "https://example.com/qr.png",
+	})
+
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, viewData); err != nil {
+		t.Fatalf("execute qr slip a5 template: %v", err)
+	}
+
+	rendered := html.String()
+	if !strings.Contains(rendered, "white-space: nowrap;") {
+		t.Fatal("expected single-line header css to be rendered")
+	}
+	if !strings.Contains(rendered, "width: 150mm;") {
+		t.Fatal("expected large centered qr image size to be rendered")
+	}
+	if !strings.Contains(rendered, "Mã đơn: ORD-004") {
+		t.Fatal("expected header line to contain order number")
+	}
+	if !strings.Contains(rendered, "https://example.com/qr.png") {
+		t.Fatal("expected template to render qr image url")
 	}
 }
 

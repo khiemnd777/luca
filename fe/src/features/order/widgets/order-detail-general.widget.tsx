@@ -19,6 +19,7 @@ import { OrderDetailDeliveryStatusBoard } from "../components/order-delivery-sta
 import { AuditLogListInfinite } from "@core/auditlog";
 import { apiClient } from "@core/network/api-client";
 import type { OrderModel } from "../model/order.model";
+import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 
 export function OrderDetailBodyWidget() {
   const { orderId } = useParams();
@@ -86,7 +87,10 @@ export function OrderDetailBodyWidget() {
               value: "qr",
               content: (
                 <Box>
-                  <SectionCard title={title ?? ""}>
+                  <SectionCard
+                    title={title ?? ""}
+                    extra={orderTargetId ? <OrderDetailPrintQRSlipButton orderId={orderTargetId} /> : null}
+                  >
                     <AutoForm name="order-qr" initial={detail} />
                   </SectionCard>
                 </Box>

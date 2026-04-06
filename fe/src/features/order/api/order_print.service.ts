@@ -1,6 +1,7 @@
 import toast from "react-hot-toast";
 import {
   printDeliveryNote,
+  printQRSlipA5,
   type DeliveryNotePaperSize,
   type DeliveryNotePrintRequest,
   type PrintPdfBlob,
@@ -75,6 +76,26 @@ export async function downloadDeliveryNote(
       error instanceof Error && error.message
         ? error.message
         : "Không thể in phiếu giao hàng.";
+
+    toast.error(message);
+    throw error;
+  }
+}
+
+export async function downloadQRSlipA5(
+  payload: Pick<DeliveryNotePrintRequest, "order_id">,
+): Promise<void> {
+  try {
+    const blob = (await printQRSlipA5(payload)) as PrintPdfBlob;
+    const filename = extractFileNameFromDisposition(blob.__contentDisposition);
+
+    triggerBrowserDownload(blob, filename);
+    toast.success("Da tai phieu QR.");
+  } catch (error) {
+    const message =
+      error instanceof Error && error.message
+        ? error.message
+        : "Không thể in phiếu QR.";
 
     toast.error(message);
     throw error;

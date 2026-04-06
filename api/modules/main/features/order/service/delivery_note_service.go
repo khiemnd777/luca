@@ -37,6 +37,10 @@ var (
 	deliveryNoteTemplate     *template.Template
 	deliveryNoteTemplateErr  error
 
+	qrSlipA5TemplateOnce sync.Once
+	qrSlipA5Template     *template.Template
+	qrSlipA5TemplateErr  error
+
 	deliveryNoteBrowserMu          sync.Mutex
 	deliveryNoteBrowserBin         string
 	deliveryNoteBrowserAllocator   context.Context
@@ -108,6 +112,19 @@ type DeliveryNotePaymentMethod struct {
 	CongNo  bool `json:"cong_no"`
 }
 
+type QRSlipA5 struct {
+	Order          QRSlipA5Order `json:"order"`
+	QRCode         string        `json:"qr_code"`
+	QRCodeImageURL string        `json:"qr_code_image_url"`
+}
+
+type QRSlipA5Order struct {
+	Number      string `json:"number"`
+	ClinicName  string `json:"clinic_name"`
+	PatientName string `json:"patient_name"`
+	DentistName string `json:"dentist_name"`
+}
+
 type deliveryNoteTemplateData struct {
 	PaperSize          string
 	PageMargin         string
@@ -143,6 +160,14 @@ type deliveryNoteItemView struct {
 	Quantity    float64
 	UnitPrice   float64
 	LineTotal   float64
+}
+
+type qrSlipA5TemplateData struct {
+	PaperSize      string
+	PageMargin     string
+	HeaderLine     string
+	QRCode         string
+	QRCodeImageURL string
 }
 
 // GenerateDeliveryNotePDF renders delivery note HTML and converts it to PDF bytes.
@@ -206,6 +231,16 @@ func getDeliveryNoteTemplate() (*template.Template, error) {
 	return deliveryNoteTemplate, nil
 }
 
+func getQRSlipA5Template() (*template.Template, error) {
+	qrSlipA5TemplateOnce.Do(func() {
+		qrSlipA5Template, qrSlipA5TemplateErr = template.New("order_qr_slip_a5").Parse(templateasset.OrderQRSlipA5HTML)
+	})
+	if qrSlipA5TemplateErr != nil {
+		return nil, fmt.Errorf("parse qr slip a5 template: %w", qrSlipA5TemplateErr)
+	}
+	return qrSlipA5Template, nil
+}
+
 func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNoteTemplateData {
 	items := make([]deliveryNoteItemView, 0, len(data.Items))
 	totalQty := 0.0
@@ -265,6 +300,59 @@ func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNote
 		TotalQuantity:      totalQty,
 		TotalAmount:        totalAmount,
 	}
+}
+
+func buildQRSlipA5ViewData(data QRSlipA5) qrSlipA5TemplateData {
+	return qrSlipA5TemplateData{
+		PaperSize:      deliveryNotePaperSizeA5,
+		PageMargin:     "8mm 8mm 8mm 8mm",
+		HeaderLine:     buildQRSlipA5HeaderLine(data.Order),
+		QRCode:         strings.TrimSpace(data.QRCode),
+		QRCodeImageURL: strings.TrimSpace(data.QRCodeImageURL),
+	}
+}
+
+func buildQRSlipA5HeaderLine(order QRSlipA5Order) string {
+	parts := make([]string, 0, 4)
+	if v := strings.TrimSpace(order.Number); v != "" {
+		parts = append(parts, "Mã đơn: "+v)
+	}
+	if v := strings.TrimSpace(order.ClinicName); v != "" {
+		parts = append(parts, "Phòng khám: "+v)
+	}
+	if v := strings.TrimSpace(order.PatientName); v != "" {
+		parts = append(parts, "Bệnh nhân: "+v)
+	}
+	if v := strings.TrimSpace(order.DentistName); v != "" {
+		parts = append(parts, "Bác sĩ: "+v)
+	}
+	return strings.Join(parts, " | ")
+}
+
+func GenerateQRSlipA5PDF(data QRSlipA5) ([]byte, error) {
+	if strings.TrimSpace(data.Order.Number) == "" {
+		return nil, errors.New("order number is required")
+	}
+	if strings.TrimSpace(data.QRCodeImageURL) == "" {
+		return nil, errors.New("qr code image url is required")
+	}
+
+	tpl, err := getQRSlipA5Template()
+	if err != nil {
+		return nil, err
+	}
+
+	var htmlBuf bytes.Buffer
+	if err := tpl.Execute(&htmlBuf, buildQRSlipA5ViewData(data)); err != nil {
+		return nil, fmt.Errorf("render qr slip a5 html: %w", err)
+	}
+
+	pdfBytes, err := htmlToPDF(htmlBuf.Bytes(), deliveryNotePaperSizeA5)
+	if err != nil {
+		return nil, fmt.Errorf("convert qr slip a5 to pdf: %w", err)
+	}
+
+	return pdfBytes, nil
 }
 
 func htmlToPDF(htmlBytes []byte, paperSize string) ([]byte, error) {
