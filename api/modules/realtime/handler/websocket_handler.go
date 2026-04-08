@@ -58,8 +58,18 @@ func (h *Handler) WithHeartbeat(pongWait, pingPeriod, writeWait time.Duration) *
 
 func (h *Handler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/", websocket.New(func(c *websocket.Conn) {
+		logger.Info("ws.realtime.accept",
+			"remote_addr", c.RemoteAddr().String(),
+			"local_addr", c.LocalAddr().String(),
+			"query_present", c.Query("token") != "",
+		)
+
 		userID, err := h.parseUserIDFromJWT(c)
 		if err != nil {
+			logger.Warn("ws.realtime.reject_user",
+				"remote_addr", c.RemoteAddr().String(),
+				"error", err,
+			)
 			if errors.Is(err, ErrTokenExpired) {
 				h.closeWithReason(c, "token_expired")
 			} else {
@@ -70,6 +80,11 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 
 		deptID, err := h.parseDeptIDFromJWT(c)
 		if err != nil {
+			logger.Warn("ws.realtime.reject_dept",
+				"remote_addr", c.RemoteAddr().String(),
+				"user_id", userID,
+				"error", err,
+			)
 			if errors.Is(err, ErrTokenExpired) {
 				h.closeWithReason(c, "token_expired")
 			} else {
@@ -84,8 +99,23 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 			Conn:   c,
 		}
 
+		logger.Info("ws.realtime.register",
+			"user_id", userID,
+			"dept_id", deptID,
+			"remote_addr", c.RemoteAddr().String(),
+			"local_addr", c.LocalAddr().String(),
+			"pong_wait", h.pongWait.String(),
+			"ping_period", h.pingPeriod.String(),
+			"write_wait", h.writeWait.String(),
+		)
+
 		h.hub.Register <- client
 		defer func() {
+			logger.Info("ws.realtime.unregister",
+				"user_id", client.UserID,
+				"dept_id", client.DeptID,
+				"remote_addr", c.RemoteAddr().String(),
+			)
 			h.hub.Unregister <- client
 			_ = client.Close()
 		}()
@@ -100,9 +130,19 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 		for {
 			mt, msg, err := c.ReadMessage()
 			if err != nil {
+				logger.Warn("ws.realtime.read_failed",
+					"user_id", client.UserID,
+					"dept_id", client.DeptID,
+					"remote_addr", c.RemoteAddr().String(),
+					"error", err,
+				)
 				break
 			}
 			if mt != websocket.TextMessage && mt != websocket.BinaryMessage {
+				logger.Debug("ws.realtime.ignore_message_type",
+					"user_id", client.UserID,
+					"message_type", mt,
+				)
 				continue
 			}
 
@@ -112,16 +152,32 @@ func (h *Handler) RegisterRoutes(router fiber.Router) {
 				case "pong":
 					// refresh read deadline (client is alive)
 					_ = c.SetReadDeadline(time.Now().Add(h.pongWait))
+					logger.Debug("ws.realtime.heartbeat_pong",
+						"user_id", client.UserID,
+						"dept_id", client.DeptID,
+						"next_deadline", time.Now().Add(h.pongWait).Format(time.RFC3339Nano),
+					)
 					continue
 				case "ping":
 					// client-initiated ping; reply immediately
 					_ = h.writeText(client, "pong")
 					_ = c.SetReadDeadline(time.Now().Add(h.pongWait))
+					logger.Debug("ws.realtime.heartbeat_ping",
+						"user_id", client.UserID,
+						"dept_id", client.DeptID,
+						"next_deadline", time.Now().Add(h.pongWait).Format(time.RFC3339Nano),
+					)
 					continue
 				}
 			}
 
 			// ignore other client messages for now
+			logger.Debug("ws.realtime.ignore_payload",
+				"user_id", client.UserID,
+				"dept_id", client.DeptID,
+				"message_type", mt,
+				"payload_size", len(msg),
+			)
 			_ = msg
 		}
 	}))
@@ -152,7 +208,12 @@ func (h *Handler) RegisterInternalRoutes(router fiber.Router) {
 
 func (h *Handler) setupMessageHeartbeat(c *websocket.Conn) {
 	// deadline = if we don't see "pong" within pongWait -> ReadMessage fails -> disconnect
-	_ = c.SetReadDeadline(time.Now().Add(h.pongWait))
+	deadline := time.Now().Add(h.pongWait)
+	_ = c.SetReadDeadline(deadline)
+	logger.Debug("ws.realtime.heartbeat_init",
+		"remote_addr", c.RemoteAddr().String(),
+		"deadline", deadline.Format(time.RFC3339Nano),
+	)
 }
 
 func (h *Handler) pingLoop(client *service.ClientConn, stop <-chan struct{}) {
@@ -162,9 +223,22 @@ func (h *Handler) pingLoop(client *service.ClientConn, stop <-chan struct{}) {
 	for {
 		select {
 		case <-stop:
+			logger.Debug("ws.realtime.ping_loop_stop",
+				"user_id", client.UserID,
+				"dept_id", client.DeptID,
+			)
 			return
 		case <-ticker.C:
+			logger.Debug("ws.realtime.ping_loop_tick",
+				"user_id", client.UserID,
+				"dept_id", client.DeptID,
+			)
 			if err := h.writeText(client, "ping"); err != nil {
+				logger.Warn("ws.realtime.ping_loop_write_failed",
+					"user_id", client.UserID,
+					"dept_id", client.DeptID,
+					"error", err,
+				)
 				return
 			}
 		}
@@ -260,6 +334,10 @@ func (h *Handler) parseUserIDFromJWT(c *websocket.Conn) (int, error) {
 }
 
 func (h *Handler) closeWithReason(c *websocket.Conn, reason string) {
+	logger.Warn("ws.realtime.close_with_reason",
+		"remote_addr", c.RemoteAddr().String(),
+		"reason", reason,
+	)
 	_ = c.WriteControl(
 		websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.ClosePolicyViolation, reason),
