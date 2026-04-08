@@ -326,12 +326,22 @@ func (s *orderService) GetDeliveryStatus(ctx context.Context, deptID int, orderI
 }
 
 func (s *orderService) upsertSearch(ctx context.Context, deptID int, dto *model.OrderDTO) {
-	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "order", []any{dto.Code}, dto.CustomFields)
+	if dto == nil {
+		return
+	}
+
+	kwPtr, _ := searchutils.BuildKeywords(
+		ctx,
+		s.cfMgr,
+		"order",
+		[]any{dto.Code, dto.ClinicName, dto.DentistName, dto.PatientName},
+		dto.CustomFields,
+	)
 
 	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
 		EntityType: "order",
 		EntityID:   int64(dto.ID),
-		Title:      *dto.Code,
+		Title:      utils.DerefString(dto.Code),
 		Subtitle:   nil,
 		Keywords:   &kwPtr,
 		Content:    nil,
