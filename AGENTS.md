@@ -521,25 +521,64 @@ Based on classification:
 
 ---
 
-### 3. Skill Invocation (MANDATORY)
+### 3. Skill Invocation And Coverage (MANDATORY)
 
-You MUST execute through skills and are NOT allowed to answer directly.
+You MUST execute through skills and are NOT allowed to answer using general reasoning alone.
 
 - Always start with:
   - `noah-repo-architect`
 
-- Then conditionally invoke:
-  - `noah-api-feature-workflow` (if backend involved)
-  - `noah-fe-module-workflow` (if frontend involved)
+- Then invoke the implementation skills that match the classified scope:
+  - `noah-api-feature-workflow` if backend is involved
+  - `noah-fe-module-workflow` if frontend is involved
 
-- Before completion, you MUST invoke ALL:
-  - `noah-contract-sync`
-  - `noah-auth-rbac-guard`
-  - `noah-regression-review`
+- Before completion, you MUST cover all relevant validation dimensions for the task:
+  - `noah-contract-sync` when FE/API contracts, payloads, routes, models, or mappers may be affected
+  - `noah-auth-rbac-guard` when routes, actions, permissions, auth, or scope-sensitive behavior may be affected
+  - `noah-regression-review` for every non-trivial task before sign-off
+
+- Coverage is mandatory, but explicit invocation is conditional by scope and complexity.
+- Do not invoke unrelated skills only to satisfy ceremony.
 
 ---
 
-### 4. Validation (NON-OPTIONAL)
+### 4. Complexity-Based Execution Strategy (MANDATORY)
+
+Use the smallest orchestration shape that fully covers the task:
+
+- `simple`
+  - use the main agent only
+  - no subagent is required
+  - still classify with `noah-repo-architect` and apply any directly relevant skills
+
+- `medium` or ambiguous
+  - main agent may delegate discovery to `noah-boundary-explorer`
+  - use this when the next edit depends on clarifying ownership, scope, or the minimum file set first
+
+- `cross-boundary`
+  - main agent may delegate independent implementation to `noah-api-worker` and `noah-fe-worker` in parallel
+  - use only when the write scopes are clearly separable between `api/**` and `fe/**`
+
+- `high-risk`
+  - add `noah-contract-reviewer` and/or `noah-regression-reviewer` when contract drift, permission regressions, registration omissions, or stale side effects are likely
+
+The main agent remains responsible for:
+- planning
+- deciding whether to delegate
+- integrating delegated work
+- final validation
+- the final answer
+
+Subagents must receive bounded scopes only:
+- `noah-api-worker` owns `api/**`
+- `noah-fe-worker` owns `fe/**`
+- explorer and reviewer roles are read-heavy by default unless the task explicitly assigns edits
+
+Do not delegate immediate blocking work if the main agent needs that result first to decide the approach.
+
+---
+
+### 5. Validation (NON-OPTIONAL)
 
 You MUST NOT complete the task until all applicable validations pass:
 
@@ -552,7 +591,7 @@ A task is considered INCOMPLETE if validation is skipped.
 
 ---
 
-### 5. Constraints (STRICT)
+### 6. Constraints (STRICT)
 
 You are NOT allowed to:
 
@@ -564,7 +603,7 @@ You are NOT allowed to:
 
 ---
 
-### 6. Input Model
+### 7. Input Model
 
 The user will provide ONLY a single-line task.
 
@@ -579,16 +618,24 @@ without asking for additional prompts.
 
 ---
 
-### 7. Output Requirements
+### 8. Output Requirements
 
 Your final output MUST include:
 
-- task classification (feature / bug / refactor)
-- affected modules
-- changes made
-- validations performed
-- risks
-- final status:
-  - SAFE
-  - PARTIAL
-  - UNSAFE
+- for simple tasks:
+  - task classification
+  - affected modules
+  - changes made
+  - validations performed
+  - final status
+
+- for non-trivial tasks:
+  - task classification (feature / bug / refactor)
+  - affected modules
+  - changes made
+  - validations performed
+  - risks
+  - final status:
+    - SAFE
+    - PARTIAL
+    - UNSAFE
