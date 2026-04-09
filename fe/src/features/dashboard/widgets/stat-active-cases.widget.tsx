@@ -1,6 +1,7 @@
 import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import { StatCard } from "@features/dashboard/components/stat-card";
 import { useActiveCasesToday } from "@features/dashboard/api/dashboard.api";
+import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 import type { SalesReportRange } from "@features/dashboard/model/dashboard.model";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { useEffect } from "react";
@@ -12,7 +13,8 @@ type Props = {
 };
 
 export function ActiveCasesStatWidget({ range }: Props) {
-  const { data } = useActiveCasesToday(range);
+  const { departmentId, cacheNamespace } = useDashboardContext();
+  const { data } = useActiveCasesToday(range, { departmentId, cacheNamespace });
 
   return (
     <StatCard

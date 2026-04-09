@@ -41,6 +41,8 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/search", h.Search)
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search", h.AdvancedSearch)
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report", h.AdvancedSearchReport)
+	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/summary", h.AdvancedSearchReportSummary)
+	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/breakdown", h.AdvancedSearchReportBreakdown)
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/remake/prepare", h.PrepareForRemakeByOrderID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>", h.GetByOrderIDAndOrderItemID)
@@ -184,6 +186,44 @@ func (h *OrderHandler) AdvancedSearchReport(c *fiber.Ctx) error {
 	}
 
 	res, err := h.svc.AdvancedSearchReport(c.UserContext(), deptID, filter, canViewDepartment)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) AdvancedSearchReportSummary(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	filter := parseAdvancedSearchFilter(c)
+	canViewDepartment, err := rbac.HasAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	res, err := h.svc.AdvancedSearchReportSummary(c.UserContext(), deptID, filter, canViewDepartment)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) AdvancedSearchReportBreakdown(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	filter := parseAdvancedSearchFilter(c)
+	canViewDepartment, err := rbac.HasAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	res, err := h.svc.AdvancedSearchReportBreakdown(c.UserContext(), deptID, filter, canViewDepartment)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

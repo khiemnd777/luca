@@ -8,7 +8,12 @@ import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
 import type { SearchOpts, SearchResult } from "@core/types/search.types";
-import type { OrderAdvancedSearchFilters, OrderAdvancedSearchReportModel } from "@features/order/model/order-advanced-search.model";
+import type {
+  OrderAdvancedSearchFilters,
+  OrderAdvancedSearchReportBreakdownModel,
+  OrderAdvancedSearchReportModel,
+  OrderAdvancedSearchReportSummaryModel,
+} from "@features/order/model/order-advanced-search.model";
 import type { OrderItemProductModel } from "../model/order-item-product.model";
 import type { OrderItemMaterialModel } from "../model/order-item-material.model";
 import { serverTimeToClientDate } from "@root/shared/utils/datetime.utils";
@@ -204,6 +209,24 @@ export async function advancedSearchReport(filters: OrderAdvancedSearchFilters):
   const params = buildAdvancedSearchParams(filters);
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/advanced-search/report`, { params });
   return mapper.map<any, OrderAdvancedSearchReportModel>("OrderAdvancedSearchReport", data, "dto_to_model");
+}
+
+export async function advancedSearchReportSummary(
+  filters: OrderAdvancedSearchFilters
+): Promise<OrderAdvancedSearchReportSummaryModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const params = buildAdvancedSearchParams(filters);
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/advanced-search/report/summary`, { params });
+  return mapper.map<any, OrderAdvancedSearchReportSummaryModel>("OrderAdvancedSearchReportSummary", data, "dto_to_model");
+}
+
+export async function advancedSearchReportBreakdown(
+  filters: OrderAdvancedSearchFilters
+): Promise<OrderAdvancedSearchReportBreakdownModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const params = buildAdvancedSearchParams(filters);
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/advanced-search/report/breakdown`, { params });
+  return mapper.map<any, OrderAdvancedSearchReportBreakdownModel>("OrderAdvancedSearchReportBreakdown", data, "dto_to_model");
 }
 
 export async function id(id: number): Promise<OrderModel> {

@@ -6,10 +6,9 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_daily_sales_stats/service"
+	dashboardshared "github.com/khiemnd777/noah_api/modules/main/features/dashboard/shared"
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
-	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
@@ -30,13 +29,9 @@ func (h *CaseDailySalesStatsHandler) RegisterRoutes(router fiber.Router) {
 }
 
 func (h *CaseDailySalesStatsHandler) Summary(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
-		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
-	}
-
-	deptID, err := resolveDepartmentID(c)
+	deptID, err := dashboardshared.ResolveAuthorizedDepartmentID(c, h.deps)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+		return client_error.ResponseError(c, dashboardshared.ErrorStatus(err, fiber.StatusBadRequest), err, err.Error())
 	}
 
 	fromDateRaw := utils.GetQueryAsString(c, "from_date")
@@ -91,13 +86,9 @@ func (h *CaseDailySalesStatsHandler) Summary(c *fiber.Ctx) error {
 }
 
 func (h *CaseDailySalesStatsHandler) Daily(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
-		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
-	}
-
-	deptID, err := resolveDepartmentID(c)
+	deptID, err := dashboardshared.ResolveAuthorizedDepartmentID(c, h.deps)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+		return client_error.ResponseError(c, dashboardshared.ErrorStatus(err, fiber.StatusBadRequest), err, err.Error())
 	}
 
 	fromDateRaw := utils.GetQueryAsString(c, "from_date")
@@ -127,13 +118,9 @@ func (h *CaseDailySalesStatsHandler) Daily(c *fiber.Ctx) error {
 }
 
 func (h *CaseDailySalesStatsHandler) GetReport(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
-		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
-	}
-
-	deptID, err := resolveDepartmentID(c)
+	deptID, err := dashboardshared.ResolveAuthorizedDepartmentID(c, h.deps)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+		return client_error.ResponseError(c, dashboardshared.ErrorStatus(err, fiber.StatusBadRequest), err, err.Error())
 	}
 
 	rangeRaw := utils.GetQueryAsString(c, "range")
@@ -154,32 +141,4 @@ func (h *CaseDailySalesStatsHandler) GetReport(c *fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusOK).JSON(res)
-}
-
-func resolveDepartmentID(c *fiber.Ctx) (int, error) {
-	departmentID, err := utils.GetQueryAsNillableInt(c, "department_id")
-	if err != nil {
-		return 0, err
-	}
-	if departmentID != nil && *departmentID <= 0 {
-		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid department_id")
-	}
-	if departmentID == nil {
-		paramDeptID, err := utils.GetParamAsNillableInt(c, "dept_id")
-		if err != nil {
-			return 0, err
-		}
-		if paramDeptID != nil {
-			departmentID = paramDeptID
-		}
-	}
-	if departmentID == nil {
-		if deptID, ok := utils.GetDeptIDInt(c); ok && deptID > 0 {
-			departmentID = &deptID
-		}
-	}
-	if departmentID == nil || *departmentID <= 0 {
-		return 0, fiber.NewError(fiber.StatusBadRequest, "invalid department_id")
-	}
-	return *departmentID, nil
 }

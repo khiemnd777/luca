@@ -35,6 +35,11 @@ export type DashboardStat = {
   caption?: string;
 };
 
+type DashboardQueryOptions = {
+  departmentId?: number | null;
+  cacheNamespace?: string;
+};
+
 type CaseStatusColor = NonNullable<CaseStatusItemModel["color"]>;
 
 const CASE_STATUS_COLORS = new Set<CaseStatusColor>([
@@ -87,6 +92,21 @@ function toDailyQuery(params: SalesDailyParams): SalesDailyParamsDto {
   return query;
 }
 
+function toDepartmentQuery(departmentId?: number | null) {
+  if (departmentId == null) return undefined;
+  return { department_id: departmentId };
+}
+
+function buildScopedKey(
+  baseKey: string,
+  options?: DashboardQueryOptions,
+  extra?: string,
+) {
+  const namespace = options?.cacheNamespace ?? "home";
+  const departmentKey = options?.departmentId ?? "current";
+  return [baseKey, namespace, departmentKey, extra].filter(Boolean).join(":");
+}
+
 async function getDashboardMetric<TModel, TDto>(
   path: string,
   params: DashboardCompareParams,
@@ -98,10 +118,15 @@ async function getDashboardMetric<TModel, TDto>(
   return mapper.map<TDto, TModel>("Dashboard", data, "dto_to_model");
 }
 
-export async function fetchDueToday(): Promise<DueTodayItem[]> {
+export async function fetchDueToday(
+  departmentId?: number | null,
+): Promise<DueTodayItem[]> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<DueTodayItemDto[]>(
     `${departmentApiPath()}/dashboard/due-today`,
+    {
+      params: toDepartmentQuery(departmentId),
+    },
   );
 
   const mapped = mapper.map<DueTodayItemDto[], DueTodayItem[]>(
@@ -124,10 +149,15 @@ export async function fetchDueToday(): Promise<DueTodayItem[]> {
   }));
 }
 
-export async function fetchActiveToday(): Promise<ActiveTodayItem[]> {
+export async function fetchActiveToday(
+  departmentId?: number | null,
+): Promise<ActiveTodayItem[]> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<ActiveTodayItemDto[]>(
     `${departmentApiPath()}/dashboard/active-today`,
+    {
+      params: toDepartmentQuery(departmentId),
+    },
   );
 
   const mapped = mapper.map<DueTodayItemDto[], ActiveTodayItem[]>(
@@ -169,10 +199,15 @@ function normalizeCaseStatusItem(item: CaseStatusItemModel): CaseStatusItemModel
   };
 }
 
-export async function fetchCaseStatuses(): Promise<CaseStatusItemModel[]> {
+export async function fetchCaseStatuses(
+  departmentId?: number | null,
+): Promise<CaseStatusItemModel[]> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<CaseStatusItemDto[]>(
     `${departmentApiPath()}/dashboard/case-statuses`,
+    {
+      params: toDepartmentQuery(departmentId),
+    },
   );
 
   const mapped = mapper.map<CaseStatusItemDto[], CaseStatusItemModel[]>(
@@ -229,7 +264,10 @@ export function fetchSalesSummary(
   );
 }
 
-function buildCompareRangeParams(range: SalesReportRange): DashboardCompareParams {
+function buildCompareRangeParams(
+  range: SalesReportRange,
+  departmentId?: number | null,
+): DashboardCompareParams {
   const now = dayjs();
   let start = now.startOf("day");
   let end = now.endOf("day");
@@ -247,6 +285,7 @@ function buildCompareRangeParams(range: SalesReportRange): DashboardCompareParam
   const prevEnd = end.subtract(totalDays, "day");
 
   return {
+    departmentId,
     fromDate: start.toISOString(),
     toDate: end.toISOString(),
     previousFromDate: prevStart.toISOString(),
@@ -254,11 +293,17 @@ function buildCompareRangeParams(range: SalesReportRange): DashboardCompareParam
   };
 }
 
-export function useSalesSummary(range: SalesReportRange = "7d") {
+export function useSalesSummary(
+  range: SalesReportRange = "7d",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<SalesSummaryModel>(
-    async () => fetchSalesSummary(buildCompareRangeParams(range)),
-    [range],
-    { key: "dashboard:sales-summary" },
+    async () => fetchSalesSummary(buildCompareRangeParams(range, options?.departmentId)),
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:sales-summary", options, range),
+      invalidateEvent: "invalidate:dashboard:sales-summary",
+    },
   );
 }
 
@@ -283,7 +328,10 @@ export async function fetchSalesDaily(
   }));
 }
 
-function buildSalesDailyParams(range: SalesReportRange): SalesDailyParams {
+function buildSalesDailyParams(
+  range: SalesReportRange,
+  departmentId?: number | null,
+): SalesDailyParams {
   const now = dayjs();
   let start = now.startOf("day");
   let end = now.endOf("day");
@@ -297,26 +345,34 @@ function buildSalesDailyParams(range: SalesReportRange): SalesDailyParams {
   }
 
   return {
+    departmentId,
     fromDate: start.toISOString(),
     toDate: end.toISOString(),
   };
 }
 
-export function useSalesDaily(range: SalesReportRange = "7d") {
+export function useSalesDaily(
+  range: SalesReportRange = "7d",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<SalesDailyItem[]>(
-    async () => fetchSalesDaily(buildSalesDailyParams(range)),
-    [range],
-    { key: "dashboard:sales-daily" },
+    async () => fetchSalesDaily(buildSalesDailyParams(range, options?.departmentId)),
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:sales-daily", options, range),
+      invalidateEvent: "invalidate:dashboard:sales-daily",
+    },
   );
 }
 
 export async function fetchSalesReport(
   range: SalesReportRange,
+  departmentId?: number | null,
 ): Promise<SalesReportResult> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<SalesReportResultDto>(
     `${departmentApiPath()}/dashboard/case-daily-sales-stats/report`,
-    { params: { range } },
+    { params: { range, ...toDepartmentQuery(departmentId) } },
   );
 
   const summary = mapper.map<SalesSummaryDto, SalesSummaryModel>(
@@ -347,11 +403,14 @@ export async function fetchSalesReport(
   };
 }
 
-export function useSalesReport(range: SalesReportRange) {
+export function useSalesReport(range: SalesReportRange, options?: DashboardQueryOptions) {
   return useAsync<SalesReportResult>(
-    async () => fetchSalesReport(range),
-    [],
-    { key: "dashboard:sales-report" },
+    async () => fetchSalesReport(range, options?.departmentId),
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:sales-report", options, range),
+      invalidateEvent: "invalidate:dashboard:sales-report",
+    },
   );
 }
 
@@ -366,38 +425,53 @@ function rangeSuffix(range: SalesReportRange) {
   return "30 ngày";
 }
 
-export function useActiveCasesToday(range: SalesReportRange = "today") {
+export function useActiveCasesToday(
+  range: SalesReportRange = "today",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<DashboardStat>(
     async () => {
-      const res = await fetchActiveCases(buildCompareRangeParams(range));
+      const res = await fetchActiveCases(buildCompareRangeParams(range, options?.departmentId));
       return {
         value: res.value,
         delta: formatDelta(res.delta, rangeSuffix(range)),
       };
     },
-    [range],
-    { key: "dashboard:active-cases-today" },
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:active-cases-today", options, range),
+      invalidateEvent: "invalidate:dashboard:active-cases-today",
+    },
   );
 }
 
-export function useCasesCompletedThisWeek(range: SalesReportRange = "7d") {
+export function useCasesCompletedThisWeek(
+  range: SalesReportRange = "7d",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<DashboardStat>(
     async () => {
-      const res = await fetchCompletedCases(buildCompareRangeParams(range));
+      const res = await fetchCompletedCases(buildCompareRangeParams(range, options?.departmentId));
       return {
         value: res.value,
         delta: formatDelta(res.delta, rangeSuffix(range)),
       };
     },
-    [range],
-    { key: "dashboard:cases-completed-week" },
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:cases-completed-week", options, range),
+      invalidateEvent: "invalidate:dashboard:cases-completed-week",
+    },
   );
 }
 
-export function useAvgTurnaround(range: SalesReportRange = "7d") {
+export function useAvgTurnaround(
+  range: SalesReportRange = "7d",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<DashboardStat>(
     async () => {
-      const res = await fetchAvgTurnaround(buildCompareRangeParams(range));
+      const res = await fetchAvgTurnaround(buildCompareRangeParams(range, options?.departmentId));
       const avgDays = Number.isFinite(res.avgDays) ? res.avgDays : 0;
       const deltaDays = Number.isFinite(res.deltaDays) ? res.deltaDays : 0;
       const sign = deltaDays > 0 ? "+" : "";
@@ -408,15 +482,21 @@ export function useAvgTurnaround(range: SalesReportRange = "7d") {
         caption: "so với kỳ trước", //"vs previous period",
       };
     },
-    [range],
-    { key: "dashboard:avg-turnaround" },
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:avg-turnaround", options, range),
+      invalidateEvent: "invalidate:dashboard:avg-turnaround",
+    },
   );
 }
 
-export function useAvgRemakeRate(range: SalesReportRange = "7d") {
+export function useAvgRemakeRate(
+  range: SalesReportRange = "7d",
+  options?: DashboardQueryOptions,
+) {
   return useAsync<DashboardStat>(
     async () => {
-      const res = await fetchAvgRemakeRate(buildCompareRangeParams(range));
+      const res = await fetchAvgRemakeRate(buildCompareRangeParams(range, options?.departmentId));
       const rate = Number.isFinite(res.rate) ? res.rate : 0;
       const deltaRate = Number.isFinite(res.deltaRate) ? res.deltaRate : 0;
       const sign = deltaRate > 0 ? "+" : "";
@@ -427,31 +507,43 @@ export function useAvgRemakeRate(range: SalesReportRange = "7d") {
         caption: "làm lại",
       };
     },
-    [range],
-    { key: "dashboard:avg-remake-rate" },
+    [range, options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:avg-remake-rate", options, range),
+      invalidateEvent: "invalidate:dashboard:avg-remake-rate",
+    },
   );
 }
 
-export function useDueToday() {
+export function useDueToday(options?: DashboardQueryOptions) {
   return useAsync<DueTodayItem[]>(
-    async () => fetchDueToday(),
-    [],
-    { key: "dashboard:due-today" },
+    async () => fetchDueToday(options?.departmentId),
+    [options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:due-today", options),
+      invalidateEvent: "invalidate:dashboard:due-today",
+    },
   );
 }
 
-export function useActiveToday() {
+export function useActiveToday(options?: DashboardQueryOptions) {
   return useAsync<ActiveTodayItem[]>(
-    async () => fetchActiveToday(),
-    [],
-    { key: "dashboard:active-today" },
+    async () => fetchActiveToday(options?.departmentId),
+    [options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:active-today", options),
+      invalidateEvent: "invalidate:dashboard:active-today",
+    },
   );
 }
 
-export function useCaseStatuses() {
+export function useCaseStatuses(options?: DashboardQueryOptions) {
   return useAsync<CaseStatusItemModel[]>(
-    async () => fetchCaseStatuses(),
-    [],
-    { key: "dashboard:case-statuses" },
+    async () => fetchCaseStatuses(options?.departmentId),
+    [options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:case-statuses", options),
+      invalidateEvent: "invalidate:dashboard:case-statuses",
+    },
   );
 }

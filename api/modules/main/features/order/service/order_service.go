@@ -45,6 +45,8 @@ type OrderService interface {
 	CompletedList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error)
 	AdvancedSearch(ctx context.Context, deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) (table.TableListResult[model.OrderDTO], error)
+	AdvancedSearchReportSummary(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportSummaryDTO, error)
+	AdvancedSearchReportBreakdown(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
@@ -76,6 +78,8 @@ func kOrderAll(deptID int) []string {
 	return []string{
 		kOrderListAll(deptID),
 		kOrderSearchAll(deptID),
+		"order:advanced-report:summary:*",
+		"order:advanced-report:breakdown:*",
 		kOrderSectionAll(),
 		kOrderPromotionAll(),
 		fmt.Sprintf("order:assigned:dpt%d:*", deptID),
@@ -144,6 +148,14 @@ func kOrderSearch(deptID int, q dbutils.SearchQuery) string {
 		orderBy = *q.OrderBy
 	}
 	return fmt.Sprintf("order:search:dpt%d:k%s:l%d:p%d:o%s:d%s", deptID, q.Keyword, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kOrderAdvancedReportSummary(filter model.OrderAdvancedSearchFilter) string {
+	return fmt.Sprintf("order:advanced-report:summary:%s", serializeAdvancedSearchFilter(filter))
+}
+
+func kOrderAdvancedReportBreakdown(filter model.OrderAdvancedSearchFilter) string {
+	return fmt.Sprintf("order:advanced-report:breakdown:%s", serializeAdvancedSearchFilter(filter))
 }
 
 func (s *orderService) Create(ctx context.Context, deptID int, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
@@ -577,9 +589,40 @@ func (s *orderService) AdvancedSearch(ctx context.Context, deptID int, query mod
 	return s.repo.AdvancedSearch(ctx, normalized)
 }
 
+func (s *orderService) AdvancedSearchReportSummary(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportSummaryDTO, error) {
+	normalized := s.normalizeAdvancedSearchFilter(deptID, filter, canViewDepartment)
+	key := kOrderAdvancedReportSummary(normalized)
+
+	return cache.Get(key, 60*time.Second, func() (*model.OrderAdvancedSearchReportSummaryDTO, error) {
+		return s.repo.AdvancedSearchReportSummary(ctx, normalized)
+	})
+}
+
+func (s *orderService) AdvancedSearchReportBreakdown(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportBreakdownDTO, error) {
+	normalized := s.normalizeAdvancedSearchFilter(deptID, filter, canViewDepartment)
+	key := kOrderAdvancedReportBreakdown(normalized)
+
+	return cache.Get(key, 300*time.Second, func() (*model.OrderAdvancedSearchReportBreakdownDTO, error) {
+		return s.repo.AdvancedSearchReportBreakdown(ctx, normalized)
+	})
+}
+
 func (s *orderService) AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error) {
 	normalized := s.normalizeAdvancedSearchFilter(deptID, filter, canViewDepartment)
-	return s.repo.AdvancedSearchReport(ctx, normalized)
+	summary, err := s.AdvancedSearchReportSummary(ctx, deptID, normalized, true)
+	if err != nil {
+		return nil, err
+	}
+
+	breakdown, err := s.AdvancedSearchReportBreakdown(ctx, deptID, normalized, true)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.OrderAdvancedSearchReportDTO{
+		OrderAdvancedSearchReportSummaryDTO:   *summary,
+		OrderAdvancedSearchReportBreakdownDTO: *breakdown,
+	}, nil
 }
 
 func (s *orderService) normalizeAdvancedSearchQuery(deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) model.OrderAdvancedSearchQuery {
@@ -666,4 +709,33 @@ func normalizeMonthPtr(value *int) *int {
 		return nil
 	}
 	return value
+}
+
+func serializeAdvancedSearchFilter(filter model.OrderAdvancedSearchFilter) string {
+	parts := []string{
+		fmt.Sprintf("department=%d", utils.DerefInt(filter.DepartmentID)),
+		fmt.Sprintf("categories=%s", serializeIntSlice(filter.CategoryIDs)),
+		fmt.Sprintf("products=%s", serializeIntSlice(filter.ProductIDs)),
+		fmt.Sprintf("dentist=%s", utils.DerefString(filter.DentistName)),
+		fmt.Sprintf("patient=%s", utils.DerefString(filter.PatientName)),
+		fmt.Sprintf("created_year=%d", utils.DerefInt(filter.CreatedYear)),
+		fmt.Sprintf("created_month=%d", utils.DerefInt(filter.CreatedMonth)),
+		fmt.Sprintf("delivery_year=%d", utils.DerefInt(filter.DeliveryYear)),
+		fmt.Sprintf("delivery_month=%d", utils.DerefInt(filter.DeliveryMonth)),
+	}
+
+	return strings.Join(parts, "|")
+}
+
+func serializeIntSlice(values []int) string {
+	if len(values) == 0 {
+		return ""
+	}
+
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, fmt.Sprintf("%d", value))
+	}
+
+	return strings.Join(parts, ",")
 }

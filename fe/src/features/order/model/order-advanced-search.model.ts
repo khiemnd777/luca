@@ -29,13 +29,20 @@ export interface OrderAdvancedSearchTopProductModel {
   totalRevenue: number;
 }
 
-export interface OrderAdvancedSearchReportModel {
+export interface OrderAdvancedSearchReportSummaryModel {
   totalOrders: number;
   totalValue: number;
   averageOrderValue: number;
   remakeOrders: number;
   totalSales: number;
   totalRevenue: number;
+}
+
+export interface OrderAdvancedSearchReportBreakdownModel {
   statusBreakdown: OrderAdvancedSearchStatusBreakdownModel[];
   topProducts: OrderAdvancedSearchTopProductModel[];
 }
+
+export interface OrderAdvancedSearchReportModel
+  extends OrderAdvancedSearchReportSummaryModel,
+    OrderAdvancedSearchReportBreakdownModel {}

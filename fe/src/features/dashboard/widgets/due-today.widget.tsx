@@ -1,4 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useDueToday } from "@features/dashboard/api/dashboard.api";
+import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 import type { DueTodayItem } from "@features/dashboard/model/dashboard.model";
 import { registerSlot } from "@root/core/module/registry";
 import { DueTodayCard } from "../components/due-today-card";
@@ -23,7 +25,8 @@ const mockDueToday: DueTodayItem[] = [
 ];
 
 function DueTodayWidget() {
-  const { data: dueTodayData } = useDueToday();
+  const { departmentId, cacheNamespace } = useDashboardContext();
+  const { data: dueTodayData } = useDueToday({ departmentId, cacheNamespace });
   const dueToday = dueTodayData && dueTodayData.length > 0 ? dueTodayData : mockDueToday;
   return (
     <DueTodayCard items={dueToday} />

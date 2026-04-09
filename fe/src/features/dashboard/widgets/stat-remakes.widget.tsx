@@ -1,6 +1,7 @@
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { StatCard } from "@features/dashboard/components/stat-card";
 import { useAvgRemakeRate } from "@features/dashboard/api/dashboard.api";
+import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 import type { SalesReportRange } from "@features/dashboard/model/dashboard.model";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { useEffect } from "react";
@@ -12,7 +13,8 @@ type Props = {
 };
 
 export function RemakesStatWidget({ range }: Props) {
-  const { data } = useAvgRemakeRate(range);
+  const { departmentId, cacheNamespace } = useDashboardContext();
+  const { data } = useAvgRemakeRate(range, { departmentId, cacheNamespace });
 
   return (
     <StatCard

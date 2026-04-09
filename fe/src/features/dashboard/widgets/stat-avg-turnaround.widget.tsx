@@ -1,6 +1,7 @@
 import SpeedIcon from "@mui/icons-material/Speed";
 import { StatCard } from "@features/dashboard/components/stat-card";
 import { useAvgTurnaround } from "@features/dashboard/api/dashboard.api";
+import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 import type { SalesReportRange } from "@features/dashboard/model/dashboard.model";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { useEffect } from "react";
@@ -12,7 +13,8 @@ type Props = {
 };
 
 export function AvgTurnaroundStatWidget({ range }: Props) {
-  const { data } = useAvgTurnaround(range);
+  const { departmentId, cacheNamespace } = useDashboardContext();
+  const { data } = useAvgTurnaround(range, { departmentId, cacheNamespace });
 
   return (
     <StatCard

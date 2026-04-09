@@ -36,13 +36,21 @@ type OrderAdvancedSearchTopProductDTO struct {
 	TotalRevenue  float64 `json:"total_revenue"`
 }
 
+type OrderAdvancedSearchReportSummaryDTO struct {
+	TotalOrders       int     `json:"total_orders"`
+	TotalValue        float64 `json:"total_value"`
+	AverageOrderValue float64 `json:"average_order_value"`
+	RemakeOrders      int     `json:"remake_orders"`
+	TotalSales        float64 `json:"total_sales"`
+	TotalRevenue      float64 `json:"total_revenue"`
+}
+
+type OrderAdvancedSearchReportBreakdownDTO struct {
+	StatusBreakdown []*OrderAdvancedSearchStatusBreakdownDTO `json:"status_breakdown,omitempty"`
+	TopProducts     []*OrderAdvancedSearchTopProductDTO      `json:"top_products,omitempty"`
+}
+
 type OrderAdvancedSearchReportDTO struct {
-	TotalOrders       int                                      `json:"total_orders"`
-	TotalValue        float64                                  `json:"total_value"`
-	AverageOrderValue float64                                  `json:"average_order_value"`
-	RemakeOrders      int                                      `json:"remake_orders"`
-	TotalSales        float64                                  `json:"total_sales"`
-	TotalRevenue      float64                                  `json:"total_revenue"`
-	StatusBreakdown   []*OrderAdvancedSearchStatusBreakdownDTO `json:"status_breakdown,omitempty"`
-	TopProducts       []*OrderAdvancedSearchTopProductDTO      `json:"top_products,omitempty"`
+	OrderAdvancedSearchReportSummaryDTO
+	OrderAdvancedSearchReportBreakdownDTO
 }

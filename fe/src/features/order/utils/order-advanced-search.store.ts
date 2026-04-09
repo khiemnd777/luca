@@ -81,3 +81,17 @@ export function hasAdvancedSearchFilters(filters: OrderAdvancedSearchFilters): b
     filters.deliveryMonth.trim()
   );
 }
+
+export function serializeAdvancedSearchFilters(filters: OrderAdvancedSearchFilters): string {
+  return [
+    `department=${filters.department?.id ?? 0}`,
+    `categories=${filters.categories.map((item) => item.id).filter(Boolean).join(",")}`,
+    `products=${filters.products.map((item) => item.id).filter(Boolean).join(",")}`,
+    `dentist=${filters.dentistName.trim()}`,
+    `patient=${filters.patientName.trim()}`,
+    `createdYear=${filters.createdYear.trim()}`,
+    `createdMonth=${filters.createdMonth.trim()}`,
+    `deliveryYear=${filters.deliveryYear.trim()}`,
+    `deliveryMonth=${filters.deliveryMonth.trim()}`,
+  ].join("|");
+}

@@ -1,4 +1,6 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useActiveToday } from "@features/dashboard/api/dashboard.api";
+import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 import type { ActiveTodayItem } from "@features/dashboard/model/dashboard.model";
 import { registerSlot } from "@root/core/module/registry";
 import { ActiveTodayCard } from "../components/active-today-card";
@@ -23,7 +25,8 @@ export const mockActiveToday: ActiveTodayItem[] = [
 
 
 function ActiveTodayWidget() {
-  const { data: activeTodayData } = useActiveToday();
+  const { departmentId, cacheNamespace } = useDashboardContext();
+  const { data: activeTodayData } = useActiveToday({ departmentId, cacheNamespace });
   const activeToday = activeTodayData && activeTodayData.length > 0 ? activeTodayData : mockActiveToday;
   return (
     <ActiveTodayCard items={activeToday} />

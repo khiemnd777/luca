@@ -60,6 +60,8 @@ type OrderRepository interface {
 	CompletedList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error)
 	AdvancedSearch(ctx context.Context, query model.OrderAdvancedSearchQuery) (table.TableListResult[model.OrderDTO], error)
+	AdvancedSearchReportSummary(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportSummaryDTO, error)
+	AdvancedSearchReportBreakdown(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error)
 	Delete(ctx context.Context, id int64) error
 }
@@ -1191,6 +1193,23 @@ func (r *orderRepository) AdvancedSearch(ctx context.Context, query model.OrderA
 }
 
 func (r *orderRepository) AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error) {
+	summary, err := r.AdvancedSearchReportSummary(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	breakdown, err := r.AdvancedSearchReportBreakdown(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.OrderAdvancedSearchReportDTO{
+		OrderAdvancedSearchReportSummaryDTO:   *summary,
+		OrderAdvancedSearchReportBreakdownDTO: *breakdown,
+	}, nil
+}
+
+func (r *orderRepository) AdvancedSearchReportSummary(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportSummaryDTO, error) {
 	scope := r.buildAdvancedSearchScope(filter)
 
 	summaryQuery := fmt.Sprintf(`
@@ -1205,10 +1224,7 @@ FROM orders o
 WHERE %s
 `, scope.WhereSQL)
 
-	report := &model.OrderAdvancedSearchReportDTO{
-		StatusBreakdown: []*model.OrderAdvancedSearchStatusBreakdownDTO{},
-		TopProducts:     []*model.OrderAdvancedSearchTopProductDTO{},
-	}
+	report := &model.OrderAdvancedSearchReportSummaryDTO{}
 
 	if err := r.deps.DB.QueryRowContext(ctx, summaryQuery, scope.Args...).Scan(
 		&report.TotalOrders,
@@ -1219,6 +1235,17 @@ WHERE %s
 		&report.TotalRevenue,
 	); err != nil {
 		return nil, err
+	}
+
+	return report, nil
+}
+
+func (r *orderRepository) AdvancedSearchReportBreakdown(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportBreakdownDTO, error) {
+	scope := r.buildAdvancedSearchScope(filter)
+
+	report := &model.OrderAdvancedSearchReportBreakdownDTO{
+		StatusBreakdown: []*model.OrderAdvancedSearchStatusBreakdownDTO{},
+		TopProducts:     []*model.OrderAdvancedSearchTopProductDTO{},
 	}
 
 	statusQuery := fmt.Sprintf(`

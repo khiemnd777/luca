@@ -5,12 +5,10 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	"github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_statuses/service"
+	dashboardshared "github.com/khiemnd777/noah_api/modules/main/features/dashboard/shared"
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
-	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
-	"github.com/khiemnd777/noah_api/shared/utils"
 )
 
 type CaseStatusesHandler struct {
@@ -27,11 +25,10 @@ func (h *CaseStatusesHandler) RegisterRoutes(router fiber.Router) {
 }
 
 func (h *CaseStatusesHandler) CaseStatuses(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
-		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	deptID, err := dashboardshared.ResolveAuthorizedDepartmentID(c, h.deps)
+	if err != nil {
+		return client_error.ResponseError(c, dashboardshared.ErrorStatus(err, fiber.StatusBadRequest), err, err.Error())
 	}
-
-	deptID, _ := utils.GetDeptIDInt(c)
 
 	res, err := h.svc.CaseStatuses(c.UserContext(), deptID)
 	if err != nil {

@@ -100,6 +100,8 @@ func (s *orderItemService) Delete(ctx context.Context, deptID int, orderID, orde
 		fmt.Sprintf("order:id:%d:historical:oid:0", orderID),
 		"order:list:*",
 		"order:search:*",
+		"order:advanced-report:summary:*",
+		"order:advanced-report:breakdown:*",
 	)
 
 	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{

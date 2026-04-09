@@ -5,10 +5,9 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	"github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_daily_completed_stats/service"
+	dashboardshared "github.com/khiemnd777/noah_api/modules/main/features/dashboard/shared"
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
-	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
@@ -27,21 +26,9 @@ func (h *CaseDailyCompletedStatsHandler) RegisterRoutes(router fiber.Router) {
 }
 
 func (h *CaseDailyCompletedStatsHandler) CompletedCases(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
-		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
-	}
-
-	departmentID, err := utils.GetQueryAsNillableInt(c, "department_id")
+	departmentID, err := dashboardshared.ResolveAuthorizedDepartmentID(c, h.deps)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid department_id")
-	}
-	if departmentID != nil && *departmentID <= 0 {
-		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid department_id")
-	}
-	if departmentID == nil {
-		if deptID, ok := utils.GetDeptIDInt(c); ok && deptID > 0 {
-			departmentID = &deptID
-		}
+		return client_error.ResponseError(c, dashboardshared.ErrorStatus(err, fiber.StatusBadRequest), err, err.Error())
 	}
 
 	fromDateRaw := utils.GetQueryAsString(c, "from_date")
@@ -82,7 +69,7 @@ func (h *CaseDailyCompletedStatsHandler) CompletedCases(c *fiber.Ctx) error {
 
 	res, err := h.svc.CompletedCases(
 		c.UserContext(),
-		departmentID,
+		&departmentID,
 		fromDate,
 		toDate,
 		previousFrom,
