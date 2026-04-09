@@ -48,6 +48,13 @@ type staffRepo struct {
 	cfMgr *customfields.Manager
 }
 
+func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
+	if dto == nil {
+		return
+	}
+	dto.DepartmentID = deptID
+}
+
 func NewStaffRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffRepository {
 	return &staffRepo{db: db, deps: deps, cfMgr: cfMgr}
 }
@@ -234,7 +241,7 @@ func (r *staffRepo) Create(ctx context.Context, deptID int, input model.StaffDTO
 	}
 
 	dto := mapper.MapAs[*generated.User, *model.StaffDTO](userEnt)
-	dto.DepartmentID = input.DepartmentID
+	setDepartmentIDFromPersistedStaff(dto, staffEnt.DepartmentID)
 	dto.SectionIDs = input.SectionIDs
 	dto.SectionNames = sectionNames
 	dto.RoleIDs = input.RoleIDs
