@@ -217,6 +217,19 @@ func HasAnyPerm(have map[string]struct{}, permValues ...string) bool {
 	return allowed
 }
 
+func GetPermissionSet(c *fiber.Ctx, dbEnt *generated.Client) (map[string]struct{}, error) {
+	return getPerms(c, dbEnt)
+}
+
+func HasAnyPermission(c *fiber.Ctx, dbEnt *generated.Client, permValues ...string) (bool, error) {
+	permSet, err := getPerms(c, dbEnt)
+	if err != nil {
+		return false, err
+	}
+
+	return HasAnyPerm(permSet, permValues...), nil
+}
+
 func HasAllPerms(have map[string]struct{}, permValues ...string) bool {
 	req := normalizeStrings(permValues)
 

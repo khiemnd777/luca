@@ -10,6 +10,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils"
@@ -26,6 +27,7 @@ func NewDepartmentHandler(svc service.DepartmentService, deps *module.ModuleDeps
 }
 func (h *DepartmentHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>", h.List)
+	app.RouterGet(router, "/:dept_id<int>/search", h.Search)
 	app.RouterGet(router, "/:dept_id<int>/child/:child_dept_id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/children", h.ChildrenList)
 	app.RouterPost(router, "/:dept_id<int>/child/:child_dept_id<int>", h.Create)
@@ -41,6 +43,19 @@ func (h *DepartmentHandler) List(c *fiber.Ctx) error {
 	q := table.ParseTableQuery(c, table.DefaultLimit)
 
 	res, err := h.svc.List(c.UserContext(), q)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *DepartmentHandler) Search(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+	q := dbutils.ParseSearchQuery(c, 20)
+
+	res, err := h.svc.Search(c.UserContext(), q)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

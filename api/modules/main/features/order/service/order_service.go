@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -43,6 +44,8 @@ type OrderService interface {
 	NewestList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.NewestOrderDTO], error)
 	CompletedList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error)
+	AdvancedSearch(ctx context.Context, deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) (table.TableListResult[model.OrderDTO], error)
+	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
 }
@@ -567,4 +570,100 @@ func (s *orderService) Search(ctx context.Context, deptID int, q dbutils.SearchQ
 		return zero, err
 	}
 	return *ptr, nil
+}
+
+func (s *orderService) AdvancedSearch(ctx context.Context, deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) (table.TableListResult[model.OrderDTO], error) {
+	normalized := s.normalizeAdvancedSearchQuery(deptID, query, canViewDepartment)
+	return s.repo.AdvancedSearch(ctx, normalized)
+}
+
+func (s *orderService) AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error) {
+	normalized := s.normalizeAdvancedSearchFilter(deptID, filter, canViewDepartment)
+	return s.repo.AdvancedSearchReport(ctx, normalized)
+}
+
+func (s *orderService) normalizeAdvancedSearchQuery(deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) model.OrderAdvancedSearchQuery {
+	query.OrderAdvancedSearchFilter = s.normalizeAdvancedSearchFilter(deptID, query.OrderAdvancedSearchFilter, canViewDepartment)
+
+	if query.Limit <= 0 {
+		query.Limit = table.DefaultLimit
+	}
+	if query.Page <= 0 {
+		query.Page = 1
+	}
+	query.Offset = (query.Page - 1) * query.Limit
+
+	if query.OrderBy == nil || utils.DerefString(query.OrderBy) == "" {
+		query.OrderBy = utils.Ptr("created_at")
+	}
+	if query.Direction == "" {
+		query.Direction = "desc"
+	}
+
+	return query
+}
+
+func (s *orderService) normalizeAdvancedSearchFilter(deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) model.OrderAdvancedSearchFilter {
+	if !canViewDepartment || filter.DepartmentID == nil || *filter.DepartmentID <= 0 {
+		filter.DepartmentID = utils.Ptr(deptID)
+	}
+
+	filter.CategoryIDs = normalizeIntSlice(filter.CategoryIDs)
+	filter.ProductIDs = normalizeIntSlice(filter.ProductIDs)
+	filter.DentistName = normalizeStringPtr(filter.DentistName)
+	filter.PatientName = normalizeStringPtr(filter.PatientName)
+	filter.CreatedYear = normalizePositiveIntPtr(filter.CreatedYear)
+	filter.CreatedMonth = normalizeMonthPtr(filter.CreatedMonth)
+	filter.DeliveryYear = normalizePositiveIntPtr(filter.DeliveryYear)
+	filter.DeliveryMonth = normalizeMonthPtr(filter.DeliveryMonth)
+
+	return filter
+}
+
+func normalizeIntSlice(values []int) []int {
+	if len(values) == 0 {
+		return nil
+	}
+
+	seen := make(map[int]struct{}, len(values))
+	out := make([]int, 0, len(values))
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeStringPtr(value *string) *string {
+	if value == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*value)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
+}
+
+func normalizePositiveIntPtr(value *int) *int {
+	if value == nil || *value <= 0 {
+		return nil
+	}
+	return value
+}
+
+func normalizeMonthPtr(value *int) *int {
+	if value == nil || *value < 1 || *value > 12 {
+		return nil
+	}
+	return value
 }

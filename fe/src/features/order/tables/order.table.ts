@@ -2,10 +2,12 @@ import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
 import { reloadTable } from "@core/table/table-reload";
 import type { OrderModel } from "@features/order/model/order.model";
-import { list } from "@features/order/api/order.api";
+import { advancedSearchList, list } from "@features/order/api/order.api";
 import { priorityColor, priorityLabel, statusColor, statusLabel } from "@root/shared/utils/order.utils";
 import { navigate } from "@root/core/navigation/navigate";
 import { getLatestOrderItemIdByOrderId, unlink } from "../api/order-item.api";
+import type { OrderAdvancedSearchFilters } from "@features/order/model/order-advanced-search.model";
+import { hasAdvancedSearchFilters } from "@features/order/utils/order-advanced-search.store";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -59,7 +61,13 @@ const columns: ColumnDef<OrderModel>[] = [
 registerTable("orders", () => {
   return createTableSchema<OrderModel>({
     columns,
-    fetch: async (opts: FetchTableOpts) => await list(opts),
+    fetch: async (opts: FetchTableOpts & { advancedSearchFilters?: OrderAdvancedSearchFilters }) => {
+      const { advancedSearchFilters, ...tableOpts } = opts;
+      if (advancedSearchFilters && hasAdvancedSearchFilters(advancedSearchFilters)) {
+        return advancedSearchList(advancedSearchFilters, tableOpts);
+      }
+      return list(tableOpts);
+    },
     initialPageSize: 10,
     initialSort: { by: "created_at", dir: "desc" },
     // allowUpdating: ["order.update"],

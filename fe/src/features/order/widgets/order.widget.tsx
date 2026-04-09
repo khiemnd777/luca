@@ -5,26 +5,32 @@ import { openFormDialog } from "@core/form/form-dialog.service";
 import { AutoTable } from "@core/table/auto-table";
 import { registerSlot } from "@root/core/module/registry";
 import { IfPermission } from "@root/core/auth/if-permission";
+import { useOrderAdvancedSearchStore } from "@features/order/utils/order-advanced-search.store";
+
+function OrderListWidget() {
+  const appliedFilters = useOrderAdvancedSearchStore((state) => state.appliedFilters);
+  const refreshToken = useOrderAdvancedSearchStore((state) => state.refreshToken);
+
+  return (
+    <SectionCard title="Quản lý đơn hàng" extra={
+      <>
+        <IfPermission permissions={["order.create"]}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
+            openFormDialog("order-new");
+          }} >Tạo đơn hàng mới</Button>
+        </IfPermission>
+      </>
+    }>
+      <AutoTable key={refreshToken} name="orders" params={{ advancedSearchFilters: appliedFilters }} />
+    </SectionCard>
+  );
+}
 
 registerSlot({
   id: "order",
   name: "order:left",
   priority: 1,
-  render: () => (
-    <>
-      <SectionCard title="Quản lý đơn hàng" extra={
-        <>
-          <IfPermission permissions={["order.create"]}>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
-              openFormDialog("order-new");
-            }} >Tạo đơn hàng mới</Button>
-          </IfPermission>
-        </>
-      }>
-        <AutoTable name="orders" />
-      </SectionCard>
-    </>
-  ),
+  render: () => <OrderListWidget />,
 });
 
 // registerSlot({

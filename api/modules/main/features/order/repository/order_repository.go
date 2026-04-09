@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	relation "github.com/khiemnd777/noah_api/modules/main/features/__relation/policy"
@@ -19,6 +21,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemmaterial"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocess"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemproduct"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/predicate"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/product"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/logger"
@@ -27,6 +30,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
+	"github.com/lib/pq"
 )
 
 type OrderRepository interface {
@@ -55,6 +59,8 @@ type OrderRepository interface {
 	NewestList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.NewestOrderDTO], error)
 	CompletedList(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.CompletedOrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.OrderDTO], error)
+	AdvancedSearch(ctx context.Context, query model.OrderAdvancedSearchQuery) (table.TableListResult[model.OrderDTO], error)
+	AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error)
 	Delete(ctx context.Context, id int64) error
 }
 
@@ -70,6 +76,12 @@ type orderRepository struct {
 	promoengine          *engine.Engine
 	promoctxbuilder      *contextbuilder.Builder
 	promoguard           engine.PromotionGuard
+}
+
+type orderAdvancedSearchScope struct {
+	Predicates []predicate.Order
+	WhereSQL   string
+	Args       []any
 }
 
 func NewOrderRepository(
@@ -1146,6 +1158,249 @@ func (r *orderRepository) Search(ctx context.Context, deptID int, query dbutils.
 			return mapper.MapListAs[*generated.Order, *model.OrderDTO](src)
 		},
 	)
+}
+
+func (r *orderRepository) AdvancedSearch(ctx context.Context, query model.OrderAdvancedSearchQuery) (table.TableListResult[model.OrderDTO], error) {
+	scope := r.buildAdvancedSearchScope(query.OrderAdvancedSearchFilter)
+
+	list, err := table.TableListV2(
+		ctx,
+		r.db.Order.Query().Where(scope.Predicates...),
+		table.TableQuery{
+			Limit:     query.Limit,
+			Page:      query.Page,
+			Offset:    query.Offset,
+			OrderBy:   query.OrderBy,
+			Direction: query.Direction,
+		},
+		order.Table,
+		order.FieldID,
+		order.FieldCreatedAt,
+		func(q *generated.OrderQuery) *generated.OrderQuery {
+			return q
+		},
+		func(src []*generated.Order) []*model.OrderDTO {
+			return mapper.MapListAs[*generated.Order, *model.OrderDTO](src)
+		},
+	)
+	if err != nil {
+		var zero table.TableListResult[model.OrderDTO]
+		return zero, err
+	}
+	return list, nil
+}
+
+func (r *orderRepository) AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error) {
+	scope := r.buildAdvancedSearchScope(filter)
+
+	summaryQuery := fmt.Sprintf(`
+SELECT
+	COUNT(*) AS total_orders,
+	COALESCE(SUM(COALESCE(o.total_price, 0)), 0) AS total_value,
+	COALESCE(AVG(COALESCE(o.total_price, 0)), 0) AS average_order_value,
+	COUNT(*) FILTER (WHERE COALESCE(o.remake_count, 0) > 0) AS remake_orders,
+	COALESCE(SUM(COALESCE(o.total_price, 0)), 0) AS total_sales,
+	COALESCE(SUM(COALESCE(o.total_price, 0)), 0) AS total_revenue
+FROM orders o
+WHERE %s
+`, scope.WhereSQL)
+
+	report := &model.OrderAdvancedSearchReportDTO{
+		StatusBreakdown: []*model.OrderAdvancedSearchStatusBreakdownDTO{},
+		TopProducts:     []*model.OrderAdvancedSearchTopProductDTO{},
+	}
+
+	if err := r.deps.DB.QueryRowContext(ctx, summaryQuery, scope.Args...).Scan(
+		&report.TotalOrders,
+		&report.TotalValue,
+		&report.AverageOrderValue,
+		&report.RemakeOrders,
+		&report.TotalSales,
+		&report.TotalRevenue,
+	); err != nil {
+		return nil, err
+	}
+
+	statusQuery := fmt.Sprintf(`
+SELECT
+	COALESCE(o.status_latest, '') AS status,
+	COUNT(*) AS total
+FROM orders o
+WHERE %s
+GROUP BY COALESCE(o.status_latest, '')
+ORDER BY total DESC, status ASC
+`, scope.WhereSQL)
+
+	statusRows, err := r.deps.DB.QueryContext(ctx, statusQuery, scope.Args...)
+	if err != nil {
+		return nil, err
+	}
+	defer statusRows.Close()
+
+	for statusRows.Next() {
+		row := &model.OrderAdvancedSearchStatusBreakdownDTO{}
+		if err := statusRows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		report.StatusBreakdown = append(report.StatusBreakdown, row)
+	}
+	if err := statusRows.Err(); err != nil {
+		return nil, err
+	}
+
+	topProductsQuery := fmt.Sprintf(`
+SELECT
+	oip.product_id,
+	MIN(NULLIF(oip.product_code, '')) AS product_code,
+	MIN(COALESCE(NULLIF(p.name, ''), NULLIF(o.product_name, ''), NULLIF(oi.product_name, ''), NULLIF(oip.product_code, ''), 'Sản phẩm chưa đặt tên')) AS product_name,
+	COUNT(DISTINCT o.id) AS order_count,
+	COALESCE(SUM(COALESCE(oip.quantity, 0)), 0) AS total_quantity,
+	COALESCE(SUM(COALESCE(oip.quantity, 0) * COALESCE(oip.retail_price, 0)), 0) AS total_sales,
+	COALESCE(SUM(COALESCE(oip.quantity, 0) * COALESCE(oip.retail_price, 0)), 0) AS total_revenue
+FROM orders o
+JOIN order_items oi ON oi.order_id = o.id AND oi.deleted_at IS NULL
+JOIN order_item_products oip ON oip.order_id = o.id AND oip.order_item_id = oi.id AND oip.product_id IS NOT NULL
+LEFT JOIN products p ON p.id = oip.product_id
+WHERE %s
+GROUP BY oip.product_id
+ORDER BY order_count DESC, total_quantity DESC, product_name ASC
+LIMIT 5
+`, scope.WhereSQL)
+
+	topRows, err := r.deps.DB.QueryContext(ctx, topProductsQuery, scope.Args...)
+	if err != nil {
+		return nil, err
+	}
+	defer topRows.Close()
+
+	for topRows.Next() {
+		row := &model.OrderAdvancedSearchTopProductDTO{}
+		if err := topRows.Scan(
+			&row.ProductID,
+			&row.ProductCode,
+			&row.ProductName,
+			&row.OrderCount,
+			&row.TotalQuantity,
+			&row.TotalSales,
+			&row.TotalRevenue,
+		); err != nil {
+			return nil, err
+		}
+		report.TopProducts = append(report.TopProducts, row)
+	}
+	if err := topRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return report, nil
+}
+
+func (r *orderRepository) buildAdvancedSearchScope(filter model.OrderAdvancedSearchFilter) orderAdvancedSearchScope {
+	scope := orderAdvancedSearchScope{
+		Predicates: []predicate.Order{
+			order.DeletedAtIsNil(),
+		},
+	}
+
+	clauses := []string{"o.deleted_at IS NULL"}
+	args := make([]any, 0, 12)
+	addArg := func(value any) string {
+		args = append(args, value)
+		return fmt.Sprintf("$%d", len(args))
+	}
+
+	if filter.DepartmentID != nil && *filter.DepartmentID > 0 {
+		scope.Predicates = append(scope.Predicates, order.DepartmentIDEQ(*filter.DepartmentID))
+		clauses = append(clauses, fmt.Sprintf("o.department_id = %s", addArg(*filter.DepartmentID)))
+	}
+
+	if len(filter.CategoryIDs) > 0 {
+		scope.Predicates = append(scope.Predicates, order.HasItemsWith(
+			orderitem.DeletedAtIsNil(),
+			orderitem.HasProductsWith(
+				orderitemproduct.HasProductWith(
+					product.CategoryIDIn(filter.CategoryIDs...),
+				),
+			),
+		))
+		clauses = append(clauses, fmt.Sprintf(`
+EXISTS (
+	SELECT 1
+	FROM order_items oi
+	JOIN order_item_products oip ON oip.order_item_id = oi.id
+	JOIN products p ON p.id = oip.product_id
+	WHERE oi.order_id = o.id
+	  AND oi.deleted_at IS NULL
+	  AND p.category_id = ANY(%s)
+)`, addArg(pq.Array(filter.CategoryIDs))))
+	}
+
+	if len(filter.ProductIDs) > 0 {
+		scope.Predicates = append(scope.Predicates, order.HasItemsWith(
+			orderitem.DeletedAtIsNil(),
+			orderitem.HasProductsWith(
+				orderitemproduct.ProductIDIn(filter.ProductIDs...),
+			),
+		))
+		clauses = append(clauses, fmt.Sprintf(`
+EXISTS (
+	SELECT 1
+	FROM order_items oi
+	JOIN order_item_products oip ON oip.order_item_id = oi.id
+	WHERE oi.order_id = o.id
+	  AND oi.deleted_at IS NULL
+	  AND oip.product_id = ANY(%s)
+)`, addArg(pq.Array(filter.ProductIDs))))
+	}
+
+	if filter.DentistName != nil && strings.TrimSpace(*filter.DentistName) != "" {
+		pattern := "%" + strings.TrimSpace(*filter.DentistName) + "%"
+		scope.Predicates = append(scope.Predicates, order.DentistNameContainsFold(strings.TrimSpace(*filter.DentistName)))
+		clauses = append(clauses, fmt.Sprintf("o.dentist_name ILIKE %s", addArg(pattern)))
+	}
+
+	if filter.PatientName != nil && strings.TrimSpace(*filter.PatientName) != "" {
+		pattern := "%" + strings.TrimSpace(*filter.PatientName) + "%"
+		scope.Predicates = append(scope.Predicates, order.PatientNameContainsFold(strings.TrimSpace(*filter.PatientName)))
+		clauses = append(clauses, fmt.Sprintf("o.patient_name ILIKE %s", addArg(pattern)))
+	}
+
+	if filter.CreatedYear != nil {
+		scope.Predicates = append(scope.Predicates, yearPredicate(order.FieldCreatedAt, *filter.CreatedYear))
+		clauses = append(clauses, fmt.Sprintf("EXTRACT(YEAR FROM o.created_at) = %s", addArg(*filter.CreatedYear)))
+	}
+
+	if filter.CreatedMonth != nil {
+		scope.Predicates = append(scope.Predicates, monthPredicate(order.FieldCreatedAt, *filter.CreatedMonth))
+		clauses = append(clauses, fmt.Sprintf("EXTRACT(MONTH FROM o.created_at) = %s", addArg(*filter.CreatedMonth)))
+	}
+
+	if filter.DeliveryYear != nil {
+		scope.Predicates = append(scope.Predicates, yearPredicate(order.FieldDeliveryDate, *filter.DeliveryYear))
+		clauses = append(clauses, fmt.Sprintf("o.delivery_date IS NOT NULL AND EXTRACT(YEAR FROM o.delivery_date) = %s", addArg(*filter.DeliveryYear)))
+	}
+
+	if filter.DeliveryMonth != nil {
+		scope.Predicates = append(scope.Predicates, monthPredicate(order.FieldDeliveryDate, *filter.DeliveryMonth))
+		clauses = append(clauses, fmt.Sprintf("o.delivery_date IS NOT NULL AND EXTRACT(MONTH FROM o.delivery_date) = %s", addArg(*filter.DeliveryMonth)))
+	}
+
+	scope.WhereSQL = strings.Join(clauses, " AND ")
+	scope.Args = args
+
+	return scope
+}
+
+func yearPredicate(field string, year int) predicate.Order {
+	return predicate.Order(func(s *sql.Selector) {
+		s.Where(sql.ExprP(fmt.Sprintf("EXTRACT(YEAR FROM %s) = ?", s.C(field)), year))
+	})
+}
+
+func monthPredicate(field string, month int) predicate.Order {
+	return predicate.Order(func(s *sql.Selector) {
+		s.Where(sql.ExprP(fmt.Sprintf("EXTRACT(MONTH FROM %s) = ?", s.C(field)), month))
+	})
 }
 
 func (r *orderRepository) Delete(ctx context.Context, id int64) error {

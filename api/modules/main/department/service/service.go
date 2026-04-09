@@ -8,6 +8,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/department/model"
 	"github.com/khiemnd777/noah_api/modules/main/department/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/mapper"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
@@ -19,6 +20,7 @@ type DepartmentService interface {
 	GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error)
 	GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
+	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error)
 	ChildrenList(ctx context.Context, parentID int, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Delete(ctx context.Context, id int) error
 	GetFirstDepartmentOfUser(ctx context.Context, userID int) (*model.DepartmentDTO, error)
@@ -64,6 +66,22 @@ func keyDeptChildren(parentID int, query table.TableQuery) string {
 	return fmt.Sprintf(
 		"department:children:p%d:l%d:p%d:o%d:ob%s:d%s",
 		parentID,
+		query.Limit,
+		query.Page,
+		query.Offset,
+		orderBy,
+		query.Direction,
+	)
+}
+
+func keyDeptSearch(query dbutils.SearchQuery) string {
+	orderBy := ""
+	if query.OrderBy != nil {
+		orderBy = *query.OrderBy
+	}
+	return fmt.Sprintf(
+		"department:search:k%s:l%d:p%d:o%d:ob%s:d%s",
+		query.Keyword,
 		query.Limit,
 		query.Page,
 		query.Offset,
@@ -137,6 +155,24 @@ func (s *departmentService) ChildrenList(ctx context.Context, parentID int, quer
 
 	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
 		res, e := s.repo.ChildrenList(ctx, parentID, query)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *departmentService) Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error) {
+	type boxed = dbutils.SearchResult[model.DepartmentDTO]
+	key := keyDeptSearch(query)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.Search(ctx, query)
 		if e != nil {
 			return nil, e
 		}

@@ -3,6 +3,8 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v2"
@@ -37,6 +39,8 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/completed/list", h.CompletedList)
 	app.RouterGet(router, "/:dept_id<int>/section/:section_id<int>/orders", h.GetOrdersBySectionID)
 	app.RouterGet(router, "/:dept_id<int>/order/search", h.Search)
+	app.RouterGet(router, "/:dept_id<int>/order/advanced-search", h.AdvancedSearch)
+	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report", h.AdvancedSearchReport)
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/remake/prepare", h.PrepareForRemakeByOrderID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>", h.GetByOrderIDAndOrderItemID)
@@ -148,6 +152,44 @@ func (h *OrderHandler) Search(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(res)
 }
 
+func (h *OrderHandler) AdvancedSearch(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	query := parseAdvancedSearchQuery(c)
+	canViewDepartment, err := rbac.HasAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	res, err := h.svc.AdvancedSearch(c.UserContext(), deptID, query, canViewDepartment)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) AdvancedSearchReport(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	filter := parseAdvancedSearchFilter(c)
+	canViewDepartment, err := rbac.HasAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	res, err := h.svc.AdvancedSearchReport(c.UserContext(), deptID, filter, canViewDepartment)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
 func (h *OrderHandler) GetByID(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
@@ -162,6 +204,101 @@ func (h *OrderHandler) GetByID(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.Status(fiber.StatusOK).JSON(dto)
+}
+
+func parseAdvancedSearchQuery(c *fiber.Ctx) model.OrderAdvancedSearchQuery {
+	tableQuery := table.ParseTableQuery(c, table.DefaultLimit)
+
+	return model.OrderAdvancedSearchQuery{
+		OrderAdvancedSearchFilter: parseAdvancedSearchFilter(c),
+		Limit:                     tableQuery.Limit,
+		Page:                      tableQuery.Page,
+		Offset:                    tableQuery.Offset,
+		OrderBy:                   tableQuery.OrderBy,
+		Direction:                 tableQuery.Direction,
+	}
+}
+
+func parseAdvancedSearchFilter(c *fiber.Ctx) model.OrderAdvancedSearchFilter {
+	return model.OrderAdvancedSearchFilter{
+		DepartmentID:  parseOptionalIntFromQuery(c, "department_id"),
+		CategoryIDs:   parseIntListFromQuery(c, "category_ids"),
+		ProductIDs:    parseIntListFromQuery(c, "product_ids"),
+		DentistName:   parseOptionalStringFromQuery(c, "dentist_name"),
+		PatientName:   parseOptionalStringFromQuery(c, "patient_name"),
+		CreatedYear:   parseOptionalIntFromQuery(c, "created_year"),
+		CreatedMonth:  parseOptionalIntFromQuery(c, "created_month"),
+		DeliveryYear:  parseOptionalIntFromQuery(c, "delivery_year"),
+		DeliveryMonth: parseOptionalIntFromQuery(c, "delivery_month"),
+	}
+}
+
+func parseOptionalStringFromQuery(c *fiber.Ctx, key string) *string {
+	value := strings.TrimSpace(utils.GetQueryAsString(c, key))
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func parseOptionalIntFromQuery(c *fiber.Ctx, key string) *int {
+	raw := strings.TrimSpace(utils.GetQueryAsString(c, key))
+	if raw == "" {
+		return nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return nil
+	}
+	return &value
+}
+
+func parseIntListFromQuery(c *fiber.Ctx, key string) []int {
+	values := make([]string, 0)
+	args := c.Context().QueryArgs()
+
+	for _, raw := range args.PeekMulti(key) {
+		values = append(values, string(raw))
+	}
+	for _, raw := range args.PeekMulti(key + "[]") {
+		values = append(values, string(raw))
+	}
+	if len(values) == 0 {
+		if raw := strings.TrimSpace(utils.GetQueryAsString(c, key)); raw != "" {
+			values = append(values, raw)
+		}
+	}
+
+	out := make([]int, 0, len(values))
+	seen := make(map[int]struct{}, len(values))
+
+	appendValue := func(token string) {
+		token, _ = url.QueryUnescape(strings.TrimSpace(token))
+		if token == "" {
+			return
+		}
+		value, err := strconv.Atoi(token)
+		if err != nil || value <= 0 {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+
+	for _, raw := range values {
+		for _, part := range strings.Split(raw, ",") {
+			appendValue(part)
+		}
+	}
+
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func (h *OrderHandler) GetByOrderIDAndOrderItemID(c *fiber.Ctx) error {

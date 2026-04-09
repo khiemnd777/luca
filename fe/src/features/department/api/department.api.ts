@@ -1,5 +1,6 @@
 import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
+import type { SearchOpts, SearchResult } from "@core/types/search.types";
 import { mapper } from "@core/mapper/auto-mapper";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
@@ -29,6 +30,13 @@ export async function childrenList(tableOpts: FetchTableOpts): Promise<ListResul
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/children`, tableOpts);
   const result = mapper.map<any[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
+  return result;
+}
+
+export async function search(opts: SearchOpts): Promise<SearchResult<DeparmentModel>> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.search<any[]>(`${departmentApiPath()}/search`, opts);
+  const result = mapper.map<any[], SearchResult<DeparmentModel>>("Department", data, "dto_to_model");
   return result;
 }
 

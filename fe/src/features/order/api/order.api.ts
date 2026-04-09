@@ -8,6 +8,7 @@ import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
 import type { SearchOpts, SearchResult } from "@core/types/search.types";
+import type { OrderAdvancedSearchFilters, OrderAdvancedSearchReportModel } from "@features/order/model/order-advanced-search.model";
 import type { OrderItemProductModel } from "../model/order-item-product.model";
 import type { OrderItemMaterialModel } from "../model/order-item-material.model";
 import { serverTimeToClientDate } from "@root/shared/utils/datetime.utils";
@@ -154,6 +155,55 @@ export async function search(opts: SearchOpts): Promise<SearchResult<OrderModel>
   const { data } = await apiClient.search<any[]>(`${departmentApiPath()}/order/search`, opts);
   const result = mapper.map<any[], SearchResult<OrderModel>>("Order", data, "dto_to_model");
   return result;
+}
+
+function parseOptionalNumber(value?: string | null): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return parsed;
+}
+
+function buildAdvancedSearchParams(filters: OrderAdvancedSearchFilters) {
+  const createdYear = parseOptionalNumber(filters.createdYear);
+  const createdMonth = parseOptionalNumber(filters.createdMonth);
+  const deliveryYear = parseOptionalNumber(filters.deliveryYear);
+  const deliveryMonth = parseOptionalNumber(filters.deliveryMonth);
+
+  return {
+    department_id: filters.department?.id,
+    category_ids: filters.categories.map((item) => item.id),
+    product_ids: filters.products.map((item) => item.id),
+    dentist_name: filters.dentistName.trim() || undefined,
+    patient_name: filters.patientName.trim() || undefined,
+    created_year: createdYear,
+    created_month: createdMonth,
+    delivery_year: deliveryYear,
+    delivery_month: deliveryMonth,
+  };
+}
+
+export async function advancedSearchList(
+  filters: OrderAdvancedSearchFilters,
+  tableOpts: FetchTableOpts
+): Promise<ListResult<OrderModel>> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const params = {
+    ...buildAdvancedSearchParams(filters),
+    limit: tableOpts.limit,
+    page: tableOpts.page,
+    order_by: tableOpts.orderBy ?? undefined,
+    direction: tableOpts.direction ?? "desc",
+  };
+  const { data } = await apiClient.get<any[]>(`${departmentApiPath()}/order/advanced-search`, { params });
+  return mapper.map<any[], ListResult<OrderModel>>("Order", data, "dto_to_model");
+}
+
+export async function advancedSearchReport(filters: OrderAdvancedSearchFilters): Promise<OrderAdvancedSearchReportModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const params = buildAdvancedSearchParams(filters);
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/advanced-search/report`, { params });
+  return mapper.map<any, OrderAdvancedSearchReportModel>("OrderAdvancedSearchReport", data, "dto_to_model");
 }
 
 export async function id(id: number): Promise<OrderModel> {

@@ -8,6 +8,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
+	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/mapper"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
@@ -19,6 +20,7 @@ type DepartmentRepository interface {
 	GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error)
 	GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
+	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error)
 	ChildrenList(ctx context.Context, parentID int, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Delete(ctx context.Context, id int) error
 	ExistsMembership(ctx context.Context, userID, deptID int) (bool, error)
@@ -152,6 +154,26 @@ func (r *departmentRepo) ChildrenList(ctx context.Context, parentID int, query t
 		return zero, err
 	}
 	return list, nil
+}
+
+func (r *departmentRepo) Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error) {
+	return dbutils.Search(
+		ctx,
+		r.db.Department.Query().
+			Where(department.Deleted(false)),
+		[]string{
+			dbutils.GetNormField(department.FieldName),
+			dbutils.GetNormField(department.FieldSlug),
+		},
+		query,
+		department.Table,
+		department.FieldID,
+		department.FieldName,
+		department.Or,
+		func(src []*generated.Department) []*model.DepartmentDTO {
+			return mapper.MapListAs[*generated.Department, *model.DepartmentDTO](src)
+		},
+	)
 }
 
 func (r *departmentRepo) Delete(ctx context.Context, id int) error {
