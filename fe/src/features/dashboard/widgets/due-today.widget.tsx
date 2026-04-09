@@ -37,12 +37,12 @@ registerSlot({
   priority: 1,
 });
 
-registerSlot({
-  id: "order-due-today",
-  name: "order:top",
-  render: () => <DueTodayWidget />,
-  priority: 98,
-});
+// registerSlot({
+//   id: "order-due-today",
+//   name: "order:top",
+//   render: () => <DueTodayWidget />,
+//   priority: 98,
+// });
 
 // WS
 function DueTodayWSWidget() {
