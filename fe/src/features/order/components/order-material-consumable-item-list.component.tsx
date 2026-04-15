@@ -1,24 +1,17 @@
 import * as React from "react";
-import type { FormContext } from "@core/form/types";
-import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
 import { useAsyncDebounce } from "@core/hooks/use-async/use-async-debounce";
+import type { FormContext } from "@core/form/types";
 import { calculateTotalPrice } from "@features/order/api/order-item.api";
-
-import { ListItemRender } from "@shared/components/list/list-item-render.component";
-import { GenericItemList } from "@root/shared/components/list/list-item.component";
+import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
+import { Typography } from "@mui/material";
+import { prefixCurrency } from "@root/shared/utils/currency.utils";
+import { OrderItemTableEditor } from "./order-item-table-editor.component";
 
 export type OrderMaterialItemListProps = {
-  /** Controlled value from AutoForm (or any parent). */
   value?: OrderItemMaterialModel[] | null;
-
-  /** Name inside FormContext to auto-sync when onChange is not provided. */
   name?: string;
-
-  /** Access to AutoForm context */
   ctx?: FormContext | null;
-
   values?: Record<string, any>;
-
   onChange?: (items: OrderItemMaterialModel[]) => void;
   onAdd?: (
     item: OrderItemMaterialModel,
@@ -30,7 +23,6 @@ export type OrderMaterialItemListProps = {
     items: OrderItemMaterialModel[],
     ctx?: FormContext | null
   ) => void;
-
   createItem?: (values: Record<string, any>) => OrderItemMaterialModel;
   addLabel?: string;
 };
@@ -47,18 +39,31 @@ function defaultFactory(values: Record<string, any>): OrderItemMaterialModel {
   };
 }
 
+function toNumber(value?: number | null) {
+  return value == null ? 0 : Number(value) || 0;
+}
+
+function formatCurrency(value?: number | null) {
+  return `${prefixCurrency} ${toNumber(value).toLocaleString("vi-VN")}`;
+}
+
+function getMaterialLabel(item: OrderItemMaterialModel) {
+  const code = item.materialCode?.trim();
+  const name = item.materialName?.trim();
+  if (code && name) return `${code} → ${name}`;
+  if (code) return code;
+  if (name) return name;
+  return item.materialId != null ? `Vật tư #${item.materialId}` : `Vật tư #${item.id}`;
+}
+
 function normalizeItem(item: OrderItemMaterialModel) {
   return {
     materialId: item.materialId ?? null,
     materialCode: item.materialCode ?? "",
     quantity: Number(item.quantity) || 0,
     retailPrice: item.retailPrice == null ? null : Number(item.retailPrice) || 0,
-    note: item.note ?? "",    
+    note: item.note ?? "",
   };
-}
-
-function buildSignature(vals: Record<string, any>) {
-  return `${vals.materialId ?? "null"}|${vals.materialCode ?? ""}|${Number(vals.quantity) || 0}|${vals.retailPrice ?? "null"}|${vals.note ?? ""}`;
 }
 
 export function OrderConsumableMaterialItemList({
@@ -72,65 +77,32 @@ export function OrderConsumableMaterialItemList({
   createItem,
   addLabel = "Thêm vật tư tiêu hao",
 }: OrderMaterialItemListProps) {
-  const resolvedValues = values ?? ctx?.values ?? {};
-  const ctxRef = React.useRef<FormContext | null>(ctx ?? null);
-  const lastTotalRef = React.useRef<number | null>(null);
-
-  React.useEffect(() => {
-    ctxRef.current = ctx ?? null;
-  }, [ctx]);
-
-  // ===== SINGLE SOURCE OF TRUTH =====
-  const [items, setItems] = React.useState<OrderItemMaterialModel[]>(() => {
+  const items = React.useMemo(() => {
     if (Array.isArray(value)) return value;
     if (name && ctx && Array.isArray((ctx.values as any)?.[name])) {
-      return (ctx.values as any)[name];
+      return (ctx.values as any)[name] as OrderItemMaterialModel[];
     }
     return [];
-  });
-
-  React.useEffect(() => {
-    if (Array.isArray(value)) {
-      setItems(value);
-      return;
-    }
-    if (name && ctx && Array.isArray((ctx.values as any)?.[name])) {
-      setItems((ctx.values as any)[name]);
-    }
   }, [value, name, ctx, ctx?.values]);
+  const lastTotalRef = React.useRef<number | null>(null);
 
-  const propagate = React.useCallback(
-    (next: OrderItemMaterialModel[]) => {
-      setItems(next);
-
-      if (onChange) {
-        onChange(next);
-      } else if (name && ctxRef.current) {
-        ctxRef.current.setValue(name, next);
-      }
-    },
-    [onChange, name]
-  );
-
-  // ===== CALCULATE TOTAL PRICE =====
   const { prices, quantities, signature } = React.useMemo(() => {
-    const prices: number[] = [];
-    const quantities: number[] = [];
+    const nextPrices: number[] = [];
+    const nextQuantities: number[] = [];
     const materialIds: (number | null)[] = [];
 
-    for (const it of items) {
-      materialIds.push(it.materialId ?? null);
-      quantities.push(Number(it.quantity) || 0);
-      prices.push(it.retailPrice == null ? 0 : Number(it.retailPrice) || 0);
+    for (const item of items) {
+      materialIds.push(item.materialId ?? null);
+      nextQuantities.push(toNumber(item.quantity));
+      nextPrices.push(toNumber(item.retailPrice));
     }
 
     return {
-      prices,
-      quantities,
-      signature: `${materialIds.join(",")}|${quantities.join(",")}|${prices.join(",")}`,
+      prices: nextPrices,
+      quantities: nextQuantities,
+      signature: `${materialIds.join(",")}|${nextQuantities.join(",")}|${nextPrices.join(",")}`,
     };
   }, [items]);
-
 
   const { data: calculatedTotalPrice } = useAsyncDebounce(
     () => {
@@ -142,43 +114,67 @@ export function OrderConsumableMaterialItemList({
   );
 
   React.useEffect(() => {
-    const targetCtx = ctxRef.current;
-    if (!targetCtx || calculatedTotalPrice == null) return;
+    if (!ctx || calculatedTotalPrice == null) return;
     if (lastTotalRef.current === calculatedTotalPrice) return;
-
     lastTotalRef.current = calculatedTotalPrice;
-    targetCtx.setValue("latestOrderItem.__totalConsumableMaterialPrice", calculatedTotalPrice);
-  }, [calculatedTotalPrice]);
+    ctx.setValue("latestOrderItem.__totalConsumableMaterialPrice", calculatedTotalPrice);
+  }, [calculatedTotalPrice, ctx]);
 
   return (
-    <GenericItemList<OrderItemMaterialModel>
-      value={items}
+    <OrderItemTableEditor<OrderItemMaterialModel>
+      value={value}
+      name={name}
+      ctx={ctx}
+      values={values}
+      onChange={onChange}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      createItem={(currentValues) => (createItem ?? defaultFactory)(currentValues)}
+      formName="order-consumable-material-item"
       addLabel={addLabel}
       emptyLabel="Không có vật tư tiêu hao nào."
-      createItem={() => (createItem ?? defaultFactory)(resolvedValues)}
-      onChange={propagate}
-      onAdd={(item, list) => onAdd?.(item, list, ctx)}
-      onRemove={(item, list) => onRemove?.(item, list, ctx)}
-      renderItem={({ item, index, onChange, onRemove }) => (
-        <ListItemRender<OrderItemMaterialModel>
-          item={item}
-          labelName="Vật tư"
-          index={index}
-          onChange={onChange}
-          onRemove={onRemove}
-          isEditable={true}
-          allowEditToggle={!!item.isCloneable}
-          isRemovable={!item.isCloneable}
-          showItemLabel={false}
-          actionsPlacement="aside"
-          formName="order-consumable-material-item"
-          normalize={normalizeItem}
-          extractPatch={(vals) => normalizeItem(vals as any)}
-          buildSignature={buildSignature}
-          ctx={ctx}
-          listKey="order-consumable-material"
-        />
-      )}
+      dialogTitle="vật tư tiêu hao"
+      buildItem={(draft, submittedValues) => ({
+        ...draft,
+        ...normalizeItem(submittedValues as OrderItemMaterialModel),
+      })}
+      canEditItem={() => true}
+      canRemoveItem={(item) => !item.isCloneable}
+      getDeleteMessage={(item) => `Bạn có chắc muốn xóa ${getMaterialLabel(item)}?`}
+      footerCells={{
+        name: "Tổng",
+        retailPrice: formatCurrency(calculatedTotalPrice ?? 0),
+      }}
+      columns={[
+        {
+          key: "name",
+          header: "Tên vật tư",
+          render: (item) => getMaterialLabel(item),
+        },
+        {
+          key: "quantity",
+          header: "Số lượng",
+          width: 110,
+          align: "right",
+          render: (item) => toNumber(item.quantity).toLocaleString("vi-VN"),
+        },
+        {
+          key: "retailPrice",
+          header: "Giá bán lẻ",
+          width: 150,
+          align: "right",
+          render: (item) => formatCurrency(item.retailPrice),
+        },
+        {
+          key: "note",
+          header: "Ghi chú",
+          render: (item) => (
+            <Typography variant="body2" color={item.note ? "text.primary" : "text.secondary"}>
+              {item.note || "—"}
+            </Typography>
+          ),
+        },
+      ]}
     />
   );
 }

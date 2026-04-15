@@ -58,6 +58,11 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
         const itemId = ctx.values?.id;
 
         if (!matched) {
+          ctx.setValue("materialId", null);
+          ctx.setValue("materialCode", "");
+          ctx.setValue("materialName", "");
+          ctx.setValue("quantity", 1);
+
           ctx?.emit("item:patch", {
             __meta: {
               listKey: "order-loaner-material",
@@ -66,6 +71,7 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
             patch: {
               materialId: null,
               materialCode: "",
+              materialName: "",
               quantity: 1,
             },
           });
@@ -73,6 +79,11 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
         }
 
         const material = matched as MaterialModel | null;
+
+        ctx.setValue("materialId", material?.id ?? null);
+        ctx.setValue("materialCode", material?.code ?? null);
+        ctx.setValue("materialName", material?.name ?? "");
+        ctx.setValue("quantity", 1);
 
         ctx?.emit("item:patch", {
           __meta: {
@@ -82,6 +93,7 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
           patch: {
             materialId: material?.id ?? null,
             materialCode: material?.code ?? null,
+            materialName: material?.name ?? "",
             quantity: 1,
           },
         });

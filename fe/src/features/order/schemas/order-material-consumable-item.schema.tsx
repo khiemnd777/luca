@@ -61,6 +61,13 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
         const itemId = ctx.values?.id;
 
         if (!matched) {
+          ctx.setValue("materialId", null);
+          ctx.setValue("materialCode", "");
+          ctx.setValue("materialName", "");
+          ctx.setValue("quantity", 1);
+          ctx.setValue("retailPrice", 0);
+          ctx.setValue("note", "");
+
           ctx?.emit("item:patch", {
             __meta: {
               listKey: "order-consumable-material",
@@ -69,6 +76,7 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
             patch: {
               materialId: null,
               materialCode: "",
+              materialName: "",
               quantity: 1,
               retailPrice: 0,
               note: "",
@@ -78,6 +86,13 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
         }
         const material = matched as MaterialModel | null;
 
+        ctx.setValue("materialId", material?.id ?? null);
+        ctx.setValue("materialCode", material?.code ?? null);
+        ctx.setValue("materialName", material?.name ?? "");
+        ctx.setValue("quantity", 1);
+        ctx.setValue("retailPrice", 0);
+        ctx.setValue("note", "");
+
         ctx?.emit("item:patch", {
           __meta: {
             listKey: "order-consumable-material",
@@ -86,6 +101,7 @@ function buildOrderConsumableMaterialItemSchema(): FormSchema {
           patch: {
             materialId: material?.id ?? null,
             materialCode: material?.code ?? null,
+            materialName: material?.name ?? "",
             quantity: 1,
             retailPrice: 0,
             note: "",

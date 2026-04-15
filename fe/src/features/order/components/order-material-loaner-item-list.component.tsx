@@ -1,23 +1,14 @@
-import * as React from "react";
 import type { FormContext } from "@core/form/types";
 import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
-
-import { ListItemRender } from "@shared/components/list/list-item-render.component";
-import { GenericItemList } from "@root/shared/components/list/list-item.component";
+import { Typography } from "@mui/material";
+import { OrderItemTableEditor } from "./order-item-table-editor.component";
 
 export type OrderMaterialItemListProps = {
-  /** Controlled value from AutoForm (or any parent). */
   value?: OrderItemMaterialModel[] | null;
-
-  /** Name inside FormContext to auto-sync when onChange is not provided. */
   name?: string;
   frmName?: string;
-
-  /** Access to AutoForm context */
   ctx?: FormContext | null;
-
   values?: Record<string, any>;
-
   onChange?: (items: OrderItemMaterialModel[]) => void;
   onAdd?: (
     item: OrderItemMaterialModel,
@@ -29,7 +20,6 @@ export type OrderMaterialItemListProps = {
     items: OrderItemMaterialModel[],
     ctx?: FormContext | null
   ) => void;
-
   createItem?: (values: Record<string, any>) => OrderItemMaterialModel;
   addLabel?: string;
 };
@@ -47,19 +37,24 @@ function defaultFactory(values: Record<string, any>): OrderItemMaterialModel {
   };
 }
 
-function normalizeItem(item: OrderItemMaterialModel) {
+function getMaterialLabel(item: OrderItemMaterialModel) {
+  const code = item.materialCode?.trim();
+  const name = item.materialName?.trim();
+  if (code && name) return `${code} → ${name}`;
+  if (code) return code;
+  if (name) return name;
+  return item.materialId != null ? `Vật tư #${item.materialId}` : `Vật tư #${item.id}`;
+}
+
+function normalizeItem(item: OrderItemMaterialModel, keepStatus: boolean) {
   return {
     materialId: item.materialId ?? null,
     materialCode: item.materialCode ?? "",
     quantity: Number(item.quantity) || 0,
     retailPrice: item.retailPrice == null ? null : Number(item.retailPrice) || 0,
     note: item.note ?? "",
-    status: item.status,
+    ...(keepStatus ? { status: item.status ?? null } : {}),
   };
-}
-
-function buildSignature(vals: Record<string, any>) {
-  return `${vals.materialId ?? "null"}|${vals.materialCode ?? ""}|${Number(vals.quantity) || 0}|${vals.retailPrice ?? "null"}|${vals.status ?? ""}|${vals.note ?? ""}`;
 }
 
 export function OrderLoanerMaterialItemList({
@@ -74,73 +69,63 @@ export function OrderLoanerMaterialItemList({
   createItem,
   addLabel = "Thêm vật tư cho mượn",
 }: OrderMaterialItemListProps) {
-  const resolvedValues = values ?? ctx?.values ?? {};
-  const ctxRef = React.useRef<FormContext | null>(ctx ?? null);
-
-  React.useEffect(() => {
-    ctxRef.current = ctx ?? null;
-  }, [ctx]);
-
-  const [items, setItems] = React.useState<OrderItemMaterialModel[]>(() => {
-    if (Array.isArray(value)) return value;
-    if (name && ctx && Array.isArray((ctx.values as any)?.[name])) {
-      return (ctx.values as any)[name];
-    }
-    return [];
-  });
-
-  React.useEffect(() => {
-    if (Array.isArray(value)) {
-      setItems(value);
-      return;
-    }
-    if (name && ctx && Array.isArray((ctx.values as any)?.[name])) {
-      setItems((ctx.values as any)[name]);
-    }
-  }, [value, name, ctx, ctx?.values]);
-
-  const propagate = React.useCallback(
-    (next: OrderItemMaterialModel[]) => {
-      setItems(next);
-
-      if (onChange) {
-        onChange(next);
-      } else if (name && ctxRef.current) {
-        ctxRef.current.setValue(name, next);
-      }
-    },
-    [onChange, name]
-  );
+  const resolvedFormName = frmName ?? "order-loaner-material-item";
+  const showStatus = resolvedFormName === "order-loaner-material-with-status-item";
 
   return (
-    <GenericItemList<OrderItemMaterialModel>
-      value={items}
+    <OrderItemTableEditor<OrderItemMaterialModel>
+      value={value}
+      name={name}
+      ctx={ctx}
+      values={values}
+      onChange={onChange}
+      onAdd={onAdd}
+      onRemove={onRemove}
+      createItem={(currentValues) => (createItem ?? defaultFactory)(currentValues)}
+      formName={resolvedFormName}
       addLabel={addLabel}
       emptyLabel="Không có vật tư cho mượn nào."
-      createItem={() => (createItem ?? defaultFactory)(resolvedValues)}
-      onChange={propagate}
-      onAdd={(item, list) => onAdd?.(item, list, ctx)}
-      onRemove={(item, list) => onRemove?.(item, list, ctx)}
-      renderItem={({ item, index, onChange, onRemove }) => (
-        <ListItemRender<OrderItemMaterialModel>
-          item={item}
-          labelName="Vật tư"
-          index={index}
-          onChange={onChange}
-          onRemove={onRemove}
-          isEditable={true}
-          allowEditToggle={!!item.isCloneable}
-          isRemovable={!item.isCloneable}
-          showItemLabel={false}
-          actionsPlacement="aside"
-          formName={frmName ?? "order-loaner-material-item"}
-          normalize={normalizeItem}
-          extractPatch={(vals) => normalizeItem(vals as any)}
-          buildSignature={buildSignature}
-          ctx={ctx}
-          listKey="order-loaner-material"
-        />
-      )}
+      dialogTitle="vật tư cho mượn"
+      buildItem={(draft, submittedValues) => ({
+        ...draft,
+        ...normalizeItem(submittedValues as OrderItemMaterialModel, showStatus),
+      })}
+      canEditItem={() => true}
+      canRemoveItem={(item) => !item.isCloneable}
+      getDeleteMessage={(item) => `Bạn có chắc muốn xóa ${getMaterialLabel(item)}?`}
+      columns={[
+        {
+          key: "name",
+          header: "Tên vật tư",
+          render: (item) => getMaterialLabel(item),
+        },
+        {
+          key: "quantity",
+          header: "Số lượng",
+          width: 110,
+          align: "right",
+          render: (item) => (Number(item.quantity) || 0).toLocaleString("vi-VN"),
+        },
+        ...(showStatus
+          ? [
+              {
+                key: "status",
+                header: "Trạng thái",
+                width: 140,
+                render: (item: OrderItemMaterialModel) => item.status || "—",
+              },
+            ]
+          : []),
+        {
+          key: "note",
+          header: "Ghi chú",
+          render: (item) => (
+            <Typography variant="body2" color={item.note ? "text.primary" : "text.secondary"}>
+              {item.note || "—"}
+            </Typography>
+          ),
+        },
+      ]}
     />
   );
 }

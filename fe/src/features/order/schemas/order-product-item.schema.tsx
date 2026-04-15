@@ -9,8 +9,15 @@ const productLabel = (p?: ProductModel | null) => {
   if (!p) return "";
   const code = p.code ?? "";
   const name = p.name ?? "";
+  return name || code;
+};
+
+const productOptionLabel = (p?: ProductModel | null) => {
+  if (!p) return "";
+  const code = p.code ?? "";
+  const name = p.name ?? "";
   if (code && name) return `${code} → ${name}`;
-  return code || name;
+  return name || code;
 };
 
 export function buildOrderProductItemSchema(): FormSchema {
@@ -32,6 +39,7 @@ export function buildOrderProductItemSchema(): FormSchema {
       },
       getOptionLabel: (p: ProductModel) => productLabel(p),
       getInputLabel: (p: ProductModel) => p?.code ?? "",
+      renderItem: (p: ProductModel) => <>{productOptionLabel(p)}</>,
       async searchPage(keyword: string, page: number, limit: number) {
         const result = await searchProduct({
           keyword,
@@ -62,6 +70,15 @@ export function buildOrderProductItemSchema(): FormSchema {
         const itemId = ctx.values?.id;
 
         if (!matched) {
+          ctx.setValue("productId", null);
+          ctx.setValue("productCode", "");
+          ctx.setValue("productName", "");
+          ctx.setValue("categoryId", null);
+          ctx.setValue("quantity", 1);
+          ctx.setValue("retailPrice", 0);
+          ctx.setValue("teethPosition", null);
+          ctx.setValue("note", "");
+
           ctx?.emit("item:patch", {
             __meta: {
               listKey: "order-product",
@@ -70,6 +87,7 @@ export function buildOrderProductItemSchema(): FormSchema {
             patch: {
               productId: null,
               productCode: "",
+              productName: "",
               categoryId: null,
               quantity: 1,
               retailPrice: 0,
@@ -82,6 +100,15 @@ export function buildOrderProductItemSchema(): FormSchema {
 
         const product = matched as ProductModel | null;
 
+        ctx.setValue("productId", product?.id ?? null);
+        ctx.setValue("productCode", product?.code ?? "");
+        ctx.setValue("productName", product?.name ?? "");
+        ctx.setValue("categoryId", product?.categoryId ?? null);
+        ctx.setValue("quantity", 1);
+        ctx.setValue("retailPrice", product?.retailPrice ?? 0);
+        ctx.setValue("teethPosition", null);
+        ctx.setValue("note", "");
+
         ctx?.emit("item:patch", {
           __meta: {
             listKey: "order-product",
@@ -90,6 +117,7 @@ export function buildOrderProductItemSchema(): FormSchema {
           patch: {
             productId: product?.id ?? null,
             productCode: product?.code ?? "",
+            productName: product?.name ?? "",
             categoryId: product?.categoryId ?? null,
             quantity: 1,
             retailPrice: product?.retailPrice ?? 0,

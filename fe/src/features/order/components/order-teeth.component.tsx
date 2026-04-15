@@ -122,12 +122,16 @@ export default function OrderTeeth({
             <Typography variant="body2" component="div" fontWeight={600}>
               Vị trí răng:
             </Typography>
-            <Typography variant="body2" component="div">
-              Hàm trên: {formattedByJaw.upper || "–"}
-            </Typography>
-            <Typography variant="body2" component="div">
-              Hàm dưới: {formattedByJaw.lower || "–"}
-            </Typography>
+            {formattedByJaw.upper ? (
+              <Typography variant="body2" component="div">
+                Hàm trên: {formattedByJaw.upper}
+              </Typography>
+            ) : null}
+            {formattedByJaw.lower ? (
+              <Typography variant="body2" component="div">
+                Hàm dưới: {formattedByJaw.lower}
+              </Typography>
+            ) : null}
           </Stack>
         ) : (
           <Typography variant="body2" component="div" fontWeight={600}>
