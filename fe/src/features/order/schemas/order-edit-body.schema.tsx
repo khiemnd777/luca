@@ -116,6 +116,7 @@ export function buildEditOrderSchema(): FormSchema {
       label: "Tổng cộng:",
       group: "products",
       asText: true,
+      showIf: () => false,
     },
     {
       kind: "custom",
@@ -147,6 +148,7 @@ export function buildEditOrderSchema(): FormSchema {
       label: "Tổng cộng:",
       group: "consumable-materials",
       asText: true,
+      showIf: () => false,
     },
     {
       kind: "custom",

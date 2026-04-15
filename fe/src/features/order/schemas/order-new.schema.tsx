@@ -391,6 +391,7 @@ export function buildNewOrderSchema(): FormSchema {
       label: "Tổng cộng:",
       group: "products",
       asText: true,
+      showIf: () => false,
     },
     // Product List
     {

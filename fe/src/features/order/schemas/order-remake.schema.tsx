@@ -310,6 +310,7 @@ export function buildRemakeOrderSchema(): FormSchema {
       label: "Tổng cộng:",
       group: "products",
       asText: true,
+      showIf: () => false,
     },
     // Product list
     {
@@ -342,6 +343,7 @@ export function buildRemakeOrderSchema(): FormSchema {
       label: "Tổng cộng:",
       group: "consumable-materials",
       asText: true,
+      showIf: () => false,
     },
     {
       kind: "custom",
