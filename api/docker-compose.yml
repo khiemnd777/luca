@@ -40,6 +40,7 @@ services:
       dockerfile: Dockerfile
     container_name: ${APP_NAME}_api
     env_file:
+      - ../.env
       - .env
     environment:
       APP_ENV: ${APP_ENV}
