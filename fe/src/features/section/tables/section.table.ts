@@ -1,6 +1,5 @@
 import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
-import { openFormDialog } from "@core/form/form-dialog.service";
 import type { SectionModel } from "@features/section/model/section.model";
 import { table, unlink } from "@features/section/api/section.api";
 import { reloadTable } from "@root/core/table/table-reload";
@@ -20,12 +19,13 @@ registerTable("sections", () =>
     initialSort: { by: "id", dir: "asc" },
     allowUpdating: ["staff.update"],
     allowDeleting: ["staff.delete"],
-    onView(row) {
+    onEdit(row) {
+      // openFormDialog("section", { initial: { id: row.id } });
       navigate(`/section/${row.id}`);
     },
-    onEdit(row) {
-      openFormDialog("section", { initial: { id: row.id } });
-    },
+    // onView(row) {
+    //   navigate(`/section/${row.id}`);
+    // },
     async onDelete(row) {
       await unlink(row.id);
       reloadTable("sections");

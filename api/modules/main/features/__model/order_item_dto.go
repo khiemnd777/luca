@@ -32,6 +32,7 @@ type OrderItemDTO struct {
 	// materials
 	ConsumableMaterials []*OrderItemMaterialDTO `json:"consumable_materials,omitempty"`
 	LoanerMaterials     []*OrderItemMaterialDTO `json:"loaner_materials,omitempty"`
+	ImplantAccessories  []*OrderItemMaterialDTO `json:"implant_accessories,omitempty"`
 	// processes
 	OrderItemProcesses []*OrderItemProcessDTO `json:"order_item_processes,omitempty"`
 }

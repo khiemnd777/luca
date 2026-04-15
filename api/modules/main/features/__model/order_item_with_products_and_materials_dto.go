@@ -6,6 +6,7 @@ type OrderItemWithProductsAndMaterialsDTO struct {
 	Products            []*OrderItemProductDTO  `json:"products,omitempty"`
 	ConsumableMaterials []*OrderItemMaterialDTO `json:"consumable_materials,omitempty"`
 	LoanerMaterials     []*OrderItemMaterialDTO `json:"loaner_materials,omitempty"`
+	ImplantAccessories  []*OrderItemMaterialDTO `json:"implant_accessories,omitempty"`
 }
 
 type OrderProductsAndMaterialsDTO []OrderItemWithProductsAndMaterialsDTO

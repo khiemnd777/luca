@@ -2,7 +2,6 @@
 import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import { Button } from "@mui/material";
 import { IfPermission } from "@core/auth/if-permission";
-import { openFormDialog } from "@core/form/form-dialog.service";
 import { navigate } from "@core/navigation/navigate";
 import { reloadTable } from "@core/table/table-reload";
 import { registerTable } from "@core/table/table-registry";
@@ -55,12 +54,13 @@ registerTable("department-children", () =>
     initialSort: { by: "id", dir: "asc" },
     allowUpdating: ["department.update"],
     allowDeleting: ["department.delete"],
-    onView(row) {
+    onEdit(row) {
+      // openFormDialog("department", { initial: { id: row.id } });
       navigate(`/department/${row.id}`);
     },
-    onEdit(row) {
-      openFormDialog("department", { initial: { id: row.id } });
-    },
+    // onView(row) {
+    //   navigate(`/department/${row.id}`);
+    // },
     async onDelete(row) {
       await unlink(Number(row.id));
       reloadTable("department-children");

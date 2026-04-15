@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -13,6 +14,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/mapper"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
+	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -21,7 +23,7 @@ type MaterialRepository interface {
 	Update(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error)
 	GetByID(ctx context.Context, deptID int, id int) (*model.MaterialDTO, error)
 	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.MaterialDTO], error)
-	Search(ctx context.Context, deptID int, materialType *string, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error)
+	Search(ctx context.Context, deptID int, materialType *string, isImplant *bool, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error)
 	Delete(ctx context.Context, deptID int, id int) error
 }
 
@@ -35,7 +37,17 @@ func NewMaterialRepository(db *generated.Client, deps *module.ModuleDeps[config.
 	return &materialRepo{db: db, deps: deps, cfMgr: cfMgr}
 }
 
+func normalizeMaterialInput(input model.MaterialDTO) model.MaterialDTO {
+	name := strings.TrimSpace(utils.SafeString(input.Name))
+	input.Name = utils.Ptr(name)
+	input.Code = utils.Ptr(name)
+	input.Type = utils.Ptr("loaner")
+	return input
+}
+
 func (r *materialRepo) Create(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
+	input = normalizeMaterialInput(input)
+
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -82,6 +94,8 @@ func (r *materialRepo) Create(ctx context.Context, deptID int, input model.Mater
 }
 
 func (r *materialRepo) Update(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
+	input = normalizeMaterialInput(input)
+
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -177,7 +191,7 @@ func (r *materialRepo) List(ctx context.Context, deptID int, query table.TableQu
 	return list, nil
 }
 
-func (r *materialRepo) Search(ctx context.Context, deptID int, materialType *string, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error) {
+func (r *materialRepo) Search(ctx context.Context, deptID int, materialType *string, isImplant *bool, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error) {
 	q := r.db.Material.
 		Query().
 		Where(
@@ -187,6 +201,9 @@ func (r *materialRepo) Search(ctx context.Context, deptID int, materialType *str
 
 	if materialType != nil {
 		q = q.Where(material.TypeEQ(*materialType))
+	}
+	if isImplant != nil {
+		q = q.Where(material.IsImplantEQ(*isImplant))
 	}
 	return dbutils.Search(
 		ctx,

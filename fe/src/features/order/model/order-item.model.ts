@@ -31,6 +31,8 @@ export interface OrderItemModel {
   consumableMaterials?: OrderItemMaterialModel[] | null;
   // loaner materials
   loanerMaterials?: OrderItemMaterialModel[] | null;
+  // implant accessories
+  implantAccessories?: OrderItemMaterialModel[] | null;
 }
 
 export interface OrderItemUpsertModel {

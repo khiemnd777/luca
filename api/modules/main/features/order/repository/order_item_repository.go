@@ -8,6 +8,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/material"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemmaterial"
@@ -363,6 +364,9 @@ func (r *orderItemRepository) GetAllProductsAndMaterialsByOrderID(ctx context.Co
 			orderitemmaterial.OrderIDEQ(orderID),
 			orderitemmaterial.HasOrderItemWith(orderitem.DeletedAtIsNil()),
 		).
+		WithMaterial(func(mq *generated.MaterialQuery) {
+			mq.Select(material.FieldIsImplant, material.FieldName)
+		}).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -376,7 +380,17 @@ func (r *orderItemRepository) GetAllProductsAndMaterialsByOrderID(ctx context.Co
 		case utils.Ptr("consumable"):
 			dto.ConsumableMaterials = append(dto.ConsumableMaterials, mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](material))
 		case utils.Ptr("loaner"):
-			dto.LoanerMaterials = append(dto.LoanerMaterials, mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](material))
+			mapped := mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](material)
+			isImplant := false
+			if material.Edges.Material != nil {
+				mapped.MaterialName = material.Edges.Material.Name
+				isImplant = material.Edges.Material.IsImplant
+			}
+			if isImplant {
+				dto.ImplantAccessories = append(dto.ImplantAccessories, mapped)
+			} else {
+				dto.LoanerMaterials = append(dto.LoanerMaterials, mapped)
+			}
 		}
 	}
 
@@ -573,11 +587,12 @@ func (r *orderItemRepository) Create(ctx context.Context, tx *generated.Tx, orde
 		}
 	}
 
-	createdLoanerMaterials, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
+	createdLoanerMaterials, createdImplantAccessories, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
 	if err != nil {
 		return nil, err
 	}
 	out.LoanerMaterials = createdLoanerMaterials
+	out.ImplantAccessories = createdImplantAccessories
 
 	// processes
 	if len(products) > 0 {
@@ -695,11 +710,12 @@ func (r *orderItemRepository) Update(ctx context.Context, tx *generated.Tx, orde
 			m.ReturnedAt = &now
 		}
 	}
-	createdLoanerMaterials, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
+	createdLoanerMaterials, createdImplantAccessories, err := r.orderItemMaterialRepo.SyncLoaner(ctx, tx, entity.OrderID, entity.ID, loanerMaterials)
 	if err != nil {
 		return nil, err
 	}
 	out.LoanerMaterials = createdLoanerMaterials
+	out.ImplantAccessories = createdImplantAccessories
 
 	// processes
 	if primaryProductID > 0 {

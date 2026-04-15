@@ -65,6 +65,7 @@ mapper.register<OrderModel>({
         // materials
         consumableMaterials: null,
         loanerMaterials: null,
+        implantAccessories: null,
       }
     },
     latestOrderItem: {
@@ -94,6 +95,7 @@ mapper.register<OrderModel>({
       // materials
       consumableMaterials: null,
       loanerMaterials: null,
+      implantAccessories: null,
     },
   }),
 });

@@ -89,14 +89,20 @@ func (r *orderItemMaterialRepository) GetLoanerMaterials(
 }
 
 func (r *orderItemMaterialRepository) PrepareLoanerMaterials(dto *model.OrderItemDTO) []*model.OrderItemMaterialDTO {
-	if dto == nil || len(dto.LoanerMaterials) == 0 {
+	if dto == nil {
 		return nil
 	}
 
-	out := make([]*model.OrderItemMaterialDTO, 0, len(dto.LoanerMaterials))
-	seen := make(map[int]struct{}, len(dto.LoanerMaterials))
+	combined := append([]*model.OrderItemMaterialDTO{}, dto.LoanerMaterials...)
+	combined = append(combined, dto.ImplantAccessories...)
+	if len(combined) == 0 {
+		return nil
+	}
 
-	for _, material := range dto.LoanerMaterials {
+	out := make([]*model.OrderItemMaterialDTO, 0, len(combined))
+	seen := make(map[int]struct{}, len(combined))
+
+	for _, material := range combined {
 		if material == nil || material.MaterialID == 0 {
 			continue
 		}
@@ -148,6 +154,43 @@ func (r *orderItemMaterialRepository) PrepareLoanerForCreate(materials []*model.
 	}
 
 	return materials
+}
+
+func (r *orderItemMaterialRepository) appendLoanerMaterial(target *model.OrderItemDTO, materialDTO *model.OrderItemMaterialDTO, isImplant bool) {
+	if target == nil || materialDTO == nil {
+		return
+	}
+	if isImplant {
+		target.ImplantAccessories = append(target.ImplantAccessories, materialDTO)
+		return
+	}
+	target.LoanerMaterials = append(target.LoanerMaterials, materialDTO)
+}
+
+func (r *orderItemMaterialRepository) splitLoanerRows(rows []*generated.OrderItemMaterial) ([]*model.OrderItemMaterialDTO, []*model.OrderItemMaterialDTO) {
+	loanerMaterials := make([]*model.OrderItemMaterialDTO, 0)
+	implantAccessories := make([]*model.OrderItemMaterialDTO, 0)
+
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+
+		dto := mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](row)
+		isImplant := false
+		if row.Edges.Material != nil {
+			dto.MaterialName = row.Edges.Material.Name
+			isImplant = row.Edges.Material.IsImplant
+		}
+
+		if isImplant {
+			implantAccessories = append(implantAccessories, dto)
+		} else {
+			loanerMaterials = append(loanerMaterials, dto)
+		}
+	}
+
+	return loanerMaterials, implantAccessories
 }
 
 func (r *orderItemMaterialRepository) replaceLoanerCurrent(
@@ -227,7 +270,7 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 	orderID int64,
 	orderItemID int64,
 	materials []*model.OrderItemMaterialDTO,
-) ([]*model.OrderItemMaterialDTO, error) {
+) ([]*model.OrderItemMaterialDTO, []*model.OrderItemMaterialDTO, error) {
 
 	logger.Debug("SyncLoanerV2: start",
 		"orderItemID", orderItemID,
@@ -261,7 +304,7 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 	if err := r.replaceLoanerCurrent(
 		ctx, tx, orderID, orderItemID, current,
 	); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// UP
@@ -277,7 +320,7 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 			parentOID,
 			items,
 		); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		if err := r.syncLoanerFromSource(
@@ -287,7 +330,7 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 			parentOID,
 			items,
 		); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -299,7 +342,7 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 			orderItemID,
 			cloneToChildren,
 		); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -309,24 +352,21 @@ func (r *orderItemMaterialRepository) SyncLoaner(
 			orderitemmaterial.OrderItemIDEQ(orderItemID),
 			orderitemmaterial.TypeEQ("loaner"),
 		).
+		WithMaterial(func(mq *generated.MaterialQuery) {
+			mq.Select(material.FieldName, material.FieldIsImplant)
+		}).
 		All(ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	out := make([]*model.OrderItemMaterialDTO, 0, len(rows))
-	for _, r := range rows {
-		out = append(out,
-			mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](r),
-		)
-	}
+	loanerMaterials, implantAccessories := r.splitLoanerRows(rows)
 
 	logger.Debug("SyncLoanerV2: done",
 		"orderItemID", orderItemID,
-		"finalCount", len(out),
+		"finalCount", len(loanerMaterials)+len(implantAccessories),
 	)
 
-	return out, nil
+	return loanerMaterials, implantAccessories, nil
 }
 
 func (r *orderItemMaterialRepository) syncLoanerFromDerived(
@@ -413,6 +453,9 @@ func (r *orderItemMaterialRepository) LoadLoaner(ctx context.Context, items ...*
 			orderitemmaterial.OrderItemIDIn(itemIDs...),
 			orderitemmaterial.TypeEQ("loaner"),
 		).
+		WithMaterial(func(mq *generated.MaterialQuery) {
+			mq.Select(material.FieldName, material.FieldIsImplant)
+		}).
 		All(ctx)
 	if err != nil {
 		return err
@@ -420,7 +463,13 @@ func (r *orderItemMaterialRepository) LoadLoaner(ctx context.Context, items ...*
 
 	for _, rel := range relations {
 		if dto, ok := itemIndex[rel.OrderItemID]; ok {
-			dto.LoanerMaterials = append(dto.LoanerMaterials, mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](rel))
+			mapped := mapper.MapAs[*generated.OrderItemMaterial, *model.OrderItemMaterialDTO](rel)
+			isImplant := false
+			if rel.Edges.Material != nil {
+				mapped.MaterialName = rel.Edges.Material.Name
+				isImplant = rel.Edges.Material.IsImplant
+			}
+			r.appendLoanerMaterial(dto, mapped, isImplant)
 		}
 	}
 
@@ -456,6 +505,9 @@ func (r *orderItemMaterialRepository) PrepareLoanerForRemake(
 			orderitemmaterial.OrderItemIDIn(itemIDs...),
 			orderitemmaterial.TypeEQ("loaner"),
 		).
+		WithMaterial(func(mq *generated.MaterialQuery) {
+			mq.Select(material.FieldName, material.FieldIsImplant)
+		}).
 		All(ctx)
 	if err != nil {
 		return err
@@ -471,11 +523,16 @@ func (r *orderItemMaterialRepository) PrepareLoanerForRemake(
 			*generated.OrderItemMaterial,
 			*model.OrderItemMaterialDTO,
 		](rel)
+		isImplant := false
+		if rel.Edges.Material != nil {
+			mapped.MaterialName = rel.Edges.Material.Name
+			isImplant = rel.Edges.Material.IsImplant
+		}
 
 		cloneable := true
 		mapped.IsCloneable = &cloneable
 
-		dto.LoanerMaterials = append(dto.LoanerMaterials, mapped)
+		r.appendLoanerMaterial(dto, mapped, isImplant)
 	}
 
 	return nil

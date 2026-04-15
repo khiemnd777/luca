@@ -53,8 +53,9 @@ func (h *MaterialHandler) Search(c *fiber.Ctx) error {
 	}
 	q := dbutils.ParseSearchQuery(c, 20)
 	mtype := utils.GetQueryAsString(c, "type")
+	isImplant := utils.SafeParseBoolPtr(c.Query("is_implant"))
 	deptID, _ := utils.GetDeptIDInt(c)
-	res, err := h.svc.Search(c.UserContext(), deptID, &mtype, q)
+	res, err := h.svc.Search(c.UserContext(), deptID, &mtype, isImplant, q)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

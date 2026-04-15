@@ -101,6 +101,30 @@ export function buildEditProductsSchema(): FormSchema {
         />
       ),
     },
+    {
+      kind: "custom",
+      prop: "latestOrderItem",
+      name: "implantAccessories",
+      label: "Phụ kiện implant kèm theo",
+      group: "implant-accessories",
+      normalizeInitial: (val, _) => {
+        const arr = Array.isArray(val) ? val : val ? [val] : [];
+        return arr;
+      },
+      render: ({ value, setValue, ctx, values }) => (
+        <OrderLoanerMaterialItemList
+          name="latestOrderItem.implantAccessories"
+          frmName="order-implant-accessory-with-status-item"
+          variant="implant"
+          value={value}
+          ctx={ctx}
+          values={values}
+          onChange={setValue}
+          onAdd={(item) => console.log("added", item)}
+          onRemove={(item) => console.log("removed", item)}
+        />
+      ),
+    },
     // Total Price
     {
       kind: "custom",
@@ -159,6 +183,11 @@ export function buildEditProductsSchema(): FormSchema {
       {
         name: "loaner-materials",
         label: "Danh sách vật tư cho mượn:",
+        col: 1,
+      },
+      {
+        name: "implant-accessories",
+        label: "Danh sách phụ kiện implant kèm theo:",
         col: 1,
       },
       {

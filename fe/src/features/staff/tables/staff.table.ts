@@ -1,6 +1,5 @@
 import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
-import { openFormDialog } from "@core/form/form-dialog.service";
 import type { StaffModel } from "@features/staff/model/staff.model";
 import { table, unlink } from "@features/staff/api/staff.api";
 import { reloadTable } from "@core/table/table-reload";
@@ -40,11 +39,12 @@ registerTable("staffs", () =>
     allowUpdating: ["staff.update"],
     allowDeleting: ["staff.delete"],
     onEdit(row) {
-      openFormDialog("staff-edit-dialog", { initial: { id: row.id } });
-    },
-    onView(row) {
+      // openFormDialog("staff-edit-dialog", { initial: { id: row.id } });
       navigate(`/staff/${row.id}`);
     },
+    // onView(row) {
+    //   navigate(`/staff/${row.id}`);
+    // },
     async onDelete(row) {
       await unlink(row.id);
       reloadTable("staffs");

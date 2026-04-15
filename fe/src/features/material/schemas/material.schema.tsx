@@ -6,19 +6,9 @@ import { registerForm } from "@core/form/form-registry";
 import { reloadTable } from "@core/table/table-reload";
 import { create, id, update } from "@features/material/api/material.api";
 import type { MaterialModel } from "@features/material/model/material.model";
-import { MATERIAL_TYPES } from "../utils/material.utils";
 
 export function buildSampleSchema(): FormSchema {
   const fields: FieldDef[] = [
-    {
-      name: "code",
-      label: "Mã vật tư",
-      kind: "text",
-      rules: {
-        required: "Yêu cầu nhập mã vật tư",
-        maxLength: 30,
-      },
-    },
     {
       name: "name",
       label: "Tên vật tư",
@@ -27,12 +17,6 @@ export function buildSampleSchema(): FormSchema {
         required: "Yêu cầu nhập tên vật tư",
         maxLength: 200,
       },
-    },
-    {
-      name: "type",
-      label: "Loại",
-      kind: "select",
-      options: [...MATERIAL_TYPES],
     },
     {
       name: "isImplant",

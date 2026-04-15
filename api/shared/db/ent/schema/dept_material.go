@@ -73,7 +73,7 @@ func (Material) Indexes() []ent.Index {
 		index.Fields("id", "deleted_at"),
 		index.Fields("department_id", "deleted_at"),
 		index.Fields("code"),
-		index.Fields("code", "deleted_at").Unique(),
+		index.Fields("code", "deleted_at"),
 		index.Fields("name", "deleted_at"),
 		index.Fields("deleted_at"),
 	}

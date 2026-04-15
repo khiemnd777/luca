@@ -13,11 +13,16 @@ export async function table(tableOpts: FetchTableOpts): Promise<ListResult<Mater
   return result;
 }
 
-export async function search(opts: SearchOpts, type?: string): Promise<SearchResult<MaterialModel>> {
+export type MaterialSearchOpts = SearchOpts & {
+  isImplant?: boolean;
+};
+
+export async function search(opts: MaterialSearchOpts, type?: string, isImplant?: boolean): Promise<SearchResult<MaterialModel>> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.search<any[]>(`${departmentApiPath()}/material/search`, {
     ...opts,
     type,
+    is_implant: isImplant ?? opts.isImplant,
   });
   const result = mapper.map<any[], SearchResult<MaterialModel>>("Material", data, "dto_to_model");
   return result;

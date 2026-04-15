@@ -46,7 +46,7 @@ type OrderItemMaterialRepository interface {
 		orderID int64,
 		orderItemID int64,
 		materials []*model.OrderItemMaterialDTO,
-	) ([]*model.OrderItemMaterialDTO, error)
+	) ([]*model.OrderItemMaterialDTO, []*model.OrderItemMaterialDTO, error)
 }
 
 type orderItemMaterialRepository struct {

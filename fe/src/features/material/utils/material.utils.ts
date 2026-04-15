@@ -17,6 +17,12 @@ export function materialTypeLabel(value?: string | null): string {
   return MATERIAL_TYPE_MAP[value] ?? value;
 }
 
+export function materialDisplayLabel(input?: { name?: string | null; isImplant?: boolean } | null): string {
+  if (!input) return "";
+  const name = input.name?.trim() ?? "";
+  return name;
+}
+
 // status
 export const MATERIAL_STATUSES = [
   { label: "Đang cho mượn", value: "on_loan" },

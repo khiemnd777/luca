@@ -7,6 +7,7 @@ export type OrderMaterialItemListProps = {
   value?: OrderItemMaterialModel[] | null;
   name?: string;
   frmName?: string;
+  variant?: "loaner" | "implant";
   ctx?: FormContext | null;
   values?: Record<string, any>;
   onChange?: (items: OrderItemMaterialModel[]) => void;
@@ -61,16 +62,20 @@ export function OrderLoanerMaterialItemList({
   value,
   name,
   frmName,
+  variant = "loaner",
   ctx,
   values,
   onChange,
   onAdd,
   onRemove,
   createItem,
-  addLabel = "Thêm vật tư cho mượn",
+  addLabel,
 }: OrderMaterialItemListProps) {
   const resolvedFormName = frmName ?? "order-loaner-material-item";
-  const showStatus = resolvedFormName === "order-loaner-material-with-status-item";
+  const isImplantVariant = variant === "implant";
+  const showStatus = resolvedFormName.endsWith("-with-status-item");
+  const itemLabel = isImplantVariant ? "phụ kiện implant" : "vật tư cho mượn";
+  const resolvedAddLabel = addLabel ?? (isImplantVariant ? "Thêm phụ kiện implant" : "Thêm vật tư cho mượn");
 
   return (
     <OrderItemTableEditor<OrderItemMaterialModel>
@@ -83,9 +88,9 @@ export function OrderLoanerMaterialItemList({
       onRemove={onRemove}
       createItem={(currentValues) => (createItem ?? defaultFactory)(currentValues)}
       formName={resolvedFormName}
-      addLabel={addLabel}
-      emptyLabel="Không có vật tư cho mượn nào."
-      dialogTitle="vật tư cho mượn"
+      addLabel={resolvedAddLabel}
+      emptyLabel={isImplantVariant ? "Không có phụ kiện implant nào." : "Không có vật tư cho mượn nào."}
+      dialogTitle={itemLabel}
       buildItem={(draft, submittedValues) => ({
         ...draft,
         ...normalizeItem(submittedValues as OrderItemMaterialModel, showStatus),
@@ -96,7 +101,7 @@ export function OrderLoanerMaterialItemList({
       columns={[
         {
           key: "name",
-          header: "Tên vật tư",
+          header: isImplantVariant ? "Tên phụ kiện" : "Tên vật tư",
           render: (item) => getMaterialLabel(item),
         },
         {

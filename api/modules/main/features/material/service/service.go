@@ -23,7 +23,7 @@ type MaterialService interface {
 	Update(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error)
 	GetByID(ctx context.Context, deptID int, id int) (*model.MaterialDTO, error)
 	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.MaterialDTO], error)
-	Search(ctx context.Context, deptID int, materialType *string, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error)
+	Search(ctx context.Context, deptID int, materialType *string, isImplant *bool, query dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error)
 	Delete(ctx context.Context, deptID int, id int) error
 }
 
@@ -68,7 +68,7 @@ func kMaterialList(deptID int, q table.TableQuery) string {
 	return fmt.Sprintf("material:list:dpt%d:l%d:p%d:o%s:d%s", deptID, q.Limit, q.Page, orderBy, q.Direction)
 }
 
-func kMaterialSearch(deptID int, materialType *string, q dbutils.SearchQuery) string {
+func kMaterialSearch(deptID int, materialType *string, isImplant *bool, q dbutils.SearchQuery) string {
 	orderBy := ""
 	if q.OrderBy != nil {
 		orderBy = *q.OrderBy
@@ -77,7 +77,11 @@ func kMaterialSearch(deptID int, materialType *string, q dbutils.SearchQuery) st
 	if materialType != nil {
 		mtype = *materialType
 	}
-	return fmt.Sprintf("material:search:dpt%d:t%s:k%s:l%d:p%d:o%s:d%s", deptID, mtype, q.Keyword, q.Limit, q.Page, orderBy, q.Direction)
+	implant := ""
+	if isImplant != nil {
+		implant = fmt.Sprintf("%t", *isImplant)
+	}
+	return fmt.Sprintf("material:search:dpt%d:t%s:i%s:k%s:l%d:p%d:o%s:d%s", deptID, mtype, implant, q.Keyword, q.Limit, q.Page, orderBy, q.Direction)
 }
 
 // ----------------------------------------------------------------------------
@@ -202,12 +206,12 @@ func (s *materialService) Delete(ctx context.Context, deptID int, id int) error 
 // Search
 // ----------------------------------------------------------------------------
 
-func (s *materialService) Search(ctx context.Context, deptID int, materialType *string, q dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error) {
+func (s *materialService) Search(ctx context.Context, deptID int, materialType *string, isImplant *bool, q dbutils.SearchQuery) (dbutils.SearchResult[model.MaterialDTO], error) {
 	type boxed = dbutils.SearchResult[model.MaterialDTO]
-	key := kMaterialSearch(deptID, materialType, q)
+	key := kMaterialSearch(deptID, materialType, isImplant, q)
 
 	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
-		res, e := s.repo.Search(ctx, deptID, materialType, q)
+		res, e := s.repo.Search(ctx, deptID, materialType, isImplant, q)
 		if e != nil {
 			return nil, e
 		}

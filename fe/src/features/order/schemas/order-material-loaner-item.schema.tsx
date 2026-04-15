@@ -3,22 +3,27 @@ import type { FormSchema } from "@core/form/form.types";
 import { registerForm } from "@core/form/form-registry";
 import { id as fetchMaterialById, search as searchMaterial } from "@features/material/api/material.api";
 import type { MaterialModel } from "@features/material/model/material.model";
+import { materialDisplayLabel } from "@features/material/utils/material.utils";
 
 const materialLabel = (p?: MaterialModel | null) => {
-  if (!p) return "";
-  const code = p.code ?? "";
-  const name = p.name ?? "";
-  if (code && name) return `${name}`;
-  return code || name;
+  return materialDisplayLabel(p);
 };
 
 function buildOrderLoanerMaterialItemSchema(): FormSchema {
+  return buildLoanerMaterialItemSchema(false, "order-loaner-material", "Vật tư cho mượn");
+}
+
+function buildOrderImplantAccessoryItemSchema(): FormSchema {
+  return buildLoanerMaterialItemSchema(true, "order-implant-accessory", "Phụ kiện implant");
+}
+
+function buildLoanerMaterialItemSchema(isImplant: boolean, listKey: string, materialLabelText: string): FormSchema {
   const fields: FieldDef[] = [
     {
       name: "materialId",
-      label: "Vật tư cho mượn",
+      label: materialLabelText,
       kind: "searchsingle",
-      placeholder: "Nhập mã hoặc tên vật tư cho mượn",
+      placeholder: `Nhập mã hoặc tên ${materialLabelText.toLowerCase()}`,
       fullWidth: true,
       size: "small",
       group: "line1",
@@ -27,14 +32,14 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
         required: "Vui lòng chọn vật tư cho mượn",
       },
       getOptionLabel: (p: MaterialModel) => materialLabel(p),
-      getInputLabel: (p: MaterialModel) => p?.code ?? "",
+      getInputLabel: (p: MaterialModel) => materialLabel(p),
       async searchPage(keyword: string, page: number, limit: number) {
         const result = await searchMaterial({
           keyword,
           limit,
           page,
-          orderBy: "code",
-        }, "loaner");
+          orderBy: "name",
+        }, "loaner", isImplant);
         return result.items;
       },
       async hydrateById(idValue: number | string) {
@@ -49,8 +54,8 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
           keyword: String(key),
           limit: 1,
           page: 1,
-          orderBy: "code",
-        });
+          orderBy: "name",
+        }, "loaner", isImplant);
         return result.items?.[0] ?? null;
       },
       onBlur: (_text: string, matched: any, ctx) => {
@@ -65,7 +70,7 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
 
           ctx?.emit("item:patch", {
             __meta: {
-              listKey: "order-loaner-material",
+              listKey,
               itemId,
             },
             patch: {
@@ -86,10 +91,10 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
         ctx.setValue("quantity", 1);
 
         ctx?.emit("item:patch", {
-          __meta: {
-            listKey: "order-loaner-material",
-            itemId,
-          },
+            __meta: {
+              listKey,
+              itemId,
+            },
           patch: {
             materialId: material?.id ?? null,
             materialCode: material?.code ?? null,
@@ -144,3 +149,4 @@ function buildOrderLoanerMaterialItemSchema(): FormSchema {
 }
 
 registerForm("order-loaner-material-item", buildOrderLoanerMaterialItemSchema);
+registerForm("order-implant-accessory-item", buildOrderImplantAccessoryItemSchema);

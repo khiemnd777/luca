@@ -7,8 +7,8 @@ import { table, unlink } from "@features/product/api/product.api";
 import { navigate } from "@root/core/navigation/navigate";
 
 const columns: ColumnDef<ProductModel>[] = [
-  { key: "code", header: "Mã sản phẩm", sortable: true, },
-  { key: "name", header: "Tên sản phẩm", width: 256, sortable: true, labelField: true },
+  { key: "code", header: "Mã sản phẩm", width: 160, sortable: true, },
+  { key: "name", header: "Tên sản phẩm", width: 360, sortable: true, labelField: true },
   { key: "categoryName", header: "Danh mục", width: 300, sortable: true, },
   { key: "retailPrice", header: "Giá bán", type: "currency", sortable: true },
   { key: "costPrice", header: "Giá vốn", type: "currency", sortable: true },
@@ -40,11 +40,12 @@ registerTable("products", () => {
     allowUpdating: ["product.update"],
     allowDeleting: ["product.delete"],
     onEdit(row: ProductModel) {
-      openFormDialog("product", { initial: { id: row.id } });
-    },
-    onView(row: ProductModel) {
+      // openFormDialog("product", { initial: { id: row.id } });
       navigate(`/product/${row.id}`);
     },
+    // onView(row: ProductModel) {
+    //   navigate(`/product/${row.id}`);
+    // },
     async onDelete(row) {
       await unlink(row.id);
       reloadTable("products");
