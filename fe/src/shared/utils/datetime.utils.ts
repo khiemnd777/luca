@@ -1,7 +1,13 @@
 export function formatDateTime(value?: string | Date | null): string {
   if (!value) return "";
 
+  const dateTimeFormat = String(import.meta.env.VITE_FORMAT_DATETIME ?? "").trim().toUpperCase();
+  if (dateTimeFormat === "USA" || dateTimeFormat === "US") {
+    return formatUSADateTime(value);
+  }
+
   const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
 
   const dd = String(date.getDate()).padStart(2, "0");
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -60,6 +66,48 @@ export function formatDateShort(value?: string | Date | null): string {
   const currentYear = new Date().getFullYear();
 
   return yyyy === currentYear ? `${dd}/${mm}` : `${dd}/${mm}/${yyyy}`;
+}
+
+export function formatUSADate(value?: string | Date | null): string {
+  if (!value) return "";
+
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return "";
+
+    const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const [, year, month, day] = match;
+      return `${month}/${day}/${year}`;
+    }
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
+
+export function formatUSADateTime(value?: string | Date | null): string {
+  if (!value) return "";
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "2-digit",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(date);
 }
 
 export function formatDuration(durationSec?: number | null): string {

@@ -1,4 +1,5 @@
 import type { ListResult } from "@core/types/list-result";
+import type { LocalizedText } from "@root/core/i18n/localized-text";
 
 export type SortDir = "asc" | "desc";
 
@@ -53,7 +54,7 @@ export type MetadataColumnOptions = {
 
 export type MiniColumnDef = {
   accessor?: (row: any) => unknown;
-  header?: string;
+  header?: LocalizedText;
   type?: ColumnType;
   sortable?: boolean;
   render?: (value: any, row: any) => React.ReactNode;
@@ -69,7 +70,9 @@ export type QROptions = {
 
 export type ColumnDef<T> = {
   key: keyof T | string;
-  header?: string;
+  header?: LocalizedText;
+  headerIcon?: React.ReactNode;
+  hideHeaderLabel?: boolean;
   width?: number | string;
   type?: ColumnType;
   render?: (row: T) => React.ReactNode;

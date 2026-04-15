@@ -104,6 +104,8 @@ When in doubt:
 - extend the nearest existing feature pattern
 - keep logic with the owning feature or layer
 - avoid new shared abstractions until repetition and ownership are clear
+- apply DRY by reusing existing local patterns and shared infrastructure when repetition is real
+- apply SOLID pragmatically without introducing speculative layers or indirection
 
 ---
 

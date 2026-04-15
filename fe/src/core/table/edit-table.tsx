@@ -9,6 +9,7 @@ import {
   TablePagination,
   TableSortLabel,
 } from "@mui/material";
+import { alpha, darken, lighten, useTheme } from "@mui/material/styles";
 import EditRoundedIcon from "@mui/icons-material/EditRounded";
 import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
@@ -30,9 +31,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { getContrastText } from "@root/shared/utils/color.utils";
 import { navigate } from "@root/core/navigation/navigate";
-
-
-const formatColumnHeader = (label?: string) => label?.toUpperCase();
+import { resolveLocalizedText } from "@root/core/i18n/localized-text";
+import { useI18n } from "@root/core/i18n/use-i18n";
 
 export type EditTableProps<T> = {
   rows: T[];
@@ -163,10 +163,62 @@ function LinkCell({ label, url }: { label: React.ReactNode; url?: string | null 
         cursor: "pointer",
         textDecoration: "underline",
         textUnderlineOffset: "2px",
+        display: "block",
+        width: "100%",
+        minWidth: 0,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        whiteSpace: "nowrap",
       }}
     >
       {label}
     </Box>
+  );
+}
+
+function TruncatedCell({
+  content,
+  tooltip,
+}: {
+  content: React.ReactNode;
+  tooltip?: string;
+}) {
+  const ref = React.useRef<HTMLDivElement | null>(null);
+  const [isTruncated, setIsTruncated] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const measure = () => {
+      setIsTruncated(node.scrollWidth > node.clientWidth || node.scrollHeight > node.clientHeight);
+    };
+
+    measure();
+
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(measure);
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+  }, [content, tooltip]);
+
+  return (
+    <Tooltip title={tooltip ?? ""} disableHoverListener={!isTruncated || !tooltip}>
+      <Box
+        ref={ref}
+        sx={{
+          display: "block",
+          width: "100%",
+          minWidth: 0,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {content}
+      </Box>
+    </Tooltip>
   );
 }
 
@@ -292,7 +344,41 @@ export function EditTable<T extends { id?: string | number }>({
   stickyTopOffset = 0,
   onReorder,
 }: EditTableProps<T>) {
+  const { t } = useI18n();
+  const theme = useTheme();
   const isClickableRow = typeof onRowClick === "function";
+  const isDarkMode = theme.palette.mode === "dark";
+  const headerBackground = isDarkMode
+    ? "#0f2a43"
+    : lighten(theme.palette.primary.light, 0.82);
+  const headerTextColor = isDarkMode
+    ? "#dceefb"
+    : theme.palette.text.primary;
+  const footerBackground = isDarkMode
+    ? alpha(theme.palette.common.white, 0.04)
+    : alpha(theme.palette.primary.main, 0.035);
+  const footerBorderColor = isDarkMode
+    ? alpha(theme.palette.common.white, 0.12)
+    : alpha(theme.palette.primary.main, 0.12);
+  const rowHoverBackground = isDarkMode
+    ? alpha(theme.palette.primary.light, 0.08)
+    : alpha(theme.palette.primary.main, 0.06);
+  const stickyCellBackground = theme.palette.background.paper;
+  const stickyHoverBackground = isDarkMode
+    ? lighten(theme.palette.background.paper, 0.04)
+    : darken(theme.palette.background.paper, 0.03);
+  const headerCellSx = {
+    backgroundColor: headerBackground,
+    color: headerTextColor,
+  } as const;
+  const bodyCellBorderSx = {
+    borderBottom: "1px solid",
+    borderColor: "divider",
+  } as const;
+  const stickyBoundaryColor = isDarkMode
+    ? alpha(theme.palette.common.white, 0.08)
+    : alpha(theme.palette.primary.main, 0.12);
+  const tableRadius = 2;
 
   const handleRowClick = React.useCallback((row: T) => {
     onRowClick?.(row);
@@ -569,7 +655,13 @@ export function EditTable<T extends { id?: string | number }>({
       case "link": {
         const url = typeof col.url === "function" ? col.url(row) : col.url;
         const label = val == null || val === "" ? url ?? "" : val;
-        return <LinkCell label={label as React.ReactNode} url={url} />;
+        const tooltip = typeof label === "string" ? label : typeof url === "string" ? url : undefined;
+        return (
+          <TruncatedCell
+            content={<LinkCell label={label as React.ReactNode} url={url} />}
+            tooltip={tooltip}
+          />
+        );
       }
 
       case "chips": {
@@ -662,11 +754,14 @@ export function EditTable<T extends { id?: string | number }>({
       }
 
       case "date":
-        return formatDate(val);
+        return <TruncatedCell content={formatDate(val)} tooltip={formatDate(val)} />;
       case "datetime":
-        return formatDateTime(val);
+        return <TruncatedCell content={formatDateTime(val)} tooltip={formatDateTime(val)} />;
       case "currency":
         return (
+          <TruncatedCell
+            tooltip={String(val ?? "")}
+            content={
           <NumericFormat
             value={String(val ?? "")}
             displayType="text"
@@ -674,24 +769,37 @@ export function EditTable<T extends { id?: string | number }>({
             prefix={'đ '}
             readOnly={true}
           />
+            }
+          />
         );
       case "number":
         return (
+          <TruncatedCell
+            tooltip={String(val ?? "")}
+            content={
           <NumericFormat
             value={String(val ?? "")}
             displayType="text"
             thousandSeparator={true}
             readOnly={true}
           />
+            }
+          />
         );
       case "text":
       default:
-        return val as string; //humanize(val as string);
+        return <TruncatedCell content={val as string} tooltip={String(val ?? "")} />;
     }
   };
 
   return (
-    <Paper variant="outlined">
+    <Paper
+      variant="outlined"
+      sx={{
+        borderRadius: tableRadius,
+        overflow: "hidden",
+      }}
+    >
       <Box
         sx={{
           overflow: "auto",
@@ -708,7 +816,7 @@ export function EditTable<T extends { id?: string | number }>({
               position: stickyHeader ? "sticky" : "static",
               top: stickyHeader ? stickyTopOffset : undefined,
               zIndex: 4,
-              backgroundColor: "background.paper",
+              alignItems: "stretch",
             }}
           >
             {enableDnd && (
@@ -722,11 +830,10 @@ export function EditTable<T extends { id?: string | number }>({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
+                  alignSelf: "stretch",
                   px: 1,
-                  py: dense ? 0.75 : 1,
-                  backgroundColor: "background.paper",
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
+                  py: dense ? 1.125 : 1.375,
+                  ...headerCellSx,
                   width: dndWidth,
                   minWidth: dndWidth,
                 }}
@@ -745,12 +852,13 @@ export function EditTable<T extends { id?: string | number }>({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "flex-end",
+                  alignSelf: "stretch",
                   px: 1.5,
-                  py: dense ? 0.75 : 1,
-                  backgroundColor: "background.paper",
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
+                  py: dense ? 1.125 : 1.375,
+                  ...headerCellSx,
                   whiteSpace: "nowrap",
+                  borderRight: "1px solid",
+                  borderRightColor: stickyBoundaryColor,
                 }}
               >
                 <Stack
@@ -784,7 +892,20 @@ export function EditTable<T extends { id?: string | number }>({
               const sortable = !!c.sortable || !!c.accessor || !!c.comparator;
               const isActive = (controlledSortBy ?? orderBy) === k;
               const dir = (controlledSortDir ?? order) ?? "asc";
-              const headerLabel = formatColumnHeader(c.header);
+              const headerLabel = resolveLocalizedText(c.header, t);
+              const headerContent = (
+                <Stack direction="row" alignItems="center" spacing={0.5}>
+                  {c.headerIcon ? (
+                    <Box
+                      component="span"
+                      sx={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                    >
+                      {c.headerIcon}
+                    </Box>
+                  ) : null}
+                  {c.hideHeaderLabel ? null : <span>{headerLabel}</span>}
+                </Stack>
+              );
 
               const left = c.stickyLeft ? baseLeftOffset + (leftOffsets[idx] ?? 0) : undefined;
               const right = c.stickyRight ? (rightOffsets[idx] ?? 0) : undefined;
@@ -799,24 +920,37 @@ export function EditTable<T extends { id?: string | number }>({
                     left,
                     right,
                     zIndex: (c.stickyLeft || c.stickyRight) ? STICKY_Z_INDEX.sticky : STICKY_Z_INDEX.normal,
-                    backgroundColor: "background.paper",
+                    ...headerCellSx,
+                    display: "flex",
+                    alignItems: "center",
                     px: 1.5,
-                    py: dense ? 0.75 : 1,
-                    borderBottom: "1px solid",
-                    borderColor: "divider",
+                    py: dense ? 1.125 : 1.375,
                     whiteSpace: "nowrap",
+                    fontSize: theme.typography.body2.fontSize,
+                    fontWeight: 600,
+                    letterSpacing: 0,
                   }}
+                  title={c.hideHeaderLabel ? headerLabel : undefined}
                 >
                   {sortable ? (
                     <TableSortLabel
                       active={isActive}
                       direction={isActive ? dir : "asc"}
                       onClick={() => handleSortClick(c)}
+                      aria-label={headerLabel || undefined}
+                      sx={{
+                        color: `${headerTextColor} !important`,
+                        textTransform: "none",
+                        fontWeight: 600,
+                        "& .MuiTableSortLabel-icon": {
+                          color: `${isActive ? theme.palette.primary.main : alpha(headerTextColor, 0.72)} !important`,
+                        },
+                      }}
                     >
-                      {headerLabel}
+                      {headerContent}
                     </TableSortLabel>
                   ) : (
-                    headerLabel
+                    headerContent
                   )}
                 </Box>
               );
@@ -841,8 +975,8 @@ export function EditTable<T extends { id?: string | number }>({
                   height: "40px",
                   textAlign: "center",
                   px: 2,
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
+                  borderTop: "none",
+                  ...bodyCellBorderSx,
                 }}
               >
                 Đang tải…
@@ -866,8 +1000,8 @@ export function EditTable<T extends { id?: string | number }>({
                   minHeight: "56px",
                   textAlign: "center",
                   px: 2,
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
+                  borderTop: "none",
+                  ...bodyCellBorderSx,
                   color: "error.main",
                 }}
               >
@@ -892,11 +1026,11 @@ export function EditTable<T extends { id?: string | number }>({
                   height: "40px",
                   textAlign: "center",
                   px: 2,
-                  borderBottom: "1px solid",
-                  borderColor: "divider",
+                  borderTop: "none",
+                  ...bodyCellBorderSx,
                 }}
               >
-                Không có dữ liệu
+                {t("admin.general.no_data")}
               </Box>
             </Box>
           ) : (
@@ -918,10 +1052,16 @@ export function EditTable<T extends { id?: string | number }>({
                               alignItems: "stretch",
                               cursor: isClickableRow ? "pointer" : undefined,
                               "& > [role='cell']:not([data-sticky='true'])": {
-                                backgroundColor: isDragging ? "action.hover" : undefined,
+                                backgroundColor: isDragging ? rowHoverBackground : undefined,
                               },
                               "&:hover > [role='cell']:not([data-sticky='true'])": {
-                                backgroundColor: "action.hover",
+                                backgroundColor: rowHoverBackground,
+                              },
+                              "& > [role='cell'][data-sticky='true']": {
+                                backgroundColor: isDragging ? stickyHoverBackground : stickyCellBackground,
+                              },
+                              "&:hover > [role='cell'][data-sticky='true']": {
+                                backgroundColor: stickyHoverBackground,
                               },
                             }}
                             style={transformStyle}
@@ -939,8 +1079,7 @@ export function EditTable<T extends { id?: string | number }>({
                                 minWidth: dndWidth,
                                 px: 1,
                                 py: dense ? 0.75 : 1,
-                                borderBottom: "1px solid",
-                                borderColor: "divider",
+                                ...bodyCellBorderSx,
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
@@ -965,15 +1104,16 @@ export function EditTable<T extends { id?: string | number }>({
                                 role="cell"
                                 data-sticky="true"
                                 sx={{
-                                  position: "sticky",
-                                  left: enableDnd ? dndWidth : 0,
-                                  zIndex: STICKY_Z_INDEX.actions,
-                                  backgroundColor: "background.paper",
-                                  whiteSpace: "nowrap",
+                                position: "sticky",
+                                left: enableDnd ? dndWidth : 0,
+                                zIndex: STICKY_Z_INDEX.actions,
+                                backgroundColor: stickyCellBackground,
+                                whiteSpace: "nowrap",
                                   px: 1.5,
                                   py: dense ? 0.75 : 1,
-                                  borderBottom: "1px solid",
-                                  borderColor: "divider",
+                                  ...bodyCellBorderSx,
+                                  borderRight: "1px solid",
+                                  borderRightColor: stickyBoundaryColor,
                                   display: "flex",
                                   alignItems: "center",
                                   justifyContent: "flex-end",
@@ -992,10 +1132,19 @@ export function EditTable<T extends { id?: string | number }>({
                                   )}
                                   {onEdit && (
                                     <Tooltip title="Edit">
-                                      <IconButton size="small" onClick={(event) => {
-                                        stopRowClick(event);
-                                        onEdit(r);
-                                      }}>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(event) => {
+                                          stopRowClick(event);
+                                          onEdit(r);
+                                        }}
+                                        sx={{
+                                          color: "#1976D2",
+                                          "&:hover": {
+                                            backgroundColor: alpha("#1976D2", 0.1),
+                                          },
+                                        }}
+                                      >
                                         <EditRoundedIcon fontSize="small" />
                                       </IconButton>
                                     </Tooltip>
@@ -1028,14 +1177,16 @@ export function EditTable<T extends { id?: string | number }>({
                                     left,
                                     right,
                                     zIndex: (c.stickyLeft || c.stickyRight) ? STICKY_Z_INDEX.sticky : STICKY_Z_INDEX.normal,
-                                    backgroundColor: (c.stickyLeft || c.stickyRight) ? "background.paper" : undefined,
+                                    backgroundColor: (c.stickyLeft || c.stickyRight) ? stickyCellBackground : undefined,
                                     whiteSpace: "nowrap",
+                                    minWidth: 0,
                                     px: 1.5,
                                     py: dense ? 0.75 : 1,
-                                    borderBottom: "1px solid",
-                                    borderColor: "divider",
+                                    ...bodyCellBorderSx,
                                     display: "flex",
                                     alignItems: "center",
+                                    fontSize: theme.typography.body2.fontSize,
+                                    lineHeight: 1.35,
                                   }}
                                 >
                                   {renderCell(r, c)}
@@ -1061,7 +1212,13 @@ export function EditTable<T extends { id?: string | number }>({
                     alignItems: "stretch",
                     cursor: isClickableRow ? "pointer" : undefined,
                     "&:hover > [role='cell']:not([data-sticky='true'])": {
-                      backgroundColor: "action.hover",
+                      backgroundColor: rowHoverBackground,
+                    },
+                    "& > [role='cell'][data-sticky='true']": {
+                      backgroundColor: stickyCellBackground,
+                    },
+                    "&:hover > [role='cell'][data-sticky='true']": {
+                      backgroundColor: stickyHoverBackground,
                     },
                   }}
                 >
@@ -1074,12 +1231,13 @@ export function EditTable<T extends { id?: string | number }>({
                         position: "sticky",
                         left: 0,
                         zIndex: STICKY_Z_INDEX.actions,
-                        backgroundColor: "background.paper",
+                        backgroundColor: stickyCellBackground,
                         whiteSpace: "nowrap",
                         px: 1.5,
                         py: dense ? 0.75 : 1,
-                        borderBottom: "1px solid",
-                        borderColor: "divider",
+                        ...bodyCellBorderSx,
+                        borderRight: "1px solid",
+                        borderRightColor: stickyBoundaryColor,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "flex-end",
@@ -1098,10 +1256,19 @@ export function EditTable<T extends { id?: string | number }>({
                         )}
                         {onEdit && (
                           <Tooltip title="Edit">
-                            <IconButton size="small" onClick={(event) => {
-                              stopRowClick(event);
-                              onEdit(r);
-                            }}>
+                            <IconButton
+                              size="small"
+                              onClick={(event) => {
+                                stopRowClick(event);
+                                onEdit(r);
+                              }}
+                              sx={{
+                                color: "#1976D2",
+                                "&:hover": {
+                                  backgroundColor: alpha("#1976D2", 0.1),
+                                },
+                              }}
+                            >
                               <EditRoundedIcon fontSize="small" />
                             </IconButton>
                           </Tooltip>
@@ -1134,14 +1301,16 @@ export function EditTable<T extends { id?: string | number }>({
                         left,
                         right,
                         zIndex: (c.stickyLeft || c.stickyRight) ? STICKY_Z_INDEX.sticky : STICKY_Z_INDEX.normal,
-                        backgroundColor: (c.stickyLeft || c.stickyRight) ? "background.paper" : undefined,
+                        backgroundColor: (c.stickyLeft || c.stickyRight) ? stickyCellBackground : undefined,
                         whiteSpace: "nowrap",
+                        minWidth: 0,
                         px: 1.5,
-                          py: dense ? 0.75 : 1,
-                          borderBottom: "1px solid",
-                          borderColor: "divider",
-                          display: "flex",
-                          alignItems: "center",
+                        py: dense ? 0.75 : 1,
+                        ...bodyCellBorderSx,
+                        display: "flex",
+                        alignItems: "center",
+                        fontSize: theme.typography.body2.fontSize,
+                        lineHeight: 1.35,
                         }}
                       >
                         {renderCell(r, c)}
@@ -1155,7 +1324,15 @@ export function EditTable<T extends { id?: string | number }>({
         </Box>
       </Box>
 
-      <Box sx={{ px: 1 }}>
+      <Box
+        sx={{
+          px: 1.5,
+          py: 0.5,
+          borderTop: "1px solid",
+          borderColor: footerBorderColor,
+          backgroundColor: footerBackground,
+        }}
+      >
         <TablePagination
           component="div"
           count={total ?? -1}
@@ -1166,6 +1343,26 @@ export function EditTable<T extends { id?: string | number }>({
             onPageSizeChange?.(parseInt(e.target.value, 10))
           }
           rowsPerPageOptions={[10, 20, 50, 100]}
+          sx={{
+            color: "text.secondary",
+            "& .MuiTablePagination-toolbar": {
+              minHeight: 52,
+              px: 0.5,
+              gap: 1,
+            },
+            "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
+              color: "text.secondary",
+              fontSize: theme.typography.body2.fontSize,
+              fontWeight: 500,
+            },
+            "& .MuiTablePagination-select": {
+              borderRadius: 1,
+              fontWeight: 600,
+            },
+            "& .MuiTablePagination-actions .MuiIconButton-root": {
+              borderRadius: 1.5,
+            },
+          }}
         />
       </Box>
     </Paper>

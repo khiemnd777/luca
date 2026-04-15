@@ -235,6 +235,12 @@ A typical feature may include:
 
 Not every feature needs every folder, but new code should land in the nearest established location rather than in unrelated shared folders.
 
+When a feature needs reusable frontend helpers:
+
+- keep them in the owning feature's `utils/` folder unless they are clearly shared across features
+- use the `*.utils.ts` suffix for utility files
+- keep utility files non-visual and narrowly scoped
+
 ### 13. Prefer incremental extension of dense domains
 
 The order domain is a current local example of a dense feature area and already includes:
@@ -299,13 +305,25 @@ Follow those conventions for new files.
 - keep utility helpers typed
 - preserve strict-mode compatibility
 
+Apply SOLID pragmatically:
+
+- keep a single responsibility per module/file where feasible
+- keep transformation, remote calls, and presentation separated by the existing `mapper/`, `api/`, and `widgets/components` boundaries
+- depend on existing shared abstractions before adding feature-local indirection
+
 ### 19. Be conservative with abstraction
 
 Abstract only when there is a repeated pattern already visible across modules. Do not generalize a one-off screen prematurely.
 
+### 20. Prefer DRY without forcing premature abstractions
+
+- reuse existing helpers, mappers, page shells, form definitions, and table infrastructure when the same behavior already exists
+- do not duplicate utility logic across widgets/components when it can live once in `utils/*.utils.ts` or an existing shared abstraction
+- avoid creating new abstractions only to satisfy DRY when the repetition is not yet stable
+
 ## Operational Guidance for Agents
 
-### 20. Before making changes
+### 21. Before making changes
 
 - inspect the target feature's `index.tsx`
 - inspect existing `schemas/`, `tables/`, `widgets/`, and `api/`
@@ -330,7 +348,7 @@ Shared infrastructure changes:
 - at least one existing feature using that abstraction
 - downstream assumptions before widening behavior
 
-### 21. When adding a new module
+### 22. When adding a new module
 
 Prefer using the scaffold command:
 
@@ -340,11 +358,11 @@ bun run create:module <module_name> "<Label>"
 
 Then adapt the generated structure to the feature instead of building it manually from nothing.
 
-### 22. When touching shared core code
+### 23. When touching shared core code
 
 Changes under `src/core` affect many modules. Make narrow changes, verify downstream assumptions, and avoid feature-specific logic leaking into shared infrastructure unless it is truly reusable.
 
-### 23. Keep business logic out of presentational components
+### 24. Keep business logic out of presentational components
 
 Favor this layering:
 
@@ -353,7 +371,7 @@ Favor this layering:
 - `model/` for typed entities
 - `widgets/components` for presentation and feature interaction
 
-### 24. Prefer extension over duplication
+### 25. Prefer extension over duplication
 
 If a nearby feature already implements a similar workflow, copy its architectural approach, not just its UI.
 

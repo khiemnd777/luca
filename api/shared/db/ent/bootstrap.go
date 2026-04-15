@@ -19,7 +19,9 @@ func EntBootstrap(provider string, db *sql.DB, builder EntClientBuilder, autoMig
 	// defer client.Close()
 
 	if autoMigrate {
-		if err := client.Schema.Create(context.Background()); err != nil {
+		if err := CreateSchemaWithLock(context.Background(), provider, db, func(ctx context.Context) error {
+			return client.Schema.Create(ctx)
+		}); err != nil {
 			return nil, fmt.Errorf("auto create schema failed: %w", err)
 		}
 		logger.Info("📦 Ent schema created successfully")

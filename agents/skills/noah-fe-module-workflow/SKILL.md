@@ -34,6 +34,12 @@ Prefer feature-local ownership under:
 - `widgets/`
 - `index.tsx`
 
+When frontend code needs feature-local helper functions:
+
+- place reusable helper logic under the feature's `utils/` folder
+- name utility files with the `*.utils.ts` suffix
+- keep utilities focused on a single responsibility and free of UI rendering concerns
+
 Do not bypass the module system by wiring routes directly into the app shell when feature registration already handles it.
 
 ## Route and navigation rules
@@ -59,6 +65,8 @@ When adding or changing routes:
 - Reuse schema-driven forms from `src/core/form` when possible.
 - Reuse table infrastructure from `src/core/table`.
 - Keep the admin UI clear and operational; avoid one-off visual systems.
+- Follow SOLID in a pragmatic way: keep modules small, keep responsibilities separated, and depend on existing abstractions instead of feature-local ad hoc layers.
+- Follow DRY by reusing nearby feature patterns and shared infrastructure when repetition is real; do not duplicate helpers, API wrappers, or mapping logic across components.
 
 ## Minimum implementation checklist
 
@@ -76,3 +84,5 @@ When adding or changing routes:
 - hardcoded backend response shapes in multiple components
 - custom form or table patterns for one-off screens
 - broad UI refactors inside focused feature work
+- scattering utility logic across widgets/components when it belongs in `utils/*.utils.ts`
+- abstracting too early in the name of SOLID or DRY when there is no repeated pattern yet
