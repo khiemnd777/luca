@@ -61,6 +61,16 @@ function OrderAdvancedSearchWidget() {
   const [loadingProducts, setLoadingProducts] = React.useState(false);
   const [loadingDepartments, setLoadingDepartments] = React.useState(false);
   const [expanded, setExpanded] = React.useState(false);
+  const toggleExpanded = React.useCallback(() => {
+    setExpanded((prev) => !prev);
+  }, []);
+
+  const handleHeaderKeyDown = React.useCallback((event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      toggleExpanded();
+    }
+  }, [toggleExpanded]);
 
   React.useEffect(() => {
     if (!canViewDepartment) {
@@ -157,6 +167,7 @@ function OrderAdvancedSearchWidget() {
     if (appliedFilters.categories.length) chips.push(`Loại phục hình: ${appliedFilters.categories.length}`);
     if (appliedFilters.products.length) chips.push(`Sản phẩm: ${appliedFilters.products.length}`);
     if (appliedFilters.orderCode.trim()) chips.push(`Mã đơn: ${appliedFilters.orderCode.trim()}`);
+    if (appliedFilters.clinicName.trim()) chips.push(`Nha khoa: ${appliedFilters.clinicName.trim()}`);
     if (appliedFilters.dentistName.trim()) chips.push(`Bác sĩ: ${appliedFilters.dentistName.trim()}`);
     if (appliedFilters.patientName.trim()) chips.push(`Bệnh nhân: ${appliedFilters.patientName.trim()}`);
     if (appliedFilters.createdYear.trim() || appliedFilters.createdMonth.trim()) {
@@ -183,7 +194,26 @@ function OrderAdvancedSearchWidget() {
   return (
     <SectionCard
       title={
-        <Stack direction="row" spacing={1} alignItems="center">
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          role="button"
+          tabIndex={0}
+          aria-expanded={expanded}
+          onClick={toggleExpanded}
+          onKeyDown={handleHeaderKeyDown}
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            cursor: "pointer",
+            borderRadius: 1,
+            "&:focus-visible": (theme) => ({
+              outline: `2px solid ${theme.palette.primary.main}`,
+              outlineOffset: 2,
+            }),
+          }}
+        >
           <TuneRoundedIcon color="action" />
           <Box>
             <Typography variant="h6" fontWeight={700}>Tìm kiếm nâng cao đơn hàng</Typography>
@@ -196,7 +226,7 @@ function OrderAdvancedSearchWidget() {
       extra={
         <Stack direction="row" spacing={1}>
           <Tooltip title={expanded ? "Thu gọn" : "Mở rộng"}>
-            <IconButton onClick={() => setExpanded((prev) => !prev)} size="small">
+            <IconButton onClick={toggleExpanded} size="small">
               {expanded ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
             </IconButton>
           </Tooltip>
@@ -219,29 +249,73 @@ function OrderAdvancedSearchWidget() {
     >
       <Collapse in={expanded} timeout="auto" unmountOnExit>
         <Grid container spacing={2}>
-        {canViewDepartment ? (
-          <Grid size={{ xs: 12, md: 4 }}>
+          {canViewDepartment ? (
+            <Grid size={{ xs: 12, md: 3 }}>
+              <Autocomplete
+                fullWidth
+                options={departmentOptions ?? []}
+                filterOptions={(options) => options}
+                value={draftFilters.department ?? null}
+                loading={loadingDepartments}
+                isOptionEqualToValue={(option, value) => option.id === value.id}
+                getOptionLabel={(option) => option.name ?? ""}
+                onInputChange={(_, value, reason) => {
+                  if (reason === "input" || reason === "clear") setDepartmentKeyword(value);
+                }}
+                onChange={(_, value) => setDraftFilter("department", value)}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Chi nhánh"
+                    placeholder="Chọn chi nhánh"
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingDepartments ? <CircularProgress size={18} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      ),
+                    }}
+                  />
+                )}
+              />
+            </Grid>
+          ) : null}
+
+          <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
+            <TextField
+              fullWidth
+              label="Mã đơn hàng"
+              value={draftFilters.orderCode}
+              onChange={(event) => setDraftFilter("orderCode", event.target.value)}
+            />
+          </Grid>
+
+          <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
             <Autocomplete
-              options={departmentOptions ?? []}
-              filterOptions={(options) => options}
-              value={draftFilters.department ?? null}
-              loading={loadingDepartments}
+              fullWidth
+              multiple
+              filterSelectedOptions
+              options={categoryOptions}
+              value={draftFilters.categories}
+              loading={loadingCategories}
               isOptionEqualToValue={(option, value) => option.id === value.id}
-              getOptionLabel={(option) => option.name ?? ""}
+              getOptionLabel={(option) => categoryPath(option)}
               onInputChange={(_, value, reason) => {
-                if (reason === "input" || reason === "clear") setDepartmentKeyword(value);
+                if (reason === "input") setCategoryKeyword(value);
               }}
-              onChange={(_, value) => setDraftFilter("department", value)}
+              onChange={(_, value) => setDraftFilter("categories", value)}
               renderInput={(params) => (
                 <TextField
                   {...params}
-                  label="Chi nhánh"
-                  placeholder="Chọn chi nhánh"
+                  label="Loại phục hình"
+                  placeholder="Tìm loại phục hình"
                   InputProps={{
                     ...params.InputProps,
                     endAdornment: (
                       <>
-                        {loadingDepartments ? <CircularProgress size={18} /> : null}
+                        {loadingCategories ? <CircularProgress size={18} /> : null}
                         {params.InputProps.endAdornment}
                       </>
                     ),
@@ -250,158 +324,132 @@ function OrderAdvancedSearchWidget() {
               )}
             />
           </Grid>
-        ) : null}
 
-        <Grid size={{ xs: 12, md: canViewDepartment ? 4 : 6 }}>
-          <Autocomplete
-            multiple
-            filterSelectedOptions
-            options={categoryOptions}
-            value={draftFilters.categories}
-            loading={loadingCategories}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            getOptionLabel={(option) => categoryPath(option)}
-            onInputChange={(_, value, reason) => {
-              if (reason === "input") setCategoryKeyword(value);
-            }}
-            onChange={(_, value) => setDraftFilter("categories", value)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Loại phục hình"
-                placeholder="Tìm loại phục hình"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {loadingCategories ? <CircularProgress size={18} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-          />
-        </Grid>
+          <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
+            <Autocomplete
+              fullWidth
+              multiple
+              filterSelectedOptions
+              options={productOptions}
+              value={draftFilters.products}
+              loading={loadingProducts}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              getOptionLabel={(option) => [option.code, option.name].filter(Boolean).join(" - ")}
+              onInputChange={(_, value, reason) => {
+                if (reason === "input") setProductKeyword(value);
+              }}
+              onChange={(_, value) => setDraftFilter("products", value)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Sản phẩm"
+                  placeholder="Tìm sản phẩm"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: (
+                      <>
+                        {loadingProducts ? <CircularProgress size={18} /> : null}
+                        {params.InputProps.endAdornment}
+                      </>
+                    ),
+                  }}
+                />
+              )}
+            />
+          </Grid>
 
-        <Grid size={{ xs: 12, md: canViewDepartment ? 4 : 6 }}>
-          <Autocomplete
-            multiple
-            filterSelectedOptions
-            options={productOptions}
-            value={draftFilters.products}
-            loading={loadingProducts}
-            isOptionEqualToValue={(option, value) => option.id === value.id}
-            getOptionLabel={(option) => [option.code, option.name].filter(Boolean).join(" - ")}
-            onInputChange={(_, value, reason) => {
-              if (reason === "input") setProductKeyword(value);
-            }}
-            onChange={(_, value) => setDraftFilter("products", value)}
-            renderInput={(params) => (
-              <TextField
-                {...params}
-                label="Sản phẩm"
-                placeholder="Tìm sản phẩm"
-                InputProps={{
-                  ...params.InputProps,
-                  endAdornment: (
-                    <>
-                      {loadingProducts ? <CircularProgress size={18} /> : null}
-                      {params.InputProps.endAdornment}
-                    </>
-                  ),
-                }}
-              />
-            )}
-          />
-        </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              label="Tên nha khoa"
+              value={draftFilters.clinicName}
+              onChange={(event) => setDraftFilter("clinicName", event.target.value)}
+            />
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField
-            fullWidth
-            label="Mã đơn hàng"
-            value={draftFilters.orderCode}
-            onChange={(event) => setDraftFilter("orderCode", event.target.value)}
-          />
-        </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              label="Tên bác sĩ"
+              value={draftFilters.dentistName}
+              onChange={(event) => setDraftFilter("dentistName", event.target.value)}
+            />
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField
-            fullWidth
-            label="Tên bác sĩ"
-            value={draftFilters.dentistName}
-            onChange={(event) => setDraftFilter("dentistName", event.target.value)}
-          />
-        </Grid>
+          <Grid size={{ xs: 12, md: 4 }}>
+            <TextField
+              fullWidth
+              label="Tên bệnh nhân"
+              value={draftFilters.patientName}
+              onChange={(event) => setDraftFilter("patientName", event.target.value)}
+            />
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 3 }}>
-          <TextField
-            fullWidth
-            label="Tên bệnh nhân"
-            value={draftFilters.patientName}
-            onChange={(event) => setDraftFilter("patientName", event.target.value)}
-          />
-        </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Tháng tạo"
+                  value={draftFilters.createdMonth}
+                  onChange={(event) => setDraftFilter("createdMonth", event.target.value)}
+                >
+                  <MenuItem value="">Tất cả</MenuItem>
+                  {monthOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Năm tạo"
+                  value={draftFilters.createdYear}
+                  onChange={(event) => setDraftFilter("createdYear", event.target.value)}
+                >
+                  <MenuItem value="">Tất cả</MenuItem>
+                  {yearOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
+          </Grid>
 
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
-            fullWidth
-            select
-            label="Năm tạo"
-            value={draftFilters.createdYear}
-            onChange={(event) => setDraftFilter("createdYear", event.target.value)}
-          >
-            <MenuItem value="">Tất cả</MenuItem>
-            {yearOptions.map((option) => (
-              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
-            fullWidth
-            select
-            label="Tháng tạo"
-            value={draftFilters.createdMonth}
-            onChange={(event) => setDraftFilter("createdMonth", event.target.value)}
-          >
-            <MenuItem value="">Tất cả</MenuItem>
-            {monthOptions.map((option) => (
-              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
-            fullWidth
-            select
-            label="Năm giao"
-            value={draftFilters.deliveryYear}
-            onChange={(event) => setDraftFilter("deliveryYear", event.target.value)}
-          >
-            <MenuItem value="">Tất cả</MenuItem>
-            {yearOptions.map((option) => (
-              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-            ))}
-          </TextField>
-        </Grid>
-
-        <Grid size={{ xs: 12, md: 2 }}>
-          <TextField
-            fullWidth
-            select
-            label="Tháng giao"
-            value={draftFilters.deliveryMonth}
-            onChange={(event) => setDraftFilter("deliveryMonth", event.target.value)}
-          >
-            <MenuItem value="">Tất cả</MenuItem>
-            {monthOptions.map((option) => (
-              <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
-            ))}
-          </TextField>
-        </Grid>
+          <Grid size={{ xs: 12, md: 6 }}>
+            <Grid container spacing={2}>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Tháng giao"
+                  value={draftFilters.deliveryMonth}
+                  onChange={(event) => setDraftFilter("deliveryMonth", event.target.value)}
+                >
+                  <MenuItem value="">Tất cả</MenuItem>
+                  {monthOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  fullWidth
+                  select
+                  label="Năm giao"
+                  value={draftFilters.deliveryYear}
+                  onChange={(event) => setDraftFilter("deliveryYear", event.target.value)}
+                >
+                  <MenuItem value="">Tất cả</MenuItem>
+                  {yearOptions.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+            </Grid>
+          </Grid>
         </Grid>
 
         <Box sx={{ mt: 2 }}>

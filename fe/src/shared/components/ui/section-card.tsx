@@ -31,7 +31,9 @@ export function SectionCard({
             justifyContent="space-between"
             sx={{ px: pad, py: 1.25 }}
           >
-            <Typography variant="subtitle1" fontWeight={700}>{title}</Typography>
+            {typeof title === "string"
+              ? <Typography variant="subtitle1" fontWeight={700}>{title}</Typography>
+              : title}
             <Stack direction="row" spacing={1}>{extra}</Stack>
           </Stack>
           {!noDivider && <Divider />}

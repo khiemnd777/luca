@@ -265,6 +265,7 @@ func parseAdvancedSearchFilter(c *fiber.Ctx) model.OrderAdvancedSearchFilter {
 		CategoryIDs:   parseIntListFromQuery(c, "category_ids"),
 		ProductIDs:    parseIntListFromQuery(c, "product_ids"),
 		OrderCode:     parseOptionalStringFromQuery(c, "order_code"),
+		ClinicName:    parseOptionalStringFromQuery(c, "clinic_name"),
 		DentistName:   parseOptionalStringFromQuery(c, "dentist_name"),
 		PatientName:   parseOptionalStringFromQuery(c, "patient_name"),
 		CreatedYear:   parseOptionalIntFromQuery(c, "created_year"),

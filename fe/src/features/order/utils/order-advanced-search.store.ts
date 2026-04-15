@@ -6,6 +6,7 @@ const defaultFilters = (): OrderAdvancedSearchFilters => ({
   categories: [],
   products: [],
   orderCode: "",
+  clinicName: "",
   dentistName: "",
   patientName: "",
   createdYear: "",
@@ -61,6 +62,7 @@ export function cloneFilters(filters: OrderAdvancedSearchFilters): OrderAdvanced
     categories: [...filters.categories],
     products: [...filters.products],
     orderCode: filters.orderCode,
+    clinicName: filters.clinicName,
     dentistName: filters.dentistName,
     patientName: filters.patientName,
     createdYear: filters.createdYear,
@@ -76,6 +78,7 @@ export function hasAdvancedSearchFilters(filters: OrderAdvancedSearchFilters): b
     filters.categories.length ||
     filters.products.length ||
     filters.orderCode.trim() ||
+    filters.clinicName.trim() ||
     filters.dentistName.trim() ||
     filters.patientName.trim() ||
     filters.createdYear.trim() ||
@@ -91,6 +94,7 @@ export function serializeAdvancedSearchFilters(filters: OrderAdvancedSearchFilte
     `categories=${filters.categories.map((item) => item.id).filter(Boolean).join(",")}`,
     `products=${filters.products.map((item) => item.id).filter(Boolean).join(",")}`,
     `orderCode=${filters.orderCode.trim()}`,
+    `clinic=${filters.clinicName.trim()}`,
     `dentist=${filters.dentistName.trim()}`,
     `patient=${filters.patientName.trim()}`,
     `createdYear=${filters.createdYear.trim()}`,

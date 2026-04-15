@@ -7,6 +7,7 @@ export interface OrderAdvancedSearchFilters {
   categories: CategoryModel[];
   products: ProductModel[];
   orderCode: string;
+  clinicName: string;
   dentistName: string;
   patientName: string;
   createdYear: string;

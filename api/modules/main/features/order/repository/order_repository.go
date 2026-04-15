@@ -1404,6 +1404,12 @@ EXISTS (
 )`, addArg(pattern), addArg(pattern), addArg(pattern)))
 	}
 
+	if filter.ClinicName != nil && strings.TrimSpace(*filter.ClinicName) != "" {
+		pattern := "%" + strings.TrimSpace(*filter.ClinicName) + "%"
+		scope.Predicates = append(scope.Predicates, order.ClinicNameContainsFold(strings.TrimSpace(*filter.ClinicName)))
+		clauses = append(clauses, fmt.Sprintf("o.clinic_name ILIKE %s", addArg(pattern)))
+	}
+
 	if filter.DentistName != nil && strings.TrimSpace(*filter.DentistName) != "" {
 		pattern := "%" + strings.TrimSpace(*filter.DentistName) + "%"
 		scope.Predicates = append(scope.Predicates, order.DentistNameContainsFold(strings.TrimSpace(*filter.DentistName)))

@@ -5,6 +5,7 @@ type OrderAdvancedSearchFilter struct {
 	CategoryIDs   []int   `json:"category_ids,omitempty"`
 	ProductIDs    []int   `json:"product_ids,omitempty"`
 	OrderCode     *string `json:"order_code,omitempty"`
+	ClinicName    *string `json:"clinic_name,omitempty"`
 	DentistName   *string `json:"dentist_name,omitempty"`
 	PatientName   *string `json:"patient_name,omitempty"`
 	CreatedYear   *int    `json:"created_year,omitempty"`

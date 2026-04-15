@@ -180,6 +180,7 @@ function buildAdvancedSearchParams(filters: OrderAdvancedSearchFilters) {
     category_ids: filters.categories.map((item) => item.id),
     product_ids: filters.products.map((item) => item.id),
     order_code: filters.orderCode.trim() || undefined,
+    clinic_name: filters.clinicName.trim() || undefined,
     dentist_name: filters.dentistName.trim() || undefined,
     patient_name: filters.patientName.trim() || undefined,
     created_year: createdYear,
