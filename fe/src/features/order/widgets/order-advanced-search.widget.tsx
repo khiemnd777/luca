@@ -6,10 +6,13 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
   CircularProgress,
+  IconButton,
   MenuItem,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
@@ -26,6 +29,8 @@ import type { DeparmentModel } from "@features/department/model/department.model
 import { categoryPath } from "@features/category/utils/category.utils";
 import { toast } from "react-hot-toast";
 import * as React from "react";
+import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
+import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
 
 const monthOptions = Array.from({ length: 12 }, (_, index) => ({
   value: String(index + 1),
@@ -55,6 +60,7 @@ function OrderAdvancedSearchWidget() {
   const [loadingCategories, setLoadingCategories] = React.useState(false);
   const [loadingProducts, setLoadingProducts] = React.useState(false);
   const [loadingDepartments, setLoadingDepartments] = React.useState(false);
+  const [expanded, setExpanded] = React.useState(false);
 
   React.useEffect(() => {
     if (!canViewDepartment) {
@@ -150,6 +156,7 @@ function OrderAdvancedSearchWidget() {
     if (appliedFilters.department?.name) chips.push(`Chi nhánh: ${appliedFilters.department.name}`);
     if (appliedFilters.categories.length) chips.push(`Loại phục hình: ${appliedFilters.categories.length}`);
     if (appliedFilters.products.length) chips.push(`Sản phẩm: ${appliedFilters.products.length}`);
+    if (appliedFilters.orderCode.trim()) chips.push(`Mã đơn: ${appliedFilters.orderCode.trim()}`);
     if (appliedFilters.dentistName.trim()) chips.push(`Bác sĩ: ${appliedFilters.dentistName.trim()}`);
     if (appliedFilters.patientName.trim()) chips.push(`Bệnh nhân: ${appliedFilters.patientName.trim()}`);
     if (appliedFilters.createdYear.trim() || appliedFilters.createdMonth.trim()) {
@@ -188,6 +195,11 @@ function OrderAdvancedSearchWidget() {
       }
       extra={
         <Stack direction="row" spacing={1}>
+          <Tooltip title={expanded ? "Thu gọn" : "Mở rộng"}>
+            <IconButton onClick={() => setExpanded((prev) => !prev)} size="small">
+              {expanded ? <ExpandLessRoundedIcon /> : <ExpandMoreRoundedIcon />}
+            </IconButton>
+          </Tooltip>
           <Button
             variant="outlined"
             startIcon={<RestartAltRoundedIcon />}
@@ -205,7 +217,8 @@ function OrderAdvancedSearchWidget() {
         </Stack>
       }
     >
-      <Grid container spacing={2}>
+      <Collapse in={expanded} timeout="auto" unmountOnExit>
+        <Grid container spacing={2}>
         {canViewDepartment ? (
           <Grid size={{ xs: 12, md: 4 }}>
             <Autocomplete
@@ -306,6 +319,15 @@ function OrderAdvancedSearchWidget() {
         <Grid size={{ xs: 12, md: 3 }}>
           <TextField
             fullWidth
+            label="Mã đơn hàng"
+            value={draftFilters.orderCode}
+            onChange={(event) => setDraftFilter("orderCode", event.target.value)}
+          />
+        </Grid>
+
+        <Grid size={{ xs: 12, md: 3 }}>
+          <TextField
+            fullWidth
             label="Tên bác sĩ"
             value={draftFilters.dentistName}
             onChange={(event) => setDraftFilter("dentistName", event.target.value)}
@@ -380,19 +402,20 @@ function OrderAdvancedSearchWidget() {
             ))}
           </TextField>
         </Grid>
-      </Grid>
+        </Grid>
 
-      <Box sx={{ mt: 2 }}>
-        <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-          {appliedChips.length > 0 ? appliedChips.map((chip) => (
-            <Chip key={chip} label={chip} size="small" color="primary" variant="outlined" />
-          )) : (
-            <Typography variant="body2" color="text.secondary">
-              Chưa áp dụng bộ lọc. Bảng hiện hiển thị danh sách đơn hàng mặc định.
-            </Typography>
-          )}
-        </Stack>
-      </Box>
+        <Box sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {appliedChips.length > 0 ? appliedChips.map((chip) => (
+              <Chip key={chip} label={chip} size="small" color="primary" variant="outlined" />
+            )) : (
+              <Typography variant="body2" color="text.secondary">
+                Chưa áp dụng bộ lọc. Bảng hiện hiển thị danh sách đơn hàng mặc định.
+              </Typography>
+            )}
+          </Stack>
+        </Box>
+      </Collapse>
     </SectionCard>
   );
 }

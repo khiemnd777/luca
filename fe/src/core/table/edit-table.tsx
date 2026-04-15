@@ -1030,7 +1030,7 @@ export function EditTable<T extends { id?: string | number }>({
                   ...bodyCellBorderSx,
                 }}
               >
-                {t("admin.general.no_data")}
+                {t("admin.general.no_data", "Không có dữ liệu")}
               </Box>
             </Box>
           ) : (

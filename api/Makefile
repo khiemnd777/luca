@@ -17,6 +17,8 @@ docker-log:
 docker-stop:
 	$(COMPOSE) stop
 
+docker-restart: docker-stop docker-up
+
 docker-down:
 	$(COMPOSE) down
 

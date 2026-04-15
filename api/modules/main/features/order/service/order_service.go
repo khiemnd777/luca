@@ -653,6 +653,7 @@ func (s *orderService) normalizeAdvancedSearchFilter(deptID int, filter model.Or
 
 	filter.CategoryIDs = normalizeIntSlice(filter.CategoryIDs)
 	filter.ProductIDs = normalizeIntSlice(filter.ProductIDs)
+	filter.OrderCode = normalizeStringPtr(filter.OrderCode)
 	filter.DentistName = normalizeStringPtr(filter.DentistName)
 	filter.PatientName = normalizeStringPtr(filter.PatientName)
 	filter.CreatedYear = normalizePositiveIntPtr(filter.CreatedYear)
@@ -716,6 +717,7 @@ func serializeAdvancedSearchFilter(filter model.OrderAdvancedSearchFilter) strin
 		fmt.Sprintf("department=%d", utils.DerefInt(filter.DepartmentID)),
 		fmt.Sprintf("categories=%s", serializeIntSlice(filter.CategoryIDs)),
 		fmt.Sprintf("products=%s", serializeIntSlice(filter.ProductIDs)),
+		fmt.Sprintf("order_code=%s", utils.DerefString(filter.OrderCode)),
 		fmt.Sprintf("dentist=%s", utils.DerefString(filter.DentistName)),
 		fmt.Sprintf("patient=%s", utils.DerefString(filter.PatientName)),
 		fmt.Sprintf("created_year=%d", utils.DerefInt(filter.CreatedYear)),

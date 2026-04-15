@@ -1380,6 +1380,30 @@ EXISTS (
 )`, addArg(pq.Array(filter.ProductIDs))))
 	}
 
+	if filter.OrderCode != nil && strings.TrimSpace(*filter.OrderCode) != "" {
+		trimmed := strings.TrimSpace(*filter.OrderCode)
+		pattern := "%" + trimmed + "%"
+		scope.Predicates = append(scope.Predicates, order.Or(
+			order.CodeLatestContainsFold(trimmed),
+			order.CodeContainsFold(trimmed),
+			order.HasItemsWith(
+				orderitem.DeletedAtIsNil(),
+				orderitem.CodeContainsFold(trimmed),
+			),
+		))
+		clauses = append(clauses, fmt.Sprintf(`(
+	o.code_latest ILIKE %s
+	OR o.code ILIKE %s
+	OR EXISTS (
+		SELECT 1
+		FROM order_items oi
+		WHERE oi.order_id = o.id
+		  AND oi.deleted_at IS NULL
+		  AND oi.code ILIKE %s
+	)
+)`, addArg(pattern), addArg(pattern), addArg(pattern)))
+	}
+
 	if filter.DentistName != nil && strings.TrimSpace(*filter.DentistName) != "" {
 		pattern := "%" + strings.TrimSpace(*filter.DentistName) + "%"
 		scope.Predicates = append(scope.Predicates, order.DentistNameContainsFold(strings.TrimSpace(*filter.DentistName)))
