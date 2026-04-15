@@ -4,6 +4,7 @@ export interface ProductModel {
   name?: string | null;
   active: boolean;
   customFields?: Record<string, any> | null;
+  relationFields?: Record<string, any> | null;
   processIds?: number[];
   processNames?: string;
   categoryId?: number | null;

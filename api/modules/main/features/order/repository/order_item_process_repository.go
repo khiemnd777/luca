@@ -12,7 +12,6 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/categoryprocess"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocess"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated/process"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/product"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/productprocess"
 	"github.com/khiemnd777/noah_api/shared/logger"
@@ -682,6 +681,8 @@ ranked_sections AS (
     SELECT
         sp.process_id,
         s.id AS section_id,
+        s.name AS section_name,
+        s.color,
         s.leader_id,
         s.leader_name,
         ROW_NUMBER() OVER (
@@ -697,8 +698,8 @@ SELECT
     p.id,
     p.code,
     p.name,
-    p.color,
-    p.section_name,
+    rs.color,
+    COALESCE(rs.section_name, p.section_name),
     rs.section_id,
     rs.leader_id,
     rs.leader_name
@@ -796,6 +797,8 @@ ranked_sections AS (
     SELECT
         sp.process_id,
         s.id AS section_id,
+        s.name AS section_name,
+        s.color,
         s.leader_id,
         s.leader_name,
         ROW_NUMBER() OVER (
@@ -812,8 +815,8 @@ SELECT
     p.id,
     p.code,
     p.name,
-    p.color,
-    p.section_name,
+    rs.color,
+    COALESCE(rs.section_name, p.section_name),
     rs.section_id,
     rs.leader_id,
     rs.leader_name
@@ -873,51 +876,7 @@ func (r *orderItemProcessRepository) GetRawProcessesByProductID1(
 	ctx context.Context,
 	productID int,
 ) ([]*model.ProcessDTO, error) {
-	db := r.db
-
-	prd, err := db.Product.
-		Query().
-		Where(
-			product.IDEQ(productID),
-			product.DeletedAtIsNil(),
-		).
-		Select(product.FieldCategoryID).
-		Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if prd.CategoryID == nil {
-		return []*model.ProcessDTO{}, nil
-	}
-
-	processes, err := db.Process.
-		Query().
-		Where(
-			process.HasCategoriesWith(
-				categoryprocess.CategoryIDEQ(*prd.CategoryID),
-			),
-			process.DeletedAtIsNil(),
-		).
-		Order(func(s *sql.Selector) {
-			cp := sql.Table(categoryprocess.Table)
-
-			s.Join(cp).
-				On(
-					s.C(process.FieldID),
-					cp.C(categoryprocess.FieldProcessID),
-				)
-
-			s.OrderBy(cp.C(categoryprocess.FieldDisplayOrder))
-		}).
-		All(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
-	dtos := mapper.MapListAs[*generated.Process, *model.ProcessDTO](processes)
-	return dtos, nil
+	return r.GetRawProcessesByProductID(ctx, productID)
 }
 
 func (r *orderItemProcessRepository) getProductContexts(

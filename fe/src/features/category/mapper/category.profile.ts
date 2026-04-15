@@ -12,6 +12,7 @@ mapper.register<CategoryModel>({
     active: true,
     collectionId: null,
     customFields: null,
+    relationFields: null,
     productIds: null,
     level: null,
     parentId: null,

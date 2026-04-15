@@ -42,7 +42,7 @@ func NewCategoryService(repo repository.CategoryRepository, deps *module.ModuleD
 // ----------------------------------------------------------------------------
 
 func kCategoryByID(deptID int, id int) string {
-	return fmt.Sprintf("category:dpt%d:id:%d", deptID, id)
+	return fmt.Sprintf("category:dpt%d:id:%d:v2", deptID, id)
 }
 
 func kCategoryAll(deptID int) []string {

@@ -19,6 +19,7 @@ type CategoryDTO struct {
 	ProductIDs      []int          `json:"product_ids,omitempty"`
 	ProcessIDs      []int          `json:"process_ids,omitempty"`
 	CustomFields    map[string]any `json:"custom_fields,omitempty"`
+	RelationFields  map[string]any `json:"relation_fields,omitempty"`
 	CreatedAt       time.Time      `json:"created_at"`
 	UpdatedAt       time.Time      `json:"updated_at"`
 }

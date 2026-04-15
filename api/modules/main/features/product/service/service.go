@@ -43,7 +43,7 @@ func NewProductService(repo repository.ProductRepository, deps *module.ModuleDep
 // ----------------------------------------------------------------------------
 
 func kProductByID(deptID int, id int) string {
-	return fmt.Sprintf("product:dpt%d:id:%d", deptID, id)
+	return fmt.Sprintf("product:dpt%d:id:%d:v2", deptID, id)
 }
 
 func kProductAll(deptID int) []string {

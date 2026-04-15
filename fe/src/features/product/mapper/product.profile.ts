@@ -11,6 +11,7 @@ mapper.register<ProductModel>({
     name: "",
     active: true,
     customFields: null,
+    relationFields: null,
     processNames: "",
     categoryId: null,
     categoryName: null,

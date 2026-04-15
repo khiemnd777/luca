@@ -66,6 +66,46 @@ func toTreeNode(e *generated.Category) *collectionutils.TreeNode {
 	}
 }
 
+func (r *categoryRepo) hydrateCategoryRelationFields(ctx context.Context, dto *model.CategoryDTO) error {
+	if dto == nil || dto.ID <= 0 {
+		return nil
+	}
+
+	rows, err := r.deps.DB.QueryContext(ctx, `
+		SELECT p.id, p.name
+		FROM category_processes cp
+		JOIN processes p ON p.id = cp.process_id
+		WHERE cp.category_id = $1
+		ORDER BY COALESCE(cp.display_order, 0), cp.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	processIDs := make([]int, 0)
+	for rows.Next() {
+		var id int
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return err
+		}
+		processIDs = append(processIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	dto.ProcessIDs = processIDs
+	if len(processIDs) > 0 {
+		dto.RelationFields = map[string]any{
+			"process_ids": processIDs,
+		}
+	}
+
+	return nil
+}
+
 func (r *categoryRepo) Create(ctx context.Context, deptID int, input *model.CategoryUpsertDTO) (*model.CategoryDTO, error) {
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
@@ -298,6 +338,9 @@ func (r *categoryRepo) GetByID(ctx context.Context, deptID int, id int) (*model.
 	}
 
 	dto := mapper.MapAs[*generated.Category, *model.CategoryDTO](entity)
+	if err := r.hydrateCategoryRelationFields(ctx, dto); err != nil {
+		return nil, err
+	}
 	return dto, nil
 }
 

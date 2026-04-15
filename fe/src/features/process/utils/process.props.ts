@@ -9,11 +9,7 @@ const getOptionLabel = (item: ProcessModel) => {
 
 const renderItem = (item: ProcessModel) => {
   const sectionName = item.sectionName ? `${item.sectionName} >` : "";
-  return React.createElement(
-    Typography,
-    { sx: { color: item.color } },
-    `${sectionName} ${item.name}`,
-  );
+  return React.createElement(Typography, null, `${sectionName} ${item.name}`);
 };
 
 export const processProps = {

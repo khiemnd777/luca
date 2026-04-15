@@ -43,11 +43,6 @@ func (Process) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		field.String("color").
-			MaxLen(8).
-			Optional().
-			Nillable(),
-
 		// times
 		field.Time("created_at").
 			Default(time.Now).

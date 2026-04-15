@@ -13,6 +13,7 @@ export interface CategoryModel {
   categoryIdLv3?: number | null;
   categoryNameLv3?: string | null;
   customFields?: Record<string, any> | null;
+  relationFields?: Record<string, any> | null;
   productIds?: number[] | null;
   createdAt: string;
   updatedAt: string;

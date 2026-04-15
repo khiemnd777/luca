@@ -11,7 +11,6 @@ mapper.register<ProcessModel>({
     name: "",
     sectionId: null,
     sectionName: null,
-    color: null,
     active: true,
     customFields: null,
   }),

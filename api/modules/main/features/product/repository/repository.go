@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -57,6 +58,138 @@ func toTreeNode(e *generated.Product) *collectionutils.TreeNode {
 		Name:         e.Name,
 		CollectionID: e.CollectionID,
 	}
+}
+
+func (r *productRepo) loadProductRelation(
+	ctx context.Context,
+	query string,
+	productID int,
+) ([]int, *string, error) {
+	rows, err := r.deps.DB.QueryContext(ctx, query, productID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int, 0)
+	names := make([]string, 0)
+	for rows.Next() {
+		var (
+			id   int
+			name sql.NullString
+		)
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, nil, err
+		}
+		ids = append(ids, id)
+		if name.Valid && name.String != "" {
+			names = append(names, name.String)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	if len(names) == 0 {
+		return ids, nil, nil
+	}
+
+	joined := strings.Join(names, "|")
+	return ids, &joined, nil
+}
+
+func (r *productRepo) hydrateProductRelationFields(ctx context.Context, dto *model.ProductDTO) error {
+	if dto == nil || dto.ID <= 0 {
+		return nil
+	}
+
+	processIDs, processNames, err := r.loadProductRelation(ctx, `
+		SELECT pr.id, pr.name
+		FROM product_processes pp
+		JOIN processes pr ON pr.id = pp.process_id
+		WHERE pp.product_id = $1
+		ORDER BY COALESCE(pp.display_order, 0), pp.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+
+	brandNameIDs, brandNameNames, err := r.loadProductRelation(ctx, `
+		SELECT b.id, b.name
+		FROM product_brand_names pbn
+		JOIN brand_names b ON b.id = pbn.brand_name_id
+		WHERE pbn.product_id = $1
+		ORDER BY pbn.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+
+	rawMaterialIDs, rawMaterialNames, err := r.loadProductRelation(ctx, `
+		SELECT rm.id, rm.name
+		FROM product_raw_materials prm
+		JOIN raw_materials rm ON rm.id = prm.raw_material_id
+		WHERE prm.product_id = $1
+		ORDER BY prm.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+
+	techniqueIDs, techniqueNames, err := r.loadProductRelation(ctx, `
+		SELECT t.id, t.name
+		FROM product_techniques pt
+		JOIN techniques t ON t.id = pt.technique_id
+		WHERE pt.product_id = $1
+		ORDER BY pt.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+
+	restorationTypeIDs, restorationTypeNames, err := r.loadProductRelation(ctx, `
+		SELECT rt.id, rt.name
+		FROM product_restoration_types prt
+		JOIN restoration_types rt ON rt.id = prt.restoration_type_id
+		WHERE prt.product_id = $1
+		ORDER BY prt.id
+	`, dto.ID)
+	if err != nil {
+		return err
+	}
+
+	dto.ProcessIDs = processIDs
+	dto.ProcessNames = processNames
+	dto.BrandNameIDs = brandNameIDs
+	dto.BrandNameNames = brandNameNames
+	dto.RawMaterialIDs = rawMaterialIDs
+	dto.RawMaterialNames = rawMaterialNames
+	dto.TechniqueIDs = techniqueIDs
+	dto.TechniqueNames = techniqueNames
+	dto.RestorationTypeIDs = restorationTypeIDs
+	dto.RestorationTypeNames = restorationTypeNames
+
+	relationFields := map[string]any{}
+	if len(processIDs) > 0 {
+		relationFields["process_ids"] = processIDs
+	}
+	if len(brandNameIDs) > 0 {
+		relationFields["brand_name_ids"] = brandNameIDs
+	}
+	if len(rawMaterialIDs) > 0 {
+		relationFields["raw_material_ids"] = rawMaterialIDs
+	}
+	if len(techniqueIDs) > 0 {
+		relationFields["technique_ids"] = techniqueIDs
+	}
+	if len(restorationTypeIDs) > 0 {
+		relationFields["restoration_type_ids"] = restorationTypeIDs
+	}
+	if len(relationFields) > 0 {
+		dto.RelationFields = relationFields
+	}
+
+	return nil
 }
 
 func (r *productRepo) Create(ctx context.Context, deptID int, input *model.ProductUpsertDTO) (*model.ProductDTO, error) {
@@ -281,6 +414,9 @@ func (r *productRepo) GetByID(ctx context.Context, deptID int, id int) (*model.P
 	}
 
 	dto := mapper.MapAs[*generated.Product, *model.ProductDTO](entity)
+	if err := r.hydrateProductRelationFields(ctx, dto); err != nil {
+		return nil, err
+	}
 	return dto, nil
 }
 

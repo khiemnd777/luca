@@ -39,63 +39,6 @@ FROM process_department_resolution r
 WHERE p.id = r.process_id
 	AND (p.department_id IS NULL OR p.department_id <> r.department_id);
 
-DO $$
-DECLARE
-	ambiguous_processes TEXT;
-	unresolved_processes TEXT;
-BEGIN
-	WITH process_department_candidates AS (
-		SELECT sp.process_id, s.department_id
-		FROM section_processes sp
-		JOIN sections s ON s.id = sp.section_id
-		WHERE s.department_id IS NOT NULL
-
-		UNION ALL
-
-		SELECT pp.process_id, pr.department_id
-		FROM product_processes pp
-		JOIN products pr ON pr.id = pp.product_id
-		WHERE pr.department_id IS NOT NULL
-
-		UNION ALL
-
-		SELECT cp.process_id, c.department_id
-		FROM category_processes cp
-		JOIN categories c ON c.id = cp.category_id
-		WHERE c.department_id IS NOT NULL
-
-		UNION ALL
-
-		SELECT p.id AS process_id, s.department_id
-		FROM processes p
-		JOIN sections s ON s.id = p.section_id
-		WHERE p.section_id IS NOT NULL
-			AND s.department_id IS NOT NULL
-	),
-	process_department_counts AS (
-		SELECT process_id, COUNT(DISTINCT department_id) AS department_count
-		FROM process_department_candidates
-		GROUP BY process_id
-	)
-	SELECT string_agg(process_id::TEXT, ', ' ORDER BY process_id)
-	INTO ambiguous_processes
-	FROM process_department_counts
-	WHERE department_count > 1;
-
-	IF ambiguous_processes IS NOT NULL THEN
-		RAISE EXCEPTION 'V82 ambiguous process department ownership for process ids: %', ambiguous_processes;
-	END IF;
-
-	SELECT string_agg(id::TEXT, ', ' ORDER BY id)
-	INTO unresolved_processes
-	FROM processes
-	WHERE department_id IS NULL;
-
-	IF unresolved_processes IS NOT NULL THEN
-		RAISE EXCEPTION 'V82 unresolved process department ownership for process ids: %', unresolved_processes;
-	END IF;
-END $$;
-
 WITH seed_processes(name, active, custom_fields) AS (
 	VALUES
 		('Đai mẫu', TRUE, '{}'::jsonb),
@@ -148,3 +91,60 @@ WHERE NOT EXISTS (
 		AND p.deleted_at IS NULL
 		AND p.name_norm = lower(unaccent_immutable(s.name))
 );
+
+DO $$
+DECLARE
+	ambiguous_processes TEXT;
+	unresolved_processes TEXT;
+BEGIN
+	WITH process_department_candidates AS (
+		SELECT sp.process_id, s.department_id
+		FROM section_processes sp
+		JOIN sections s ON s.id = sp.section_id
+		WHERE s.department_id IS NOT NULL
+
+		UNION ALL
+
+		SELECT pp.process_id, pr.department_id
+		FROM product_processes pp
+		JOIN products pr ON pr.id = pp.product_id
+		WHERE pr.department_id IS NOT NULL
+
+		UNION ALL
+
+		SELECT cp.process_id, c.department_id
+		FROM category_processes cp
+		JOIN categories c ON c.id = cp.category_id
+		WHERE c.department_id IS NOT NULL
+
+		UNION ALL
+
+		SELECT p.id AS process_id, s.department_id
+		FROM processes p
+		JOIN sections s ON s.id = p.section_id
+		WHERE p.section_id IS NOT NULL
+			AND s.department_id IS NOT NULL
+	),
+	process_department_counts AS (
+		SELECT process_id, COUNT(DISTINCT department_id) AS department_count
+		FROM process_department_candidates
+		GROUP BY process_id
+	)
+	SELECT string_agg(process_id::TEXT, ', ' ORDER BY process_id)
+	INTO ambiguous_processes
+	FROM process_department_counts
+	WHERE department_count > 1;
+
+	IF ambiguous_processes IS NOT NULL THEN
+		RAISE EXCEPTION 'V97 ambiguous process department ownership for process ids: %', ambiguous_processes;
+	END IF;
+
+	SELECT string_agg(id::TEXT, ', ' ORDER BY id)
+	INTO unresolved_processes
+	FROM processes
+	WHERE department_id IS NULL;
+
+	IF unresolved_processes IS NOT NULL THEN
+		RAISE EXCEPTION 'V97 unresolved process department ownership for process ids: %', unresolved_processes;
+	END IF;
+END $$;

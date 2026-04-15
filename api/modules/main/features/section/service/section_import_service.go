@@ -82,12 +82,12 @@ func (s *sectionImportService) ImportFromExcel(ctx context.Context, deptID int, 
 		}
 
 		sectionOrder[sectionID]++
-		_, err = s.repo.UpsertSectionProcess(ctx, sectionID, row.Name, processID, processName, nullableString(row.Color), sectionOrder[sectionID])
+		_, err = s.repo.UpsertSectionProcess(ctx, sectionID, row.Name, processID, processName, sectionOrder[sectionID])
 		if err != nil {
 			return result, fmt.Errorf("row %d: upsert section process failed: %w", rowIndex, err)
 		}
 
-		if err := s.repo.UpdateProcessSectionCache(ctx, deptID, processID, sectionID, row.Name, nullableString(row.Color)); err != nil {
+		if err := s.repo.UpdateProcessSectionCache(ctx, deptID, processID, sectionID, row.Name); err != nil {
 			return result, fmt.Errorf("row %d: update process cache failed: %w", rowIndex, err)
 		}
 	}

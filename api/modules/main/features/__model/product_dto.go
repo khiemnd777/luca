@@ -8,6 +8,7 @@ type ProductDTO struct {
 	Code                 *string        `json:"code,omitempty"`
 	Name                 *string        `json:"name,omitempty"`
 	CustomFields         map[string]any `json:"custom_fields,omitempty"`
+	RelationFields       map[string]any `json:"relation_fields,omitempty"`
 	ProcessIDs           []int          `json:"process_ids,omitempty"`
 	ProcessNames         *string        `json:"process_names,omitempty"`
 	BrandNameIDs         []int          `json:"brand_name_ids,omitempty"`

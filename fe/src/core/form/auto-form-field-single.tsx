@@ -82,7 +82,13 @@ function renderAsText(f: FieldDef, values: Record<string, any>) {
   // SEARCHSINGLE
   if (f.kind === "searchsingle") {
     const nameValue = f.altName ? values[f.altName] : null;
-    return <Typography>{nameValue ?? String(v)}</Typography>;
+    if (typeof nameValue === "string" && nameValue.trim()) {
+      return <Typography>{nameValue}</Typography>;
+    }
+    if (Array.isArray(v)) {
+      return <Typography>{v[0] ?? "—"}</Typography>;
+    }
+    return <Typography>{String(v)}</Typography>;
   }
 
   // SEARCHLIST
@@ -142,6 +148,17 @@ function resolveRelationMirrors(fieldName: string) {
   const cf = [...prefix, "customFields", relField].join("."); // "customFields.supplier" hoặc "product.customFields.supplier"
 
   return { root, cf };
+}
+
+function pickSearchSingleValue(raw: any) {
+  if (Array.isArray(raw)) {
+    return raw[0] ?? null;
+  }
+  return raw ?? null;
+}
+
+function usesArrayBackedSingleValue(fieldName: string) {
+  return fieldName.endsWith("Ids") || fieldName.endsWith("_ids");
 }
 
 export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
@@ -205,30 +222,32 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
   React.useEffect(() => {
     if (!isAsText || f.kind !== "searchsingle") return;
 
-    if (altNameValue !== null && altNameValue !== undefined && altNameValue !== "") {
-      setSearchSingleLabel(String(altNameValue));
+    if (typeof altNameValue === "string" && altNameValue.trim() !== "") {
+      setSearchSingleLabel(altNameValue);
       return;
     }
 
-    if (nameValue === null || nameValue === undefined || nameValue === "") {
+    const selectedId = pickSearchSingleValue(nameValue ?? altNameValue);
+
+    if (selectedId === null || selectedId === undefined || selectedId === "") {
       setSearchSingleLabel(null);
       return;
     }
 
     if (!f.hydrateById || !f.getOptionLabel) {
-      setSearchSingleLabel(String(nameValue));
+      setSearchSingleLabel(String(selectedId));
       return;
     }
 
     let active = true;
     (async () => {
       try {
-        const obj = await f.hydrateById?.(nameValue, valuesRef.current);
+        const obj = await f.hydrateById?.(selectedId, valuesRef.current);
         if (!active) return;
         const label = obj ? f.getOptionLabel?.(obj)?.trim() : "";
-        setSearchSingleLabel(label || String(nameValue));
+        setSearchSingleLabel(label || String(selectedId));
       } catch {
-        if (active) setSearchSingleLabel(String(nameValue));
+        if (active) setSearchSingleLabel(String(selectedId));
       }
     })();
 
@@ -802,7 +821,7 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
 
   // SEARCHSINGLE
   if (f.kind === "searchsingle") {
-    const rawId = values[f.name] ?? (f.altName ? values[f.altName] : null);
+    const rawId = pickSearchSingleValue(values[f.name] ?? (f.altName ? values[f.altName] : null));
     // const isFreeSolo = !f.onOpenCreate;
 
     return (
@@ -826,11 +845,14 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
         //   }
         // }}
         onChange={(val, obj) => {
-          setValue(f.name, val);
+          const nextValue = usesArrayBackedSingleValue(f.name)
+            ? (val == null ? [] : [val])
+            : val;
+          setValue(f.name, nextValue);
           const mirrors = resolveRelationMirrors(f.name);
           if (mirrors) {
-            setValue(mirrors.root, val); // values.xxx
-            setValue(mirrors.cf, val);   // values.customFields.xxx
+            setValue(mirrors.root, nextValue); // values.xxx
+            setValue(mirrors.cf, nextValue);   // values.customFields.xxx
           }
           const mapped = mapIdFieldToNameField(f.name);
           if (obj && f.getOptionLabel) {

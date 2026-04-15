@@ -29,7 +29,7 @@ import {
 import { snakeToCamel } from "@root/shared/utils/string.utils";
 import { isJSON, parseJSON } from "@root/shared/utils/json.utils";
 import { parseShowIfDependencies } from "@root/shared/metadata/utils";
-import { rel1, relM2m, search } from "../relation/relation.api";
+import { relM2m, search } from "../relation/relation.api";
 import { openFormDialog } from "./form-dialog.service";
 import { extractVars } from "@root/shared/utils/equation.utils";
 import { parseIntSafe } from "@root/shared/utils/number.utils";
@@ -307,17 +307,46 @@ async function expandOneMetadataBlock(
 
           pageLimit: 20,
 
-          async hydrateById(id: number | string, _: Record<string, any>) {
+          async hydrateById(id: number | string, values: Record<string, any>) {
             if (!id) return null;
-            const found = await rel1(relation.target, id as number);
-            return found ?? null;
+            const dynamicWhere = fd.where?.(values ?? {}, undefined) ?? [];
+            const extendWhere = [
+              ...staticWhere,
+              ...dynamicWhere,
+              `id=${id}`,
+            ];
+            const found = await search(relation.target, {
+              keyword: "",
+              page: 1,
+              limit: 1,
+              orderBy: "name",
+              extendWhere,
+            });
+            return found.items?.[0] ?? null;
           },
 
           async fetchOne(values: Record<string, any>) {
             const refName = `${relPrefix}.${mf.name}`;
-            const refId = parseIntSafe(values[refName]);
+            const altRefName = `${altPrefix}.${mf.name}`;
+            const rawRefId = values[refName] ?? values[altRefName];
+            const refId = Array.isArray(rawRefId)
+              ? parseIntSafe(rawRefId[0])
+              : parseIntSafe(rawRefId);
             if (!refId) return null;
-            return await rel1(relation.target, refId);
+            const dynamicWhere = fd.where?.(values ?? {}, undefined) ?? [];
+            const extendWhere = [
+              ...staticWhere,
+              ...dynamicWhere,
+              `id=${refId}`,
+            ];
+            const found = await search(relation.target, {
+              keyword: "",
+              page: 1,
+              limit: 1,
+              orderBy: "name",
+              extendWhere,
+            });
+            return found.items?.[0] ?? null;
           },
 
           // renderItem: (d: any) => (<>{d?.name}</>),

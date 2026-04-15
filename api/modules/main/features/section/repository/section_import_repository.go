@@ -12,8 +12,8 @@ import (
 type SectionImportRepository interface {
 	GetOrCreateSection(ctx context.Context, deptID int, name string, color *string) (id int, created bool, err error)
 	GetProcessByName(ctx context.Context, deptID int, name string) (id int, nameOut string, err error)
-	UpsertSectionProcess(ctx context.Context, sectionID int, sectionName string, processID int, processName string, color *string, displayOrder int) (bool, error)
-	UpdateProcessSectionCache(ctx context.Context, deptID int, processID int, sectionID int, sectionName string, color *string) error
+	UpsertSectionProcess(ctx context.Context, sectionID int, sectionName string, processID int, processName string, displayOrder int) (bool, error)
+	UpdateProcessSectionCache(ctx context.Context, deptID int, processID int, sectionID int, sectionName string) error
 	UpdateSectionProcessNames(ctx context.Context, sectionID int) error
 }
 
@@ -95,38 +95,36 @@ func (r *sectionImportRepo) GetProcessByName(ctx context.Context, deptID int, na
 	return id, outName, runner.QueryRowContext(ctx, query, deptID, name).Scan(&id, &outName)
 }
 
-func (r *sectionImportRepo) UpsertSectionProcess(ctx context.Context, sectionID int, sectionName string, processID int, processName string, color *string, displayOrder int) (bool, error) {
+func (r *sectionImportRepo) UpsertSectionProcess(ctx context.Context, sectionID int, sectionName string, processID int, processName string, displayOrder int) (bool, error) {
 	query := `
-		INSERT INTO section_processes (section_id, process_id, section_name, process_name, color, display_order, created_at)
-		VALUES ($1, $2, $3, $4, $5, $6, NOW())
+		INSERT INTO section_processes (section_id, process_id, section_name, process_name, display_order, created_at)
+		VALUES ($1, $2, $3, $4, $5, NOW())
 		ON CONFLICT (section_id, process_id)
 		DO UPDATE SET
 			section_name = EXCLUDED.section_name,
 			process_name = EXCLUDED.process_name,
-			color = EXCLUDED.color,
 			display_order = EXCLUDED.display_order
 		RETURNING (xmax = 0)
 	`
 
 	var inserted bool
 	runner := r.runner(ctx)
-	if err := runner.QueryRowContext(ctx, query, sectionID, processID, sectionName, processName, color, displayOrder).Scan(&inserted); err != nil {
+	if err := runner.QueryRowContext(ctx, query, sectionID, processID, sectionName, processName, displayOrder).Scan(&inserted); err != nil {
 		return false, err
 	}
 	return inserted, nil
 }
 
-func (r *sectionImportRepo) UpdateProcessSectionCache(ctx context.Context, deptID int, processID int, sectionID int, sectionName string, color *string) error {
+func (r *sectionImportRepo) UpdateProcessSectionCache(ctx context.Context, deptID int, processID int, sectionID int, sectionName string) error {
 	query := `
 		UPDATE processes
 		SET section_id = $1,
 			section_name = $2,
-			color = $3,
 			updated_at = NOW()
-		WHERE id = $4 AND department_id = $5
+		WHERE id = $3 AND department_id = $4
 	`
 
-	_, err := r.runner(ctx).ExecContext(ctx, query, sectionID, sectionName, color, processID, deptID)
+	_, err := r.runner(ctx).ExecContext(ctx, query, sectionID, sectionName, processID, deptID)
 	return err
 }
 

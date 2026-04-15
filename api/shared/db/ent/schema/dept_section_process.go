@@ -23,10 +23,6 @@ func (SectionProcess) Fields() []ent.Field {
 		field.String("process_name").
 			Optional().
 			Nillable(),
-		field.String("color").
-			MaxLen(8).
-			Optional().
-			Nillable(),
 		field.Int("display_order").
 			Max(100).
 			Optional().
