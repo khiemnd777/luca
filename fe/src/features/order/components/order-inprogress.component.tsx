@@ -128,10 +128,6 @@ function ProductInProgressPanel({ group }: { group: ProductInProgressGroup }) {
 
   return (
     <>
-      <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-        Công đoạn theo sản phẩm
-      </Typography>
-
       <SectionCard
         title={currentSectionTitle}
         extra={
