@@ -18,7 +18,11 @@ import { priorityColor } from "@root/shared/utils/order.utils";
 import ResponsiveStatusBoard from "@root/shared/components/status-board/responsive-status-board";
 import { Section } from "@root/shared/components/ui/section";
 import { OrderProcessInProgressDialog } from "./order-process-inprogress-dialog.component";
-import { buildProductLabel, buildProductProcessLabel } from "../utils/order.utils";
+import {
+  buildProcessNameLabel,
+  buildProductNameLabel,
+  buildSectionNameLabel,
+} from "../utils/order.utils";
 
 export function OrderProcessesStatusBoard() {
   const { orderId, orderItemId } = useParams();
@@ -81,20 +85,24 @@ export function OrderProcessesStatusBoard() {
         priorityToColor={(priority) => priorityColor(priority)}
         renderCard={(_id, _status, o) => (
           <Stack spacing={1}>
-            {o.sectionName && (
-              <Stack direction="row" alignItems="left" spacing={1}>
+            {buildProductNameLabel(o) ? (
+              <Typography fontWeight={700}>{buildProductNameLabel(o)}</Typography>
+            ) : null}
+            {buildSectionNameLabel(o) ? (
+              <Stack direction="row" alignItems="center" spacing={1}>
                 <MapsHomeWorkIcon fontSize="small" />
-                <Typography fontWeight={600} color={o.color ?? undefined}>{o.sectionName}</Typography>
+                <Typography fontWeight={600} color={o.color ?? undefined}>
+                  {buildSectionNameLabel(o)}
+                </Typography>
               </Stack>
-            )}
-            <Stack direction="row" alignItems="left" spacing={1}>
-              <FactCheckIcon fontSize="small" />
-              <Typography fontWeight={700}>{buildProductProcessLabel(o)}</Typography>
-            </Stack>
-            {buildProductLabel(o) ? (
-              <Typography variant="caption" color="text.secondary">
-                {buildProductLabel(o)}
-              </Typography>
+            ) : null}
+            {buildProcessNameLabel(o) ? (
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <FactCheckIcon fontSize="small" />
+                <Typography variant="body2" fontWeight={600} color="text.secondary">
+                  {buildProcessNameLabel(o)}
+                </Typography>
+              </Stack>
             ) : null}
             <Stack direction="row" alignItems="left" spacing={1}>
               {o.assignedName &&
@@ -118,7 +126,7 @@ export function OrderProcessesStatusBoard() {
           setSelectedProcessId(processId);
           setInProgressOpen(true);
         }}
-        onStatusChange={async (id, newStatus, _oldStatus) => {
+        onStatusChange={async (id, newStatus) => {
           await updateStatus(Number(orderId ?? 0), id, newStatus);
 
         }}

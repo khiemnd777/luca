@@ -20,6 +20,7 @@ import { usePhotoUrl } from "@core/photo/use-photo-url";
 import {
   deletePrescriptionFile,
   getPrescriptionFileContentUrl,
+  listPrescriptionFiles,
   uploadPrescriptionFile,
 } from "../api/order-prescription-file.api";
 import type {
@@ -42,6 +43,7 @@ type DeferredSectionProps = {
   mode: "deferred";
   scopeKey: string;
   orderId?: number | null;
+  sourceOrderId?: number | null;
   canMutate?: boolean;
   setOrderValues: (patch: Record<string, unknown>) => void;
 };
@@ -50,6 +52,7 @@ type ImmediateSectionProps = {
   mode: "immediate";
   scopeKey: string;
   orderId?: number | null;
+  sourceOrderId?: number | null;
   canMutate?: boolean;
 };
 
@@ -106,8 +109,8 @@ function openExternalFile(url: string) {
 }
 
 type FilePreviewCellProps =
-  | { kind: "persisted"; orderId: number; file: OrderPrescriptionFileModel }
-  | { kind: "local"; file: LocalPrescriptionQueueItem };
+  | { kind: "persisted"; orderId: number; file: OrderPrescriptionFileModel; onOpen?: () => void }
+  | { kind: "local"; file: LocalPrescriptionQueueItem; onOpen?: () => void };
 
 function FilePreviewCell(props: FilePreviewCellProps) {
   const [localUrl, setLocalUrl] = React.useState<string | null>(null);
@@ -138,18 +141,33 @@ function FilePreviewCell(props: FilePreviewCellProps) {
 
   return (
     <Box
-      component="img"
-      src={src}
-      alt={props.file.fileName}
+      component="button"
+      type="button"
+      onClick={props.onOpen}
       sx={{
-        width: 72,
-        height: 72,
-        borderRadius: 1,
-        objectFit: "cover",
-        border: (theme) => `1px solid ${theme.palette.divider}`,
+        p: 0,
+        m: 0,
+        border: 0,
+        background: "transparent",
         display: "block",
+        lineHeight: 0,
+        cursor: props.onOpen ? "pointer" : "default",
       }}
-    />
+    >
+      <Box
+        component="img"
+        src={src}
+        alt={props.file.fileName}
+        sx={{
+          width: 72,
+          height: 72,
+          borderRadius: 1,
+          objectFit: "cover",
+          border: (theme) => `1px solid ${theme.palette.divider}`,
+          display: "block",
+        }}
+      />
+    </Box>
   );
 }
 
@@ -164,6 +182,8 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
   } | null>(null);
   const [viewer, setViewer] = React.useState<ViewerState>(null);
   const [uploading, setUploading] = React.useState(false);
+  const [sourceFiles, setSourceFiles] = React.useState<OrderPrescriptionFileModel[]>([]);
+  const [sourceLoading, setSourceLoading] = React.useState(false);
 
   const scope = useOrderPrescriptionFileStore((state) => state.scopes[scopeKey]);
   const ensureScope = useOrderPrescriptionFileStore((state) => state.ensureScope);
@@ -197,15 +217,41 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
     void hydratePrescriptionFiles(scopeKey, orderId);
   }, [orderId, scopeKey]);
 
-  const persistedFiles = scope?.persistedFiles ?? [];
-  const queuedFiles = scope?.queuedFiles ?? [];
-  const pendingDeleteIds = scope?.pendingDeleteIds ?? [];
-  const loading = scope?.loading ?? false;
+  React.useEffect(() => {
+    let active = true;
 
-  const visiblePersisted = React.useMemo(
-    () => persistedFiles.filter((item) => !pendingDeleteIds.includes(item.id)),
-    [pendingDeleteIds, persistedFiles]
-  );
+    if (!props.sourceOrderId || props.sourceOrderId <= 0) {
+      setSourceFiles([]);
+      setSourceLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setSourceLoading(true);
+    void listPrescriptionFiles(props.sourceOrderId)
+      .then((files) => {
+        if (!active) return;
+        setSourceFiles(files);
+      })
+      .finally(() => {
+        if (!active) return;
+        setSourceLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [props.sourceOrderId]);
+
+  const queuedFiles = scope?.queuedFiles ?? [];
+  const loading = (scope?.loading ?? false) || sourceLoading;
+
+  const visiblePersisted = React.useMemo(() => {
+    const persistedFiles = scope?.persistedFiles ?? [];
+    const pendingDeleteIds = scope?.pendingDeleteIds ?? [];
+    return persistedFiles.filter((item) => !pendingDeleteIds.includes(item.id));
+  }, [scope?.pendingDeleteIds, scope?.persistedFiles]);
 
   const handleAppendFiles = (files: File[]) => {
     if (files.length === 0) return;
@@ -283,6 +329,15 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
       return;
     }
     setViewer({ kind: "persisted", orderId, file });
+  };
+
+  const openSourceViewer = (file: OrderPrescriptionFileModel) => {
+    if (!props.sourceOrderId) return;
+    if (!isPreviewableImage(file.mimeType)) {
+      openExternalFile(getPrescriptionFileContentUrl(props.sourceOrderId, file.id));
+      return;
+    }
+    setViewer({ kind: "persisted", orderId: props.sourceOrderId, file });
   };
 
   const openLocalViewer = (file: LocalPrescriptionQueueItem) => {
@@ -378,7 +433,12 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                 </TableCell>
                 <TableCell>
                   {isPreviewableImage(file.mimeType) ? (
-                    <FilePreviewCell kind="persisted" orderId={orderId ?? 0} file={file} />
+                    <FilePreviewCell
+                      kind="persisted"
+                      orderId={orderId ?? 0}
+                      file={file}
+                      onOpen={() => openPersistedViewer(file)}
+                    />
                   ) : null}
                 </TableCell>
                 <TableCell>
@@ -387,6 +447,35 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     type="button"
                     underline="hover"
                     onClick={() => openPersistedViewer(file)}
+                  >
+                    {file.fileName}
+                  </Link>
+                </TableCell>
+                <TableCell>{file.format || toFormatLabel(file.fileName)}</TableCell>
+                <TableCell>{formatSize(file.sizeBytes)}</TableCell>
+                <TableCell>{uploadStateLabel("success")}</TableCell>
+              </TableRow>
+            ))}
+
+            {sourceFiles.map((file) => (
+              <TableRow key={`source:${file.id}`}>
+                <TableCell />
+                <TableCell>
+                  {isPreviewableImage(file.mimeType) && props.sourceOrderId ? (
+                    <FilePreviewCell
+                      kind="persisted"
+                      orderId={props.sourceOrderId}
+                      file={file}
+                      onOpen={() => openSourceViewer(file)}
+                    />
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  <Link
+                    component="button"
+                    type="button"
+                    underline="hover"
+                    onClick={() => openSourceViewer(file)}
                   >
                     {file.fileName}
                   </Link>
@@ -411,7 +500,9 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                   ) : null}
                 </TableCell>
                 <TableCell>
-                  {isPreviewableImage(file.mimeType) ? <FilePreviewCell kind="local" file={file} /> : null}
+                  {isPreviewableImage(file.mimeType) ? (
+                    <FilePreviewCell kind="local" file={file} onOpen={() => openLocalViewer(file)} />
+                  ) : null}
                 </TableCell>
                 <TableCell>
                   <Link
@@ -429,7 +520,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
               </TableRow>
             ))}
 
-            {!loading && visiblePersisted.length === 0 && queuedFiles.length === 0 ? (
+            {!loading && visiblePersisted.length === 0 && sourceFiles.length === 0 && queuedFiles.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary">

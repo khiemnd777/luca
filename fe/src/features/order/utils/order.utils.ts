@@ -23,6 +23,12 @@ export const buildProductNameLabel = (item?: {
   return item?.productName?.trim() ?? "";
 };
 
+export const buildSectionNameLabel = (item?: {
+  sectionName?: string | null;
+}) => {
+  return item?.sectionName?.trim() ?? "";
+};
+
 export const buildProcessNameLabel = (item?: {
   processName?: string | null;
 }) => {

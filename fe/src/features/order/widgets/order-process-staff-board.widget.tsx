@@ -16,14 +16,19 @@ import { openFormDialog } from "@root/core/form/form-dialog.service";
 import { useAuth } from "@root/core/auth/use-auth";
 import { priorityColor } from "@root/shared/utils/order.utils";
 import ResponsiveStatusBoard from "@root/shared/components/status-board/responsive-status-board";
-import { buildProductLabel, buildProductProcessLabel } from "../utils/order.utils";
+import {
+  buildProcessNameLabel,
+  buildProductNameLabel,
+  buildSectionNameLabel,
+} from "../utils/order.utils";
 
 export function OrderProcessBoardWidget() {
   const { user: authUser } = useAuth();
 
   const { data: list, loading } = useAsync(() => {
     return (async () => {
-      const data = await processesForStaff(authUser?.id!);
+      if (!authUser?.id) return [];
+      const data = await processesForStaff(authUser.id);
       return data;
     })();
   }, [authUser?.id],
@@ -62,11 +67,17 @@ export function OrderProcessBoardWidget() {
         priorityToColor={(priority) => priorityColor(priority)}
         renderCard={(_id, _status, o) => (
           <Stack spacing={1}>
-            <Typography fontWeight={700}>{o.orderCode}</Typography>
-            <Typography fontWeight={700}>{buildProductProcessLabel(o)}</Typography>
-            {buildProductLabel(o) ? (
-              <Typography variant="caption" color="text.secondary">
-                {buildProductLabel(o)}
+            {buildProductNameLabel(o) ? (
+              <Typography fontWeight={700}>{buildProductNameLabel(o)}</Typography>
+            ) : null}
+            {buildSectionNameLabel(o) ? (
+              <Typography variant="body2" color="text.secondary">
+                {buildSectionNameLabel(o)}
+              </Typography>
+            ) : null}
+            {buildProcessNameLabel(o) ? (
+              <Typography variant="body2" fontWeight={600} color="text.secondary">
+                {buildProcessNameLabel(o)}
               </Typography>
             ) : null}
             <Stack direction="row" alignItems="left" spacing={1}>
@@ -88,7 +99,7 @@ export function OrderProcessBoardWidget() {
         onCardClick={(_id, _status, obj) => {
           openFormDialog("order-process-staff", { initial: obj });
         }}
-        onStatusChange={async (id, newStatus, _oldStatus) => {
+        onStatusChange={async (id, newStatus) => {
           await updateStatus(0, id, newStatus);
         }}
       />

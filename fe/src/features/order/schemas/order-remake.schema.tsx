@@ -38,7 +38,7 @@ export function buildRemakeOrderSchema(): FormSchema {
       kind: "text",
       label: "Số lần làm lại",
       showIf: (values) => values["latestOrderItem.remakeCount"] > 0,
-      disableIf: (_) => true,
+      disableIf: (_, __) => true,
     },
     // Mã khuyến mãi
     {
@@ -437,6 +437,7 @@ export function buildRemakeOrderSchema(): FormSchema {
             mode="deferred"
             scopeKey={scopeKey}
             orderId={undefined}
+            sourceOrderId={Number(values.id ?? 0) || undefined}
             canMutate
             setOrderValues={(patch) => {
               if (!ctx) return;
