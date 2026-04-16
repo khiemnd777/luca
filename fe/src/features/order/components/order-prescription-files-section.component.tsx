@@ -6,6 +6,7 @@ import {
   CircularProgress,
   Link,
   Paper,
+  Box,
   Stack,
   Table,
   TableBody,
@@ -15,6 +16,7 @@ import {
   Typography,
 } from "@mui/material";
 import { ConfirmDialog } from "@shared/components/dialog/confirm-dialog";
+import { usePhotoUrl } from "@core/photo/use-photo-url";
 import {
   deletePrescriptionFile,
   getPrescriptionFileContentUrl,
@@ -101,6 +103,54 @@ function uploadStateLabel(uploadState: "success" | "pending" | "error") {
 
 function openExternalFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
+}
+
+type FilePreviewCellProps =
+  | { kind: "persisted"; orderId: number; file: OrderPrescriptionFileModel }
+  | { kind: "local"; file: LocalPrescriptionQueueItem };
+
+function FilePreviewCell(props: FilePreviewCellProps) {
+  const [localUrl, setLocalUrl] = React.useState<string | null>(null);
+  const remoteSrc =
+    props.kind === "persisted"
+      ? getPrescriptionFileContentUrl(props.orderId, props.file.id)
+      : null;
+  const { displayUrl } = usePhotoUrl(remoteSrc);
+
+  React.useEffect(() => {
+    if (props.kind !== "local" || !isPreviewableImage(props.file.mimeType)) {
+      setLocalUrl(null);
+      return;
+    }
+
+    const objectUrl = URL.createObjectURL(props.file.file);
+    setLocalUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [props]);
+
+  const src = props.kind === "persisted" ? displayUrl : localUrl;
+
+  if (!src) {
+    return null;
+  }
+
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt={props.file.fileName}
+      sx={{
+        width: 72,
+        height: 72,
+        borderRadius: 1,
+        objectFit: "cover",
+        border: (theme) => `1px solid ${theme.palette.divider}`,
+        display: "block",
+      }}
+    />
+  );
 }
 
 export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSectionProps) {
@@ -305,6 +355,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
           <TableHead>
             <TableRow>
               <TableCell width={56}>Xóa</TableCell>
+              <TableCell width={104}>Hình ảnh</TableCell>
               <TableCell>Tên file</TableCell>
               <TableCell width={120}>Định dạng</TableCell>
               <TableCell width={140}>Dung lượng</TableCell>
@@ -323,6 +374,11 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     >
                       ❌
                     </Button>
+                  ) : null}
+                </TableCell>
+                <TableCell>
+                  {isPreviewableImage(file.mimeType) ? (
+                    <FilePreviewCell kind="persisted" orderId={orderId ?? 0} file={file} />
                   ) : null}
                 </TableCell>
                 <TableCell>
@@ -355,6 +411,9 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                   ) : null}
                 </TableCell>
                 <TableCell>
+                  {isPreviewableImage(file.mimeType) ? <FilePreviewCell kind="local" file={file} /> : null}
+                </TableCell>
+                <TableCell>
                   <Link
                     component="button"
                     type="button"
@@ -372,7 +431,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
 
             {!loading && visiblePersisted.length === 0 && queuedFiles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <Typography variant="body2" color="text.secondary">
                     Chưa có file phiếu chỉ định.
                   </Typography>

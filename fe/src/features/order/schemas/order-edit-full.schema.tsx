@@ -12,8 +12,6 @@ import { list as listPromotions } from "@features/promotion/api/promotion-admin.
 import PromotionValidateButton from "../components/order-promotion-validate-button.component";
 import { normalizeOrderPaymentFlags } from "./payment-flags";
 import { TotalPriceWithPromotionV2 } from "../components/order-total-price-with-promotion.component";
-import { OrderPrescriptionFilesSection } from "../components/order-prescription-files-section.component";
-import { syncDeferredPrescriptionFiles } from "../utils/order-prescription-file.sync";
 
 export function buildEditOrderSchema(): FormSchema {
   let previousClinicId: string | number | null = null;
@@ -434,32 +432,6 @@ export function buildEditOrderSchema(): FormSchema {
         );
       },
     },
-    {
-      kind: "custom",
-      name: "__prescriptionFiles",
-      label: "Phiếu chỉ định",
-      group: "prescription-files",
-      fullWidth: true,
-      render: ({ values, ctx }) => {
-        const scopeKey = String(values.__prescriptionFilesScopeKey ?? ctx?.formSessionId ?? "order-edit");
-        if (ctx && values.__prescriptionFilesScopeKey !== scopeKey) {
-          ctx.setValue("__prescriptionFilesScopeKey", scopeKey);
-        }
-
-        return (
-          <OrderPrescriptionFilesSection
-            mode="deferred"
-            scopeKey={scopeKey}
-            orderId={typeof values.id === "number" ? values.id : undefined}
-            canMutate
-            setOrderValues={(patch) => {
-              if (!ctx) return;
-              Object.entries(patch).forEach(([key, value]) => ctx.setValue(key, value));
-            }}
-          />
-        );
-      },
-    },
   ];
 
   return {
@@ -513,11 +485,6 @@ export function buildEditOrderSchema(): FormSchema {
         label: "Thành tiền:",
         col: 1,
       },
-      {
-        name: "prescription-files",
-        label: "Phiếu chỉ định:",
-        col: 1,
-      },
     ],
     modeResolver: (_) => {
       return "update";
@@ -533,12 +500,8 @@ export function buildEditOrderSchema(): FormSchema {
       update: {
         type: "fn",
         run: async (dto) => {
-          const scopeKey = String((dto as any).__prescriptionFilesScopeKey ?? "");
           const model = dto as OrderUpsertModel;
           await update(model);
-          if (scopeKey && model.dto?.id) {
-            await syncDeferredPrescriptionFiles(scopeKey, model.dto.id);
-          }
           return dto;
         },
       },
@@ -567,10 +530,7 @@ export function buildEditOrderSchema(): FormSchema {
     },
 
     hooks: {
-      mapToDto: (v) => ({
-        ...mapper.map("Order", normalizeOrderPaymentFlags(v), "model_to_dto"),
-        __prescriptionFilesScopeKey: v.__prescriptionFilesScopeKey,
-      }),
+      mapToDto: (v) => mapper.map("Order", normalizeOrderPaymentFlags(v), "model_to_dto"),
     },
   };
 }

@@ -8,6 +8,7 @@ import {
   DialogTitle,
   Typography,
 } from "@mui/material";
+import { usePhotoUrl } from "@core/photo/use-photo-url";
 import type {
   LocalPrescriptionQueueItem,
   OrderPrescriptionFileModel,
@@ -46,9 +47,11 @@ export function OrderPrescriptionFileViewer({
 
   const mimeType = value?.kind === "persisted" ? value.file.mimeType : value?.file.mimeType;
   const fileName = value?.kind === "persisted" ? value.file.fileName : value?.file.fileName;
-  const src = value?.kind === "persisted"
+  const persistedSrc = value?.kind === "persisted"
     ? getPrescriptionFileContentUrl(value.orderId, value.file.id)
-    : localUrl;
+    : null;
+  const { displayUrl } = usePhotoUrl(persistedSrc);
+  const src = value?.kind === "persisted" ? displayUrl : localUrl;
 
   const body = React.useMemo(() => {
     if (!src || !mimeType) return null;

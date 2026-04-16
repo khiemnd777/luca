@@ -642,7 +642,10 @@ export function buildNewOrderSchema(): FormSchema {
     hooks: {
       mapToDto: (v) => ({
         ...mapper.map("Order", normalizeOrderPaymentFlags(v), "model_to_dto"),
-        __prescriptionFilesScopeKey: v.__prescriptionFilesScopeKey,
+        __prescriptionFilesScopeKey:
+          typeof v?.dto?.__prescription_files_scope_key === "string"
+            ? v.dto.__prescription_files_scope_key
+            : undefined,
       }),
     },
   };
