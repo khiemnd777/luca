@@ -16,9 +16,13 @@ import { OrderProcessesStatusBoard } from "../components/order-process-status-bo
 import { generateTitle } from "../utils/order.utils";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
+import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
+import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 
-function OrderDetailHistoricalGeneralWidget() {
+export function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
   const frmOrderEditRef = React.useRef<AutoFormRef>(null);
 
@@ -50,6 +54,7 @@ function OrderDetailHistoricalGeneralWidget() {
           tabs={[
             {
               label: "Thông tin đơn hàng",
+              icon: <InfoOutlinedIcon />,
               value: "info",
               content: (
                 <Box>
@@ -83,6 +88,7 @@ function OrderDetailHistoricalGeneralWidget() {
             },
             {
               label: "Mã QR",
+              icon: <QrCode2OutlinedIcon />,
               value: "qr",
               content: (
                 <Box>
@@ -97,6 +103,7 @@ function OrderDetailHistoricalGeneralWidget() {
             },
             {
               label: "Trạng thái",
+              icon: <TaskAltOutlinedIcon />,
               value: "process",
               content: (
                 <Box>
@@ -108,6 +115,7 @@ function OrderDetailHistoricalGeneralWidget() {
             },
             {
               label: "Tiến trình",
+              icon: <TimelineOutlinedIcon />,
               value: "inprogress",
               content: (
                 <Box>

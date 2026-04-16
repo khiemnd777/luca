@@ -14,7 +14,14 @@ import { OrderProcessesStatusBoard } from "../components/order-process-status-bo
 import { generateTitle } from "../utils/order.utils";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
+import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
+import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
 import { OrderDetailDeliveryStatusBoard } from "../components/order-delivery-status-board.component";
 import { AuditLogListInfinite } from "@core/auditlog";
 import { apiClient } from "@core/network/api-client";
@@ -54,6 +61,7 @@ export function OrderDetailBodyWidget() {
           tabs={[
             {
               label: "Thông tin đơn hàng",
+              icon: <InfoOutlinedIcon />,
               value: "info",
               content: (
                 <Box>
@@ -87,6 +95,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Mã QR",
+              icon: <QrCode2OutlinedIcon />,
               value: "qr",
               content: (
                 <Box>
@@ -101,6 +110,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Trạng thái",
+              icon: <TaskAltOutlinedIcon />,
               value: "process",
               content: (
                 <Box>
@@ -112,6 +122,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Tiến trình",
+              icon: <TimelineOutlinedIcon />,
               value: "inprogress",
               content: (
                 <Box>
@@ -121,6 +132,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Giao/Nhận hàng",
+              icon: <LocalShippingOutlinedIcon />,
               value: "delivery",
               content: (
                 <Box>
@@ -134,6 +146,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Phiếu chỉ định",
+              icon: <DescriptionOutlinedIcon />,
               value: "prescription-files",
               content: (
                 <Box>
@@ -150,6 +163,7 @@ export function OrderDetailBodyWidget() {
             },
             {
               label: "Nhật ký",
+              icon: <HistoryOutlinedIcon />,
               value: "auditlog",
               content: (
                 <Box>

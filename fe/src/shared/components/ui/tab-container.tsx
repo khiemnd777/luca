@@ -14,6 +14,7 @@ import type { SxProps, Theme } from "@mui/material/styles";
 
 export type TabItem = {
   label: string;
+  icon?: React.ReactNode;
   value: string;
   content: React.ReactNode;
 };
@@ -26,6 +27,38 @@ type TabContainerProps = {
   contentSx?: SxProps<Theme>;
   tabsMode?: "horizontal" | "vertical";
 };
+
+function renderTabLabel(tab: TabItem) {
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 1,
+        minWidth: 0,
+      }}
+    >
+      {tab.icon ? (
+        <Box
+          component="span"
+          sx={{
+            display: "inline-flex",
+            alignItems: "center",
+            "& svg": {
+              fontSize: 18,
+            },
+          }}
+        >
+          {tab.icon}
+        </Box>
+      ) : null}
+      <Box component="span" sx={{ minWidth: 0 }}>
+        {tab.label}
+      </Box>
+    </Box>
+  );
+}
 
 export function TabContainer({
   tabs,
@@ -75,7 +108,7 @@ export function TabContainer({
           <Select value={value} onChange={handleMobileChange} size="small">
             {tabs.map((t) => (
               <MenuItem key={t.value} value={t.value}>
-                {t.label}
+                {renderTabLabel(t)}
               </MenuItem>
             ))}
           </Select>
@@ -108,7 +141,7 @@ export function TabContainer({
             {tabs.map((t) => (
               <Tab
                 key={t.value}
-                label={t.label}
+                label={renderTabLabel(t)}
                 value={t.value}
                 sx={{ alignItems: "flex-start", textAlign: "left" }}
               />
@@ -125,7 +158,7 @@ export function TabContainer({
             sx={{ borderBottom: 1, borderColor: "divider", ...tabSx }}
           >
             {tabs.map((t) => (
-              <Tab key={t.value} label={t.label} value={t.value} />
+              <Tab key={t.value} label={renderTabLabel(t)} value={t.value} />
             ))}
           </Tabs>
 
