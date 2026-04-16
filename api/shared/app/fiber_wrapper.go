@@ -22,6 +22,65 @@ type RetryOptions struct {
 	ShouldRetry func(error) bool
 }
 
+func isSafeRetryMethod(method string) bool {
+	switch strings.ToUpper(method) {
+	case fiber.MethodGet, fiber.MethodHead, fiber.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func defaultMaxAttemptsForMethod(method string, configured int) int {
+	if !isSafeRetryMethod(method) {
+		return 1
+	}
+	if configured <= 0 {
+		return 1
+	}
+	return configured
+}
+
+func responseWasWritten(c *fiber.Ctx) bool {
+	if c == nil {
+		return false
+	}
+	return c.Response().StatusCode() != fiber.StatusOK || len(c.Response().Body()) > 0
+}
+
+func buildRouteRetryOptions(method string, opts []RetryOptions) RetryOptions {
+	cfgRetry := config.Get().Retry
+	defaultRetry := RetryOptions{
+		MaxAttempts: defaultMaxAttemptsForMethod(method, cfgRetry.MaxAttempts),
+		Delay:       cfgRetry.Delay,
+		ShouldRetry: func(err error) bool {
+			if errors.Is(err, circuitbreaker.ErrClientResponse) || errors.Is(err, gobreaker.ErrOpenState) {
+				return false
+			}
+			if ferr, ok := err.(*fiber.Error); ok && ferr.Code >= 400 && ferr.Code < 500 {
+				return false
+			}
+			return err != nil
+		},
+	}
+
+	if len(opts) == 0 {
+		return defaultRetry
+	}
+
+	merged := opts[0]
+	if merged.ShouldRetry == nil {
+		merged.ShouldRetry = defaultRetry.ShouldRetry
+	}
+	if merged.MaxAttempts <= 0 {
+		merged.MaxAttempts = defaultRetry.MaxAttempts
+	}
+	if merged.Delay == 0 {
+		merged.Delay = defaultRetry.Delay
+	}
+	return merged
+}
+
 func isWebSocketRequest(c *fiber.Ctx) bool {
 	// RFC 6455
 	if c.Method() != fiber.MethodGet {
@@ -38,37 +97,23 @@ func isWebSocketRequest(c *fiber.Ctx) bool {
 
 // WrapHandler applies Circuit Breaker + Retry logic to a single handler
 func WrapHandler(name string, h fiber.Handler, opts ...RetryOptions) fiber.Handler {
-	cfgRetry := config.Get().Retry
-
-	// default retry config
-	defaultRetry := RetryOptions{
-		MaxAttempts: cfgRetry.MaxAttempts,
-		Delay:       cfgRetry.Delay,
-		ShouldRetry: func(err error) bool {
-			if errors.Is(err, circuitbreaker.ErrClientResponse) || errors.Is(err, gobreaker.ErrOpenState) {
-				return false
-			}
-			if ferr, ok := err.(*fiber.Error); ok && ferr.Code >= 400 && ferr.Code < 500 {
-				return false
-			}
-			return err != nil
-		},
-	}
-	// fallback to default
-	retry := defaultRetry
-	if len(opts) > 0 {
-		retry = opts[0]
-	}
-
 	return func(c *fiber.Ctx) error {
 		if isWebSocketRequest(c) {
 			logger.Info("🔌 WS bypass circuit: " + name)
 			return h(c)
 		}
 
+		method := c.Method()
+		callName := fmt.Sprintf("%s %s", method, name)
+		retry := buildRouteRetryOptions(method, opts)
+
 		var err error
 		for i := 0; i < retry.MaxAttempts; i++ {
-			_, err = circuitbreaker.Run(name, func(ctx context.Context) (interface{}, error) {
+			if i > 0 {
+				c.Response().Reset()
+			}
+
+			_, err = circuitbreaker.Run(callName, func(ctx context.Context) (interface{}, error) {
 				handleErr := h(c)
 
 				if ferr, ok := handleErr.(*fiber.Error); ok && ferr.Code >= 400 && ferr.Code < 500 {
@@ -93,11 +138,19 @@ func WrapHandler(name string, h fiber.Handler, opts ...RetryOptions) fiber.Handl
 				return err
 			}
 
-			logger.Warn(fmt.Sprintf("🔁 Retry [%s] #%d failed: %v", name, i+1, err))
+			if !isSafeRetryMethod(method) && responseWasWritten(c) {
+				return err
+			}
+
+			if i == retry.MaxAttempts-1 {
+				break
+			}
+
+			logger.Warn(fmt.Sprintf("🔁 Retry [%s] #%d failed: %v", callName, i+1, err))
 			time.Sleep(retry.Delay)
 		}
 
-		log.Printf("❌ Handler failed after retries: %s", name)
+		log.Printf("❌ Handler failed after retries: %s", callName)
 		return err
 	}
 }

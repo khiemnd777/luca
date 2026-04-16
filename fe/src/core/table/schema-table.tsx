@@ -1,6 +1,6 @@
 import * as React from "react";
 import { EditTable } from "@core/table/edit-table";
-import type { TableSchema, SortDir, ColumnDef, ColumnType } from "@core/table/table.types";
+import type { TableSchema, SortDir, ColumnDef, ColumnType, TableRowAction } from "@core/table/table.types";
 import { subscribeTableReload } from "@core/table/table-reload";
 import { resolveRowLabel } from "@core/table/table-utils";
 import { ConfirmDialog } from "@shared/components/dialog/confirm-dialog";
@@ -265,6 +265,11 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
   );
 
   const [expandedColumns, setExpandedColumns] = React.useState<ColumnDef<T>[]>(schema.columns);
+  const visibleRowActions = React.useMemo<TableRowAction<T>[]>(() => {
+    return (schema.rowActions ?? []).filter((action) =>
+      !action.permissions?.length || hasAnyPermissions(...action.permissions)
+    );
+  }, [schema.rowActions]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -307,6 +312,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         onView={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onView : undefined}
         onEdit={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onEdit : undefined}
         onDelete={hasAnyPermissions(...(schema.allowDeleting ?? [])) ? (schema.onDelete ? askDelete : undefined) : undefined}
+        rowActions={visibleRowActions}
         onReorder={schema.onReorder}
       />
       {schema.onDelete && (

@@ -16,7 +16,7 @@ import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DragIndicatorRoundedIcon from "@mui/icons-material/DragIndicatorRounded";
 import QRCode from "react-qr-code";
-import type { ColumnDef, ImageShape, SortDir } from "@core/table/table.types";
+import type { ColumnDef, ImageShape, SortDir, TableRowAction } from "@core/table/table.types";
 import { useDisplayUrl } from "@core/photo/use-display-url";
 import { camelToSnake } from "@shared/utils/string.utils";
 import { formatDate, formatDateTime } from "@root/shared/utils/datetime.utils";
@@ -47,6 +47,7 @@ export type EditTableProps<T> = {
   onRowClick?: (row: T) => void;
   onEdit?: (row: T) => void;
   onDelete?: (row: T) => void;
+  rowActions?: TableRowAction<T>[];
   error?: string | null;
   /** Header dính khi scroll dọc */
   stickyHeader?: boolean;
@@ -335,6 +336,7 @@ export function EditTable<T extends { id?: string | number }>({
   onRowClick,
   onEdit,
   onDelete,
+  rowActions = [],
   error = null,
   stickyHeader = true,
   dense = true,
@@ -388,6 +390,93 @@ export function EditTable<T extends { id?: string | number }>({
     event.stopPropagation();
   }, []);
 
+  const actionButtons = React.useMemo(() => {
+    const actions: Array<{
+      key: string;
+      label: React.ReactNode;
+      icon: React.ReactNode;
+      color?: "inherit" | "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning";
+      sx?: Record<string, unknown>;
+      onClick?: (row: T) => void | Promise<void>;
+    }> = [];
+
+    if (onView) {
+      actions.push({
+        key: "view",
+        label: "View",
+        icon: <VisibilityRoundedIcon fontSize="small" />,
+        onClick: onView,
+      });
+    }
+
+    if (onEdit) {
+      actions.push({
+        key: "edit",
+        label: "Edit",
+        icon: <EditRoundedIcon fontSize="small" />,
+        onClick: onEdit,
+        sx: {
+          color: "#1976D2",
+          "&:hover": {
+            backgroundColor: alpha("#1976D2", 0.1),
+          },
+        },
+      });
+    }
+
+    rowActions.forEach((action) => {
+      actions.push({
+        key: action.key,
+        label: resolveLocalizedText(action.label, t),
+        icon: action.icon,
+        color: action.color,
+        sx: action.sx as Record<string, unknown> | undefined,
+        onClick: action.onClick,
+      });
+    });
+
+    if (onDelete) {
+      actions.push({
+        key: "delete",
+        label: "Delete",
+        icon: <DeleteRoundedIcon fontSize="small" />,
+        color: "error",
+        onClick: onDelete,
+      });
+    }
+
+    return actions;
+  }, [onDelete, onEdit, onView, rowActions, t]);
+
+  const renderActionButtons = React.useCallback((row?: T) => (
+    <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+      {actionButtons.map((action) => {
+        const button = (
+          <IconButton
+            size="small"
+            tabIndex={row ? undefined : -1}
+            color={action.color}
+            onClick={row ? (event) => {
+              stopRowClick(event);
+              void action.onClick?.(row);
+            } : undefined}
+            sx={action.sx}
+          >
+            {action.icon}
+          </IconButton>
+        );
+
+        if (!row) return <React.Fragment key={action.key}>{button}</React.Fragment>;
+
+        return (
+          <Tooltip key={action.key} title={action.label}>
+            {button}
+          </Tooltip>
+        );
+      })}
+    </Stack>
+  ), [actionButtons, stopRowClick]);
+
   const getRowA11yProps = React.useCallback((row: T) => {
     if (!isClickableRow) return {};
     return {
@@ -431,7 +520,7 @@ export function EditTable<T extends { id?: string | number }>({
   };
 
   // ==== actions column as first (sticky-left) ====
-  const hasActions = Boolean(onView || onEdit || onDelete);
+  const hasActions = actionButtons.length > 0;
   const enableDnd = typeof onReorder === "function";
   const dndWidth = 48;
   const [actionsMeasuredWidth, setActionsMeasuredWidth] = React.useState(0);
@@ -514,7 +603,7 @@ export function EditTable<T extends { id?: string | number }>({
       observer.observe(headerEl);
       return () => observer.disconnect();
     }
-  }, [hasActions, onView, onEdit, onDelete]);
+  }, [actionButtons.length, hasActions]);
 
   const resolveColWidth = React.useCallback(
     (col: ColumnDef<T>, idx: number) => {
@@ -861,29 +950,9 @@ export function EditTable<T extends { id?: string | number }>({
                   borderRightColor: stickyBoundaryColor,
                 }}
               >
-                <Stack
-                  aria-hidden="true"
-                  direction="row"
-                  spacing={0.5}
-                  justifyContent="flex-end"
-                  sx={{ visibility: "hidden", pointerEvents: "none" }}
-                >
-                  {onView && (
-                    <IconButton size="small" tabIndex={-1}>
-                      <VisibilityRoundedIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {onEdit && (
-                    <IconButton size="small" tabIndex={-1}>
-                      <EditRoundedIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                  {onDelete && (
-                    <IconButton size="small" tabIndex={-1}>
-                      <DeleteRoundedIcon fontSize="small" />
-                    </IconButton>
-                  )}
-                </Stack>
+                <Box sx={{ visibility: "hidden", pointerEvents: "none" }}>
+                  {renderActionButtons()}
+                </Box>
               </Box>
             )}
 
@@ -1119,47 +1188,7 @@ export function EditTable<T extends { id?: string | number }>({
                                   justifyContent: "flex-end",
                                 }}
                               >
-                                <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                                  {onView && (
-                                    <Tooltip title="View">
-                                      <IconButton size="small" onClick={(event) => {
-                                        stopRowClick(event);
-                                        onView(r);
-                                      }}>
-                                        <VisibilityRoundedIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  {onEdit && (
-                                    <Tooltip title="Edit">
-                                      <IconButton
-                                        size="small"
-                                        onClick={(event) => {
-                                          stopRowClick(event);
-                                          onEdit(r);
-                                        }}
-                                        sx={{
-                                          color: "#1976D2",
-                                          "&:hover": {
-                                            backgroundColor: alpha("#1976D2", 0.1),
-                                          },
-                                        }}
-                                      >
-                                        <EditRoundedIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                  {onDelete && (
-                                    <Tooltip title="Delete">
-                                      <IconButton size="small" color="error" onClick={(event) => {
-                                        stopRowClick(event);
-                                        onDelete(r);
-                                      }}>
-                                        <DeleteRoundedIcon fontSize="small" />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-                                </Stack>
+                                {renderActionButtons(r)}
                               </Box>
                             )}
 
@@ -1243,47 +1272,7 @@ export function EditTable<T extends { id?: string | number }>({
                         justifyContent: "flex-end",
                       }}
                     >
-                      <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                        {onView && (
-                          <Tooltip title="View">
-                            <IconButton size="small" onClick={(event) => {
-                              stopRowClick(event);
-                              onView(r);
-                            }}>
-                              <VisibilityRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {onEdit && (
-                          <Tooltip title="Edit">
-                            <IconButton
-                              size="small"
-                              onClick={(event) => {
-                                stopRowClick(event);
-                                onEdit(r);
-                              }}
-                              sx={{
-                                color: "#1976D2",
-                                "&:hover": {
-                                  backgroundColor: alpha("#1976D2", 0.1),
-                                },
-                              }}
-                            >
-                              <EditRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                        {onDelete && (
-                          <Tooltip title="Delete">
-                            <IconButton size="small" color="error" onClick={(event) => {
-                              stopRowClick(event);
-                              onDelete(r);
-                            }}>
-                              <DeleteRoundedIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
-                        )}
-                      </Stack>
+                      {renderActionButtons(r)}
                     </Box>
                   )}
 

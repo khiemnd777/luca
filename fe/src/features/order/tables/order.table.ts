@@ -8,6 +8,9 @@ import { navigate } from "@root/core/navigation/navigate";
 import { getLatestOrderItemIdByOrderId, unlink } from "../api/order-item.api";
 import type { OrderAdvancedSearchFilters } from "@features/order/model/order-advanced-search.model";
 import { hasAdvancedSearchFilters } from "@features/order/utils/order-advanced-search.store";
+import { openFormDialog } from "@core/form/form-dialog.service";
+import EventRepeatIcon from "@mui/icons-material/EventRepeat";
+import { createElement } from "react";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -73,7 +76,22 @@ registerTable("orders", () => {
     // allowUpdating: ["order.update"],
     // allowDeleting: ["order.delete"],
     onView: (row: OrderModel) => { navigate(`/order/${row.id}`) },
-    // onEdit: (row: OrderModel) => openFormDialog("order-edit", { initial: { id: row.id } }),
+    onEdit: (row: OrderModel) => openFormDialog("order-edit", { initial: { id: row.id } }),
+    rowActions: [
+      {
+        key: "remake",
+        label: "Thêm đơn làm lại",
+        icon: createElement(EventRepeatIcon, { fontSize: "small" }),
+        permissions: ["order.create"],
+        onClick: (row: OrderModel) => openFormDialog("order-remake", { initial: { id: row.id } }),
+        sx: {
+          color: "#2E7D32",
+          "&:hover": {
+            backgroundColor: "rgba(46, 125, 50, 0.1)",
+          },
+        },
+      },
+    ],
     async onDelete(row) {
       const resolvedOrderItemId = await getLatestOrderItemIdByOrderId(row.id);
       await unlink(row.id, resolvedOrderItemId);

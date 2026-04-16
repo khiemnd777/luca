@@ -65,13 +65,13 @@ func (c *HttpClient) CallRequestWithPort(ctx context.Context, method, module str
 		return err
 	}
 
-	retry := getRetryOptions(opts)
+	retry := getRetryOptions(method, opts)
 	var lastErr error
 
 	for i := 0; i < retry.MaxAttempts; i++ {
 		_, err := circuitbreaker.Run(fmt.Sprintf("%s:%s", module, path), func(_ context.Context) (interface{}, error) {
 			log.Printf("URL: %s", url)
-			req, err := http.NewRequestWithContext(ctx, method, url, reqBody)
+			req, err := http.NewRequestWithContext(ctx, method, url, newRequestBodyReader(reqBody))
 			if err != nil {
 				return nil, err
 			}
@@ -100,6 +100,9 @@ func (c *HttpClient) CallRequestWithPort(ctx context.Context, method, module str
 		}
 
 		lastErr = err
+		if i == retry.MaxAttempts-1 {
+			break
+		}
 		logger.Warn(fmt.Sprintf("🔁 Retry [%s %s] #%d failed: %v", method, url, i+1, err))
 		time.Sleep(retry.Delay)
 	}
@@ -166,9 +169,25 @@ func parseErrorResponse(resp *http.Response) error {
 	}
 }
 
-func getRetryOptions(opts []RetryOptions) RetryOptions {
+func newRequestBodyReader(body io.Reader) io.Reader {
+	if body == nil {
+		return nil
+	}
+	if seeker, ok := body.(io.ReadSeeker); ok {
+		if _, err := seeker.Seek(0, io.SeekStart); err == nil {
+			return seeker
+		}
+	}
+	payload, err := io.ReadAll(body)
+	if err != nil {
+		return nil
+	}
+	return bytes.NewReader(payload)
+}
+
+func getRetryOptions(method string, opts []RetryOptions) RetryOptions {
 	defaultRetry := RetryOptions{
-		MaxAttempts: 3,
+		MaxAttempts: defaultMaxAttemptsForMethod(method, 3),
 		Delay:       200 * time.Millisecond,
 		ShouldRetry: func(err error) bool {
 			if err == nil {

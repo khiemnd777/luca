@@ -38,6 +38,14 @@ func RouterPostWithOptions(router fiber.Router, path string, opts RetryOptions, 
 	router.Post(path, WrapHandlers(path, handlers, opts)...)
 }
 
+func RouterPutWithOptions(router fiber.Router, path string, opts RetryOptions, handlers ...fiber.Handler) {
+	router.Put(path, WrapHandlers(path, handlers, opts)...)
+}
+
+func RouterDeleteWithOptions(router fiber.Router, path string, opts RetryOptions, handlers ...fiber.Handler) {
+	router.Delete(path, WrapHandlers(path, handlers, opts)...)
+}
+
 // RequestWithOptions allows passing custom retry options
 func RouterRequestWithOptions(method string, router fiber.Router, path string, opts RetryOptions, handlers ...fiber.Handler) {
 	router.Add(method, path, WrapHandlers(path, handlers, opts)...)

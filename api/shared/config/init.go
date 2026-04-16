@@ -41,6 +41,11 @@ func Get() *AppConfig {
 	return globalConfig
 }
 
+// SetForTests injects config for package-level tests without loading runtime config files.
+func SetForTests(cfg *AppConfig) {
+	globalConfig = cfg
+}
+
 func Load(path string) (*AppConfig, error) {
 	var cfg AppConfig
 	if err := UnmarshalYAMLFile(path, &cfg); err != nil {

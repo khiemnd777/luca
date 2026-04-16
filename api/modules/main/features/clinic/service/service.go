@@ -141,7 +141,16 @@ func (s *clinicService) Update(ctx context.Context, deptID int, input model.Clin
 }
 
 func (s *clinicService) upsertSearch(ctx context.Context, deptID int, dto *model.ClinicDTO) {
+	if dto == nil {
+		return
+	}
+
 	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "clinic", []any{dto.PhoneNumber}, dto.CustomFields)
+
+	var content *string
+	if dto.Brief != nil && *dto.Brief != "" {
+		content = utils.Ptr(*dto.Brief)
+	}
 
 	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
 		EntityType: "clinic",
@@ -149,7 +158,7 @@ func (s *clinicService) upsertSearch(ctx context.Context, deptID int, dto *model
 		Title:      dto.Name,
 		Subtitle:   nil,
 		Keywords:   &kwPtr,
-		Content:    utils.Ptr(*dto.Brief),
+		Content:    content,
 		Attributes: map[string]any{
 			"logo": dto.Logo,
 		},

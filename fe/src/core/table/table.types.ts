@@ -1,5 +1,6 @@
 import type { ListResult } from "@core/types/list-result";
 import type { LocalizedText } from "@root/core/i18n/localized-text";
+import type { SxProps, Theme } from "@mui/material/styles";
 
 export type SortDir = "asc" | "desc";
 
@@ -103,6 +104,26 @@ export type ColumnDef<T> = {
   metadata?: MetadataColumnOptions;
 };
 
+export type TableRowActionColor =
+  | "inherit"
+  | "default"
+  | "primary"
+  | "secondary"
+  | "error"
+  | "info"
+  | "success"
+  | "warning";
+
+export type TableRowAction<T> = {
+  key: string;
+  label: LocalizedText;
+  icon: React.ReactNode;
+  onClick: (row: T) => void | Promise<void>;
+  permissions?: string[];
+  color?: TableRowActionColor;
+  sx?: SxProps<Theme>;
+};
+
 export type TableSchema<T> = {
   columns: ColumnDef<T>[];
 
@@ -121,6 +142,7 @@ export type TableSchema<T> = {
   onRowClick?: (row: T) => void | Promise<void>;
   onEdit?: (row: T) => void | Promise<void>;
   onDelete?: (row: T) => void | Promise<void>;
+  rowActions?: TableRowAction<T>[];
   onReorder?: (newRows: T[], from: number, to: number) => void;
 
   // Permissions

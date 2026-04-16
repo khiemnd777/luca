@@ -129,10 +129,20 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 			},
 		},
 		Attachments: DeliveryNoteAttachments{
-			Items: []DeliveryNoteAttachmentItem{{ID: 1, Name: "Bộ chứng từ", Checked: true}},
+			Items: []DeliveryNoteAttachmentItem{
+				{ID: 1, Name: "Bộ chứng từ", Checked: true},
+				{ID: 2, Name: "Máng ép", Checked: false},
+				{ID: 3, Name: "Hộp đựng", Checked: true},
+				{ID: 4, Name: "Sáp cắn", Checked: false},
+				{ID: 5, Name: "Phiếu màu", Checked: true},
+			},
 		},
 		ImplantAccessories: DeliveryNoteImplantAccessories{
-			Items: []DeliveryNoteImplantAccessoryItem{{ID: 1, Name: "Tay vặn", Checked: true}},
+			Items: []DeliveryNoteImplantAccessoryItem{
+				{ID: 1, Name: "Tay vặn", Checked: true},
+				{ID: 2, Name: "Transfer", Checked: false},
+				{ID: 3, Name: "Analog", Checked: true},
+			},
 		},
 		PaymentMethod: DeliveryNotePaymentMethod{
 			TienMat: true,
@@ -160,6 +170,15 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "GIẢM GIÁ") || !strings.Contains(rendered, "THÀNH TIỀN") {
 		t.Fatal("expected amount summary rows to be rendered when show amounts is enabled")
+	}
+	if !strings.Contains(rendered, ".summary-row td {") {
+		t.Fatal("expected compact summary row styles to be rendered")
+	}
+	if !strings.Contains(rendered, ".check-cell {\n      display: table-cell;\n      width: 25%;") {
+		t.Fatal("expected checklist cells to render in four columns")
+	}
+	if strings.Count(rendered, "<div class=\"check-cell\"></div>") != 4 {
+		t.Fatalf("expected checklist rendering to pad incomplete four-column rows, got %d fillers", strings.Count(rendered, "<div class=\"check-cell\"></div>"))
 	}
 }
 

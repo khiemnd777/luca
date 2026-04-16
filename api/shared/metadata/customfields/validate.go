@@ -2,6 +2,7 @@ package customfields
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -19,6 +20,12 @@ type ValidateResult struct {
 func (m *Manager) Validate(ctx context.Context, slug string, incoming map[string]any, isPatch bool) (*ValidateResult, error) {
 	schema, err := m.GetSchema(ctx, slug)
 	if err != nil {
+		if errors.Is(err, ErrCollectionNotFound) && len(incoming) == 0 {
+			return &ValidateResult{
+				Clean: map[string]any{},
+				Errs:  map[string]string{},
+			}, nil
+		}
 		return nil, err
 	}
 

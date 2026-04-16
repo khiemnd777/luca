@@ -12,10 +12,11 @@ import (
 )
 
 var (
-	ErrUnknownField  = errors.New("unknown custom field")
-	ErrRequired      = errors.New("required field missing")
-	ErrInvalidType   = errors.New("invalid type")
-	ErrInvalidOption = errors.New("invalid option")
+	ErrUnknownField       = errors.New("unknown custom field")
+	ErrRequired           = errors.New("required field missing")
+	ErrInvalidType        = errors.New("invalid type")
+	ErrInvalidOption      = errors.New("invalid option")
+	ErrCollectionNotFound = errors.New("custom field collection not found")
 )
 
 type Store interface {
@@ -28,6 +29,9 @@ type PGStore struct{ DB *sql.DB }
 func (s *PGStore) GetIDBySlug(ctx context.Context, slug string) (*int, error) {
 	var collID int
 	if err := s.DB.QueryRowContext(ctx, `SELECT id FROM collections WHERE slug=$1`, slug).Scan(&collID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %s", ErrCollectionNotFound, slug)
+		}
 		return nil, fmt.Errorf("load collection: %w", err)
 	}
 	return &collID, nil
@@ -36,6 +40,9 @@ func (s *PGStore) GetIDBySlug(ctx context.Context, slug string) (*int, error) {
 func (s *PGStore) LoadSchema(ctx context.Context, slug string) (*Schema, error) {
 	var collID int
 	if err := s.DB.QueryRowContext(ctx, `SELECT id FROM collections WHERE slug=$1`, slug).Scan(&collID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%w: %s", ErrCollectionNotFound, slug)
+		}
 		return nil, fmt.Errorf("load collection: %w", err)
 	}
 	rows, err := s.DB.QueryContext(ctx, `
@@ -90,11 +97,15 @@ func (m *Manager) GetSearchFieldValues(
 	slug string,
 	data map[string]any,
 ) ([]string, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+
 	schema, err := m.GetSchema(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
-	if schema == nil || data == nil {
+	if schema == nil {
 		return nil, nil
 	}
 

@@ -121,12 +121,21 @@ func (s *patientService) Update(ctx context.Context, deptID int, input model.Pat
 }
 
 func upsertSearch(deptID int, dto *model.PatientDTO) {
+	if dto == nil {
+		return
+	}
+
+	var keywords *string
+	if dto.PhoneNumber != nil && *dto.PhoneNumber != "" {
+		keywords = utils.Ptr(*dto.PhoneNumber)
+	}
+
 	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
 		EntityType: "patient",
 		EntityID:   int64(dto.ID),
 		Title:      dto.Name,
 		Subtitle:   nil,
-		Keywords:   utils.Ptr(*dto.PhoneNumber),
+		Keywords:   keywords,
 		Content:    nil,
 		Attributes: nil,
 		OrgID:      utils.Ptr(int64(deptID)),
