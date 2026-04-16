@@ -44,7 +44,29 @@ export type ModeText =
   | { create: string; update: string }
   | ((ctx: { mode: FormMode; values: any; result?: any }) => string);
 
-export type GroupConfig = { name: string; label?: string; col?: number };
+export type GroupSectionConfig = {
+  name: string;
+  label?: string;
+  col?: number;
+};
+
+export type GroupConfig = {
+  name: string;
+  label?: string;
+  col?: number;
+  sections?: GroupSectionConfig[];
+};
+
+export type GroupSectionPlacement = GroupSectionConfig & {
+  fields: FieldDef[];
+  isFallback?: boolean;
+};
+
+export type GroupPlacement = Omit<GroupConfig, "sections"> & {
+  rootFields: FieldDef[];
+  sections: GroupSectionPlacement[];
+  isFallback?: boolean;
+};
 
 export type SubmitButton = {
   name: string;
@@ -125,4 +147,3 @@ export type AutoFormRef = {
   setValue: (name: string, v: any) => void;
   setAllValues: (obj: Record<string, any>) => void
 };
-

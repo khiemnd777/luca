@@ -15,19 +15,23 @@ export function buildHistoricalOrderSchema(): FormSchema {
     {
       kind: "text",
       name: "latestOrderItem.code",
+      section: "order_info",
       label: "Mã đơn hàng",
       asText: true,
     },
     {
       kind: "text",
       name: "latestOrderItem.codeOriginal",
+      section: "order_info",
       label: "Mã gốc",
       asText: true,
+      showIf: (v) => v["latestOrderItem.remakeCount"] > 0,
     },
     {
       kind: "text",
       name: "remakeCount",
       prop: "latestOrderItem",
+      section: "order_info",
       label: "Số lần làm lại",
       asText: true,
       showIf: (v) => v["latestOrderItem.remakeCount"] > 0,
@@ -35,18 +39,21 @@ export function buildHistoricalOrderSchema(): FormSchema {
     {
       kind: "text",
       name: "clinicName",
+      section: "participants",
       label: "Nha sĩ",
       asText: true,
     },
     {
       kind: "text",
       name: "dentistName",
+      section: "participants",
       label: "Nha sĩ",
       asText: true,
     },
     {
       kind: "text",
       name: "patientName",
+      section: "participants",
       label: "Bệnh nhân",
       asText: true,
     },
@@ -57,6 +64,13 @@ export function buildHistoricalOrderSchema(): FormSchema {
       metadata: {
         collection: "order",
         mode: "whole",
+        groups: [
+          {
+            group: "general",
+            section: "participants",
+            fields: ["clinicId", "dentistId", "patientId", "refUserId"],
+          },
+        ],
         ignoreFields: ["clinicId", "dentistId", "patientId"],
         def: [
           // {
@@ -88,7 +102,7 @@ export function buildHistoricalOrderSchema(): FormSchema {
         def: [
           {
             name: "productCategory",
-            disableIf: () => true,
+            showIf: () => false,
           }
         ],
       }
@@ -147,11 +161,18 @@ export function buildHistoricalOrderSchema(): FormSchema {
         ignoreFields: ["isCash", "isCredit", "retailPrice", "quantity", "vat", "discountPrice", "totalPrice"],
         groups: [
           {
-            group: "status",
+            group: "general",
+            section: "order_info",
+            fields: ["deliveryDate"],
+          },
+          {
+            group: "general",
+            section: "status",
             fields: ["status", "priority"],
           },
           {
-            group: "note",
+            group: "general",
+            section: "note",
             fields: ["note"],
           },
         ],
@@ -295,18 +316,32 @@ export function buildHistoricalOrderSchema(): FormSchema {
         name: "general",
         label: "Thông tin chung:",
         col: 2,
+        sections: [
+          {
+            name: "order_info",
+            label: "Thông tin đơn hàng",
+            col: 2,
+          },
+          {
+            name: "participants",
+            label: "Khách hàng",
+            col: 2,
+          },
+          {
+            name: "status",
+            label: "Trạng thái đơn hàng",
+            col: 2,
+          },
+          {
+            name: "note",
+            label: "Ghi chú",
+            col: 1,
+          },
+        ],
       },
       {
         name: "remake",
         col: 1,
-      },
-      {
-        name: "note",
-        col: 1,
-      },
-      {
-        name: "status",
-        col: 2,
       },
       {
         name: "products",

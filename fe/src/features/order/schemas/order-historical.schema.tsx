@@ -33,7 +33,7 @@ export function buildHistoricalOrderSchema(): FormSchema {
         def: [
           {
             name: "productCategory",
-            asText: true,
+            showIf: () => false,
           }
         ],
       }

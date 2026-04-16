@@ -10,6 +10,9 @@ import type {
   AutoFormProps,
   FormSchema,
   FormMode,
+  GroupConfig,
+  GroupPlacement,
+  GroupSectionPlacement,
   ModeText,
   SubmitButton,
 } from "@core/form/form.types";
@@ -210,7 +213,7 @@ async function expandOneMetadataBlock(
 
   for (const mf of fieldsToUse ?? []) {
     const kind = mapMetadataFieldTypeToFieldKind(mf.type);
-    const group = resolveMetadataFieldGroup(metaField, mf.name);
+    const placement = resolveMetadataFieldPlacement(metaField, mf.name);
 
     if (kind === "currency-equation") {
       const prop = metaField.prop;
@@ -223,7 +226,8 @@ async function expandOneMetadataBlock(
         label: mf.label ?? mf.name,
         currencyEquation: snakeToCamel(mf.defaultValue ?? ""),
         fullWidth: true,
-        group,
+        group: placement.group,
+        section: placement.section,
         rules: mergeMetadataRules(mf.required, override?.rules),
       };
       if (override) {
@@ -246,7 +250,8 @@ async function expandOneMetadataBlock(
         label: mf.label ?? mf.name,
         options: opts,
         fullWidth: true,
-        group,
+        group: placement.group,
+        section: placement.section,
         rules: mergeMetadataRules(mf.required, override?.rules),
       };
       if (override) {
@@ -282,7 +287,8 @@ async function expandOneMetadataBlock(
           name: `${relPrefix}.${mf.name}`,
           altName: `${altPrefix}.${mf.name}`,
           label: mf.label ?? mf.name,
-          group,
+          group: placement.group,
+          section: placement.section,
           placeholder: relation.placeholer ?? "",
           fullWidth: true,
           onSelect: metaField.onSelect,
@@ -384,7 +390,8 @@ async function expandOneMetadataBlock(
           kind: "searchlist",
           name: `${relPrefix}.${mf.name}`,
           label: mf.label ?? mf.name,
-          group,
+          group: placement.group,
+          section: placement.section,
           placeholder: relation.placeholer ?? "",
           fullWidth: true,
           onSelect: metaField.onSelect,
@@ -456,7 +463,8 @@ async function expandOneMetadataBlock(
       label: mf.label ?? mf.name,
       fullWidth: true,
       rules: mergeMetadataRules(mf.required, override?.rules),
-      group,
+      group: placement.group,
+      section: placement.section,
     };
     if (override) {
       const { name: _omit, ...rest } = override;
@@ -477,32 +485,117 @@ async function expandOneMetadataBlock(
    ======================================================================== */
 // const defaultFetcher = (input: string, init: RequestInit) => fetch(input, init);
 
-function resolveMetadataFieldGroup(
+function resolveMetadataFieldPlacement(
   metaField: FieldDef,
   fieldName: string
-): string {
+): { group: string; section?: string } {
   const groups = metaField.metadata?.groups;
   if (!groups || groups.length === 0) {
-    return metaField.group ?? "general";
+    return {
+      group: metaField.group ?? "general",
+      section: metaField.section,
+    };
   }
 
-  let fallbackGroup: string | null = null;
+  let fallbackPlacement: { group: string; section?: string } | null = null;
 
   for (const g of groups) {
     if (Array.isArray(g.fields) && g.fields.length > 0) {
       if (g.fields.includes(`customFields.${fieldName}`) || g.fields.includes(fieldName)) {
-        return g.group;
+        return {
+          group: g.group,
+          section: g.section,
+        };
       }
     }
 
     if (!g.fields || g.fields.length === 0) {
-      fallbackGroup = g.group;
+      fallbackPlacement = {
+        group: g.group,
+        section: g.section,
+      };
     }
   }
 
-  if (fallbackGroup) return fallbackGroup;
+  if (fallbackPlacement) return fallbackPlacement;
 
-  return metaField.group ?? "general";
+  return {
+    group: metaField.group ?? "general",
+    section: metaField.section,
+  };
+}
+
+function buildGroupPlacements(
+  fields: FieldDef[],
+  groupsConfig: GroupConfig[],
+): GroupPlacement[] {
+  const groupOrder: string[] = [];
+  const groups = new Map<
+    string,
+    GroupPlacement & { sectionsMap: Map<string, GroupSectionPlacement> }
+  >();
+
+  const ensureGroup = (name: string, config?: GroupConfig, isFallback = false) => {
+    let group = groups.get(name);
+    if (!group) {
+      group = {
+        name,
+        label: config?.label,
+        col: config?.col,
+        sections: [],
+        rootFields: [],
+        sectionsMap: new Map(),
+        isFallback,
+      };
+
+      groups.set(name, group);
+      groupOrder.push(name);
+
+      for (const sectionConfig of config?.sections ?? []) {
+        const sectionPlacement: GroupSectionPlacement = {
+          ...sectionConfig,
+          fields: [],
+        };
+        group.sections.push(sectionPlacement);
+        group.sectionsMap.set(sectionConfig.name, sectionPlacement);
+      }
+    }
+
+    return group;
+  };
+
+  for (const config of groupsConfig) {
+    ensureGroup(config.name, config);
+  }
+
+  for (const field of fields) {
+    const groupName = field.group ?? "general";
+    const group = ensureGroup(groupName, undefined, true);
+
+    if (!field.section) {
+      group.rootFields.push(field);
+      continue;
+    }
+
+    let section = group.sectionsMap.get(field.section);
+    if (!section) {
+      section = {
+        name: field.section,
+        col: group.col,
+        fields: [],
+        isFallback: true,
+      };
+      group.sections.push(section);
+      group.sectionsMap.set(field.section, section);
+    }
+
+    section.fields.push(field);
+  }
+
+  return groupOrder.map((name) => {
+    const { sectionsMap: _sectionsMap, ...group } = groups.get(name)!;
+    return group;
+  });
 }
 
 function mergeMetadataRules(
@@ -844,26 +937,10 @@ export const AutoForm = React.forwardRef<AutoFormRef, Props>(
     // ========================================
     const groupsConfig = schema.groups ?? [{ name: "general", col: 1 }];
 
-    // gom field theo group
-    const groupMap = React.useMemo(() => {
-      const map = new Map<string, FieldDef[]>();
-
-      // init map theo groupsConfig
-      for (const g of groupsConfig) map.set(g.name, []);
-
-      // fallback cho field.group không nằm trong config
-      const ensureGroup = (name: string) => {
-        if (!map.has(name)) map.set(name, []);
-      };
-
-      for (const f of finalFields) {
-        const gname = f.group ?? "general";
-        ensureGroup(gname);
-        map.get(gname)!.push(f);
-      }
-
-      return map;
-    }, [finalFields, groupsConfig]);
+    const groups = React.useMemo(
+      () => buildGroupPlacements(finalFields, groupsConfig),
+      [finalFields, groupsConfig],
+    );
 
 
     /* NON-METADATA FIELDS */
@@ -1316,8 +1393,7 @@ export const AutoForm = React.forwardRef<AutoFormRef, Props>(
           <div>Đang tải…</div>
         ) : (
           <AutoFormFieldsGrouped
-            groupMap={groupMap}
-            groupsConfig={groupsConfig}
+            groups={groups}
             values={values}
             setValue={setValueUser}
             errors={errors}

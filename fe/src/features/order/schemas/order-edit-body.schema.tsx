@@ -38,7 +38,7 @@ export function buildEditOrderSchema(): FormSchema {
         def: [
           {
             name: "productCategory",
-            asText: true,
+            showIf: () => false,
           }
         ],
       }

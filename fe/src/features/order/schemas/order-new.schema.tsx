@@ -27,6 +27,7 @@ export function buildNewOrderSchema(): FormSchema {
     {
       kind: "searchsingle",
       name: "code",
+      section: "order_info",
       allowUnmatched: true,
       label: "Mã đơn hàng",
       placeholder: "Nhập mã đơn hàng",
@@ -96,6 +97,7 @@ export function buildNewOrderSchema(): FormSchema {
       name: "code",
       prop: "latestOrderItem",
       kind: "text",
+      section: "order_info",
       label: "Mã đơn làm lại",
       showIf: (values) => values["latestOrderItem.remakeCount"] > 0,
     },
@@ -104,6 +106,7 @@ export function buildNewOrderSchema(): FormSchema {
       name: "remakeCount",
       prop: "latestOrderItem",
       kind: "text",
+      section: "order_info",
       label: "Số lần làm lại",
       showIf: (values) => values["latestOrderItem.remakeCount"] > 0,
       disableIf: (_) => true,
@@ -188,6 +191,13 @@ export function buildNewOrderSchema(): FormSchema {
       metadata: {
         collection: "order",
         mode: "whole",
+        groups: [
+          {
+            group: "general",
+            section: "participants",
+            fields: ["clinicId", "dentistId", "patientId", "refUserId"],
+          },
+        ],
         def: [
           {
             name: "clinicId",
@@ -347,11 +357,18 @@ export function buildNewOrderSchema(): FormSchema {
         ignoreFields: ["status", "isCash", "isCredit", "retailPrice", "quantity", "vat", "discountPrice", "totalPrice"],
         groups: [
           {
-            group: "status",
+            group: "general",
+            section: "order_info",
+            fields: ["deliveryDate"],
+          },
+          {
+            group: "general",
+            section: "status",
             fields: ["priority"],
           },
           {
-            group: "note",
+            group: "general",
+            section: "note",
             fields: ["note"],
           },
         ],
@@ -532,15 +549,28 @@ export function buildNewOrderSchema(): FormSchema {
         name: "general",
         label: "Thông tin chung:",
         col: 2,
-      },
-      {
-        name: "note",
-        col: 1,
-      },
-      {
-        name: "status",
-        label: "Trạng thái đơn hàng:",
-        col: 2,
+        sections: [
+          {
+            name: "order_info",
+            label: "Thông tin đơn hàng",
+            col: 2,
+          },
+          {
+            name: "participants",
+            label: "Khách hàng",
+            col: 2,
+          },
+          {
+            name: "status",
+            label: "Trạng thái đơn hàng",
+            col: 2,
+          },
+          {
+            name: "note",
+            label: "Ghi chú",
+            col: 1,
+          },
+        ],
       },
       {
         name: "promotion",

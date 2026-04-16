@@ -28,6 +28,7 @@ export function buildRemakeOrderSchema(): FormSchema {
       name: "code",
       prop: "latestOrderItem",
       kind: "text",
+      section: "order_info",
       label: "Mã đơn làm lại",
       showIf: (values) => values["latestOrderItem.remakeCount"] > 0,
     },
@@ -36,6 +37,7 @@ export function buildRemakeOrderSchema(): FormSchema {
       name: "remakeCount",
       prop: "latestOrderItem",
       kind: "text",
+      section: "remake_info",
       label: "Số lần làm lại",
       showIf: (values) => values["latestOrderItem.remakeCount"] > 0,
       disableIf: (_, __) => true,
@@ -120,6 +122,13 @@ export function buildRemakeOrderSchema(): FormSchema {
       metadata: {
         collection: "order",
         mode: "whole",
+        groups: [
+          {
+            group: "general",
+            section: "participants",
+            fields: ["clinicId", "dentistId", "patientId", "refUserId"],
+          },
+        ],
         def: [
           {
             name: "clinicId",
@@ -254,8 +263,19 @@ export function buildRemakeOrderSchema(): FormSchema {
         mode: "whole",
         groups: [
           {
-            group: "remake",
+            group: "general",
+            section: "remake_info",
+            fields: ["remakeType", "remakeReason"],
           }
+        ],
+        def: [
+          {
+            name: "remakeType",
+          },
+          {
+            name: "remakeReason",
+            col: 2,
+          },
         ],
       }
     },
@@ -271,11 +291,18 @@ export function buildRemakeOrderSchema(): FormSchema {
         ignoreFields: ["status", "retailPrice", "quantity", "vat", "discountPrice", "totalPrice"],
         groups: [
           {
-            group: "status",
+            group: "general",
+            section: "order_info",
+            fields: ["deliveryDate"],
+          },
+          {
+            group: "general",
+            section: "status",
             fields: ["priority"],
           },
           {
-            group: "note",
+            group: "general",
+            section: "note",
             fields: ["note"],
           },
         ],
@@ -457,23 +484,37 @@ export function buildRemakeOrderSchema(): FormSchema {
         name: "general",
         label: "Thông tin chung:",
         col: 2,
-      },
-      {
-        name: "note",
-        col: 1,
-      },
-      {
-        name: "status",
-        label: "Trạng thái đơn hàng:",
-        col: 2,
+        sections: [
+          {
+            name: "order_info",
+            label: "Thông tin đơn hàng",
+            col: 2,
+          },
+          {
+            name: "participants",
+            label: "Khách hàng",
+            col: 2,
+          },
+          {
+            name: "remake_info",
+            label: "Thông tin làm lại",
+            col: 2,
+          },
+          {
+            name: "status",
+            label: "Trạng thái đơn hàng",
+            col: 2,
+          },
+          {
+            name: "note",
+            label: "Ghi chú",
+            col: 1,
+          },
+        ],
       },
       {
         name: "promotion",
         label: "Khuyến mãi:",
-      },
-      {
-        name: "remake",
-        col: 1,
       },
       {
         name: "products",

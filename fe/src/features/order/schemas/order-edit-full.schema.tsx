@@ -21,6 +21,7 @@ export function buildEditOrderSchema(): FormSchema {
     {
       kind: "text",
       name: "codeLatest",
+      section: "order_info",
       label: "Mã đơn hàng",
       asText: true,
     },
@@ -28,14 +29,17 @@ export function buildEditOrderSchema(): FormSchema {
     {
       kind: "text",
       name: "code",
+      section: "order_info",
       label: "Mã gốc",
       asText: true,
+      showIf: (v) => v["latestOrderItem.remakeCount"] > 0,
     },
     // Số lần làm lại
     {
       kind: "text",
       name: "remakeCount",
       prop: "latestOrderItem",
+      section: "order_info",
       label: "Số lần làm lại",
       asText: true,
       showIf: (v) => v["latestOrderItem.remakeCount"] > 0,
@@ -141,7 +145,13 @@ export function buildEditOrderSchema(): FormSchema {
       metadata: {
         collection: "order",
         mode: "whole",
-        // ignoreFields: ["clinicId", "dentistId", "patientId"],
+        groups: [
+          {
+            group: "general",
+            section: "participants",
+            fields: ["clinicId", "dentistId", "patientId", "refUserId"],
+          },
+        ],
         def: [
           {
             name: "clinicId",
@@ -217,7 +227,7 @@ export function buildEditOrderSchema(): FormSchema {
         def: [
           {
             name: "productCategory",
-            asText: true,
+            showIf: () => false,
           }
         ],
       }
@@ -280,11 +290,18 @@ export function buildEditOrderSchema(): FormSchema {
         ignoreFields: ["retailPrice", "quantity", "vat", "discountPrice", "totalPrice"],
         groups: [
           {
-            group: "status",
+            group: "general",
+            section: "order_info",
+            fields: ["deliveryDate"],
+          },
+          {
+            group: "general",
+            section: "status",
             fields: ["status", "priority"],
           },
           {
-            group: "note",
+            group: "general",
+            section: "note",
             fields: ["note"],
           },
         ],
@@ -442,15 +459,28 @@ export function buildEditOrderSchema(): FormSchema {
         name: "general",
         label: "Thông tin chung:",
         col: 2,
-      },
-      {
-        name: "note",
-        col: 1,
-      },
-      {
-        name: "status",
-        label: "Trạng thái đơn hàng:",
-        col: 2,
+        sections: [
+          {
+            name: "order_info",
+            label: "Thông tin đơn hàng",
+            col: 2,
+          },
+          {
+            name: "participants",
+            label: "Khách hàng",
+            col: 2,
+          },
+          {
+            name: "status",
+            label: "Trạng thái đơn hàng",
+            col: 2,
+          },
+          {
+            name: "note",
+            label: "Ghi chú",
+            col: 1,
+          },
+        ],
       },
       {
         name: "promotion",

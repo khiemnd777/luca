@@ -117,6 +117,7 @@ export type SearchListHydrateFn = (
 // metadata def
 export type MiniFieldOverride = {
   name: string;
+  col?: number;
   label?: string;
   placeholder?: string;
   helperText?: string;
@@ -147,6 +148,12 @@ export type MiniFieldOverride = {
   renderItem?: (item: any, index?: number) => React.ReactNode;
 };
 
+export type MetadataFieldPlacement = {
+  group: string;
+  section?: string;
+  fields?: string[];
+};
+
 
 export type FieldDef = {
   name: string;
@@ -154,6 +161,8 @@ export type FieldDef = {
   label: string;
   kind: FieldKind;
   group?: string;                                                           // default: "general"
+  section?: string;
+  col?: number;
   placeholder?: string;
   rows?: number;                                                            // for textarea
   defaultValue?: any;
@@ -249,7 +258,7 @@ export type FieldDef = {
     fields?: string[];
     ignoreFields?: string[];
     showIfFields?: string[];
-    groups?: { group: string; fields?: string[]; }[];
+    groups?: MetadataFieldPlacement[];
     def?: MiniFieldOverride[];
   };
 
