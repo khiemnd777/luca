@@ -120,6 +120,7 @@ export type MiniFieldOverride = {
   label?: string;
   placeholder?: string;
   helperText?: string;
+  defaultNowOnInteract?: boolean;
   rules?: FieldRules;
   showIf?: (values: Record<string, any>, ctx?: FormContext) => boolean;
   disableIf?: (values: Record<string, any>, ctx?: FormContext) => boolean;
@@ -156,6 +157,7 @@ export type FieldDef = {
   placeholder?: string;
   rows?: number;                                                            // for textarea
   defaultValue?: any;
+  defaultNowOnInteract?: boolean;
   helperText?: string;
   fullWidth?: boolean;
   size?: "small" | "medium";

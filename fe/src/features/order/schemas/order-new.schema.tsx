@@ -362,6 +362,7 @@ export function buildNewOrderSchema(): FormSchema {
           },
           {
             name: "deliveryDate",
+            defaultNowOnInteract: true,
             rules: { required: "Không để trống ngày giao" },
           },
         ],

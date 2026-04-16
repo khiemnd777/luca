@@ -427,6 +427,12 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
   if (f.kind === "datetime") {
     const iso: string | "" = values[f.name] ?? "";
     const val = iso ? dayjs(iso) : null;
+    const hydrateNowIfEmpty = () => {
+      if (!f.defaultNowOnInteract) return;
+      const currentValue = values[f.name];
+      if (currentValue !== null && currentValue !== undefined && currentValue !== "") return;
+      setValue(f.name, dayjs().toISOString());
+    };
 
     return (
       <DateTimePicker
@@ -440,6 +446,8 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
             fullWidth: f.fullWidth ?? true,
             error: !!error,
             helperText: error ?? f.helperText,
+            onFocus: hydrateNowIfEmpty,
+            onClick: hydrateNowIfEmpty,
           },
         }}
       />
