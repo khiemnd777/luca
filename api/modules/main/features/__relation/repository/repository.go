@@ -279,7 +279,7 @@ func (r *RelationRepository) Search(
 	whereParts := []string{}
 	if len(sq.ExtendWhere) > 0 {
 		for _, ew := range sq.ExtendWhere {
-			appendExtendWhere(&args, &whereParts, alias, ew)
+			appendExtendWhere(&args, &whereParts, alias, cfg.WhereAliases, ew)
 		}
 	}
 
@@ -481,7 +481,7 @@ func decodeValue(v any) any {
 	}
 }
 
-func appendExtendWhere(args *[]any, whereParts *[]string, alias string, ew any) {
+func appendExtendWhere(args *[]any, whereParts *[]string, alias string, whereAliases map[string]string, ew any) {
 	switch v := ew.(type) {
 	case map[string]any:
 		for field, val := range v {
@@ -490,13 +490,13 @@ func appendExtendWhere(args *[]any, whereParts *[]string, alias string, ew any) 
 				continue
 			}
 			*args = append(*args, val)
-			*whereParts = append(*whereParts, fmt.Sprintf("%s = $%d", qualifyWhereField(alias, field), len(*args)))
+			*whereParts = append(*whereParts, fmt.Sprintf("%s = $%d", qualifyWhereField(alias, fieldAlias(whereAliases, field), field), len(*args)))
 		}
 	case string:
 		field, val, ok := parseFieldValue(v)
 		if ok && isSafeWhereField(field) {
 			*args = append(*args, val)
-			*whereParts = append(*whereParts, fmt.Sprintf("%s = $%d", qualifyWhereField(alias, field), len(*args)))
+			*whereParts = append(*whereParts, fmt.Sprintf("%s = $%d", qualifyWhereField(alias, fieldAlias(whereAliases, field), field), len(*args)))
 			return
 		}
 		if strings.TrimSpace(v) != "" {
@@ -505,6 +505,16 @@ func appendExtendWhere(args *[]any, whereParts *[]string, alias string, ew any) 
 	default:
 		*args = append(*args, v)
 	}
+}
+
+func fieldAlias(whereAliases map[string]string, field string) string {
+	if whereAliases == nil {
+		return ""
+	}
+	if alias, ok := whereAliases[field]; ok {
+		return alias
+	}
+	return ""
 }
 
 func parseFieldValue(raw string) (string, any, bool) {
@@ -523,8 +533,15 @@ func parseFieldValue(raw string) (string, any, bool) {
 	return field, strings.TrimSpace(val), true
 }
 
-func qualifyWhereField(alias, field string) string {
-	if alias == "" || strings.Contains(field, ".") {
+func qualifyWhereField(defaultAlias, overrideAlias, field string) string {
+	if strings.Contains(field, ".") {
+		return field
+	}
+	alias := defaultAlias
+	if overrideAlias != "" {
+		alias = overrideAlias
+	}
+	if alias == "" {
 		return field
 	}
 	return fmt.Sprintf("%s.%s", alias, field)

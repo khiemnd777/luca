@@ -6,6 +6,7 @@ type ConfigSearch struct {
 	NormFields   []string // []string{"code", "customer_name"}
 	RefFields    []string
 	SelectFields []string
+	WhereAliases map[string]string
 	Permissions  []string
 	CachePrefix  string
 	ExtraJoins   func() string

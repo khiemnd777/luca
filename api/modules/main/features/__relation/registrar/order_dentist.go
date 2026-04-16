@@ -31,6 +31,10 @@ func init() {
 		NormFields:   []string{"r.name"},
 		RefFields:    []string{"id", "name"},
 		SelectFields: []string{"r.id", "r.name"},
+		WhereAliases: map[string]string{
+			"id":   "r",
+			"name": "r",
+		},
 		Permissions:  []string{"clinic.search"},
 		CachePrefix:  "dentist:search",
 		ExtraJoins: func() string {
