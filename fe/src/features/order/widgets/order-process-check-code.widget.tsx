@@ -19,7 +19,10 @@ import { useIsMobile } from "@root/shared/utils/media.utils";
 import { AutoFormButtons } from "@root/core/form/auto-form-buttons";
 import { off, on } from "@root/core/module/event-bus";
 import toast from "react-hot-toast";
-import { buildProductProcessLabel } from "../utils/order.utils";
+import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
+import { buildProductNameLabel } from "../utils/order.utils";
+
+type CheckCodeStep = "select-product" | "check-in";
 
 export function OrderProcessCheckCodeWidget() {
   const [orderCode, setOrderCode] = React.useState<string | undefined>("");
@@ -27,6 +30,7 @@ export function OrderProcessCheckCodeWidget() {
   const formCheckCodeRef = React.useRef<AutoFormRef>(null);
   const isMobile = useIsMobile();
   const [selectedTargetKey, setSelectedTargetKey] = React.useState<string | null>(null);
+  const [step, setStep] = React.useState<CheckCodeStep>("check-in");
 
   React.useEffect(() => {
     const handler = (nextCode: string) => {
@@ -53,12 +57,15 @@ export function OrderProcessCheckCodeWidget() {
   React.useEffect(() => {
     if (!preparedData) {
       setSelectedTargetKey(null);
+      setStep("check-in");
       return;
     }
 
-    const defaultTarget = preparedData.availableTargets?.[0];
+    const targets = preparedData.availableTargets ?? [];
+    const defaultTarget = targets[0];
     const target = defaultTarget ?? preparedData;
     setSelectedTargetKey(buildTargetKey(target));
+    setStep(targets.length > 1 ? "select-product" : "check-in");
   }, [preparedData]);
 
   const currentTarget = React.useMemo(() => {
@@ -67,6 +74,9 @@ export function OrderProcessCheckCodeWidget() {
     if (targets.length === 0) return preparedData;
     return targets.find((item) => buildTargetKey(item) === selectedTargetKey) ?? targets[0];
   }, [preparedData, selectedTargetKey]);
+  const availableTargets = preparedData?.availableTargets ?? [];
+  const hasMultipleTargets = (preparedData?.availableTargets?.length ?? 0) > 1;
+  const isSelectProductStep = hasMultipleTargets && step === "select-product";
 
   const { data: checkoutLatestData, loading: loadingCheckoutLatest } =
     useAsync<OrderItemProcessInProgressProcessModel | null>(() => {
@@ -102,20 +112,33 @@ export function OrderProcessCheckCodeWidget() {
             )}
           </Section>
           <Spacer />
-          {preparedData?.availableTargets && preparedData.availableTargets.length > 1 ? (
+          {isSelectProductStep ? (
             <>
-              <SectionCard title="Chọn sản phẩm">
+              <SectionCard
+                title="Chọn sản phẩm"
+                extra={
+                  <IfPermission permissions={["order.development"]}>
+                    <SafeButton
+                      variant="contained"
+                      disabled={!currentTarget}
+                      onClick={() => setStep("check-in")}
+                    >
+                      Tiếp tục
+                    </SafeButton>
+                  </IfPermission>
+                }
+              >
                 <TextField
                   fullWidth
                   select
                   size="small"
-                  label="Sản phẩm / công đoạn"
+                  label="Sản phẩm"
                   value={selectedTargetKey ?? ""}
                   onChange={(event) => setSelectedTargetKey(event.target.value)}
                 >
-                  {preparedData.availableTargets.map((target) => (
+                  {availableTargets.map((target) => (
                     <MenuItem key={buildTargetKey(target)} value={buildTargetKey(target)}>
-                      {buildProductProcessLabel(target)}
+                      {buildProductNameLabel(target) || "—"}
                     </MenuItem>
                   ))}
                 </TextField>
@@ -123,48 +146,60 @@ export function OrderProcessCheckCodeWidget() {
               <Spacer />
             </>
           ) : null}
-          <SectionCard
-            title={header}
-            extra={
-              <>
-                <IfPermission permissions={["order.development"]}>
-                  <SafeButton
-                    variant="contained"
-                    icon={isCheckout ? <OutputIcon /> : <InputIcon />}
-                    onClick={() => frmProcessCheckInOrOutRef.current?.submit()}
-                  >
-                    {isCheckout ? "Check out" : "Check in"}
-                  </SafeButton>
-                </IfPermission>
-              </>
-            }
-          >
-            {loadingPrepared ? (
-              <Stack alignItems="center" py={2}>
-                <CircularProgress size={22} />
-              </Stack>
-            ) : (
-              <AutoForm
-                name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
-                ref={frmProcessCheckInOrOutRef}
-                initial={currentTarget ?? {}}
-              />
-            )}
-          </SectionCard>
-          <Spacer />
-          {loadingCheckoutLatest || checkoutLatestData?.id ? (
-            <SectionCard title="Công đoạn trước">
-              {loadingCheckoutLatest ? (
-                <Stack alignItems="center" py={2}>
-                  <CircularProgress size={22} />
+          {!isSelectProductStep ? (
+            <>
+              <Section>
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  {hasMultipleTargets ? (
+                    <SafeButton
+                      variant="outlined"
+                      icon={<KeyboardBackspaceIcon />}
+                      onClick={() => setStep("select-product")}
+                    >
+                      Đổi sản phẩm
+                    </SafeButton>
+                  ) : null}
+                  <IfPermission permissions={["order.development"]}>
+                    <SafeButton
+                      variant="contained"
+                      icon={isCheckout ? <OutputIcon /> : <InputIcon />}
+                      onClick={() => frmProcessCheckInOrOutRef.current?.submit()}
+                    >
+                      {isCheckout ? "Check out" : "Check in"}
+                    </SafeButton>
+                  </IfPermission>
                 </Stack>
-              ) : (
-                <AutoForm
-                  name="order-process-inprogress-prev"
-                  initial={checkoutLatestData ?? {}}
-                />
-              )}
-            </SectionCard>
+              </Section>
+              <Spacer />
+              <SectionCard title={header}>
+                {loadingPrepared ? (
+                  <Stack alignItems="center" py={2}>
+                    <CircularProgress size={22} />
+                  </Stack>
+                ) : (
+                  <AutoForm
+                    name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
+                    ref={frmProcessCheckInOrOutRef}
+                    initial={currentTarget ?? {}}
+                  />
+                )}
+              </SectionCard>
+              <Spacer />
+              {loadingCheckoutLatest || checkoutLatestData?.id ? (
+                <SectionCard title="Công đoạn trước">
+                  {loadingCheckoutLatest ? (
+                    <Stack alignItems="center" py={2}>
+                      <CircularProgress size={22} />
+                    </Stack>
+                  ) : (
+                    <AutoForm
+                      name="order-process-inprogress-prev"
+                      initial={checkoutLatestData ?? {}}
+                    />
+                  )}
+                </SectionCard>
+              ) : null}
+            </>
           ) : null}
         </>
       ) : isMobile ? (

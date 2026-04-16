@@ -1,14 +1,14 @@
-import { mapper } from "@core/mapper/auto-mapper";
 import type { FieldDef, FormContext } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { registerForm } from "@core/form/form-registry";
 import { registerFormDialog } from "@root/core/form/form-dialog.registry";
 import { rel1, search } from "@core/relation/relation.api";
 import { parseIntSafe } from "@root/shared/utils/number.utils";
-import type { OrderItemProcessUpsertModel } from "../model/order-item-process.model";
+import { Stack, Typography } from "@mui/material";
 import { checkInOrOut } from "../api/order-item-process.api";
 import { navigate } from "@root/core/navigation/navigate";
-import { buildProductProcessLabel } from "../utils/order.utils";
+import type { OrderItemProcessInProgressModel } from "../model/order-item-process-inprogress.model";
+import { buildProcessNameLabel, buildProductNameLabel } from "../utils/order.utils";
 
 const buildRelationSearchSingleField = (
   name: string,
@@ -53,17 +53,26 @@ const buildRelationSearchSingleField = (
 
 export function buildOrderProcessInProgressSchema(): FormSchema {
   const fields: FieldDef[] = [
+    {
+      name: "productName",
+      label: "Sản phẩm",
+      kind: "custom",
+      render: ({ values, field }) => (
+        <Stack spacing={0.5}>
+          <Typography variant="caption" color="text.secondary">
+            {field.label}
+          </Typography>
+          <Typography>{buildProductNameLabel(values) || "—"}</Typography>
+        </Stack>
+      ),
+    },
     buildRelationSearchSingleField(
       "processId",
       "Công đoạn",
       "Chọn công đoạn",
       "orderitem_process",
-      (d: any) => buildProductProcessLabel(d),
-      (d: any) => {
-        const processLabel = d?.sectionName ? `${d?.sectionName} > ${d?.processName ?? ""}` : d?.processName ?? "";
-        const productProcessLabel = buildProductProcessLabel(d);
-        return productProcessLabel || processLabel;
-      },
+      (d: any) => buildProcessNameLabel(d),
+      (d: any) => buildProcessNameLabel(d),
       "step_number",
       (ctx) => [
         `order_item_id=${ctx?.values.orderItemId}`,
@@ -95,9 +104,7 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
     submit: {
       type: "fn",
       run: async (dto) => {
-        const payload = dto as OrderItemProcessUpsertModel;
-        await checkInOrOut(payload.dto);
-        return dto;
+        return await checkInOrOut(dto as OrderItemProcessInProgressModel);
       },
     },
     toasts: {
@@ -110,12 +117,12 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       return data ?? {};
     },
     async afterSaved(result, _ctx) {
-      const orderId = (result.dto as any).order_id;
-      const orderItemId = (result.dto as any).order_item_id;
+      const orderId = result?.orderId;
+      const orderItemId = result?.orderItemId;
       navigate(`/in-progresses/${orderId}/${orderItemId}`);
     },
     hooks: {
-      mapToDto: (v) => mapper.map("OrderItemProcessInProgress", v, "model_to_dto"),
+      mapToDto: (v) => (v as { dto?: Record<string, any> })?.dto ?? v,
     },
   };
 }

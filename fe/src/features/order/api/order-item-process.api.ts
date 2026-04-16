@@ -76,9 +76,10 @@ export async function prepareCheckInOrOutByCode(code: string): Promise<OrderItem
 
 export async function checkInOrOut(payload: OrderItemProcessInProgressModel): Promise<OrderItemProcessInProgressModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const orderId = payload.orderId;
-  const orderItemId = payload.orderItemId;
-  const { data } = await apiClient.post<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-in-out`, payload);
+  const orderId = payload.orderId ?? (payload as any).order_id;
+  const orderItemId = payload.orderItemId ?? (payload as any).order_item_id;
+  const body = sanitizeCheckInOutPayload(payload as Record<string, any>);
+  const { data } = await apiClient.post<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-in-out`, body);
   const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
   return result;
 }
@@ -137,4 +138,19 @@ function mapPreparedInProgress(data: any): OrderItemProcessInProgressModel {
     ...result,
     availableTargets,
   };
+}
+
+function sanitizeCheckInOutPayload(payload: Record<string, any>) {
+  const body = { ...payload };
+
+  delete body.availableTargets;
+  delete body.available_targets;
+
+  for (const key of ["updatedAt", "updated_at", "startedAt", "started_at", "completedAt", "completed_at"]) {
+    if (body[key] === "" || body[key] == null) {
+      delete body[key];
+    }
+  }
+
+  return body;
 }

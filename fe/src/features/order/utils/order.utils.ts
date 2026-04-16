@@ -17,9 +17,27 @@ export const buildProductProcessLabel = (item?: {
   return productLabel || item?.processName || "";
 };
 
+export const buildProductNameLabel = (item?: {
+  productName?: string | null;
+}) => {
+  return item?.productName?.trim() ?? "";
+};
+
+export const buildProcessNameLabel = (item?: {
+  processName?: string | null;
+}) => {
+  return item?.processName?.trim() ?? "";
+};
+
 export const buildProductLabel = (item?: {
   productCode?: string | null;
   productName?: string | null;
 }) => {
   return [item?.productCode, item?.productName].filter(Boolean).join(" - ");
+};
+
+export const buildInProgressProductTabLabel = (item?: {
+  productName?: string | null;
+}) => {
+  return item?.productName?.trim() || "Sản phẩm";
 };

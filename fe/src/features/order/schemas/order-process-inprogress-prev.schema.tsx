@@ -4,7 +4,6 @@ import { registerForm } from "@core/form/form-registry";
 import { Box, Stack, Typography } from "@mui/material";
 import { formatDateTime } from "@root/shared/utils/datetime.utils";
 import { getContrastText } from "@root/shared/utils/color.utils";
-import { buildProductLabel } from "../utils/order.utils";
 
 export function buildOrderProcessInProgressPrevSchema(): FormSchema {
   const fields: FieldDef[] = [
@@ -24,11 +23,6 @@ export function buildOrderProcessInProgressPrevSchema(): FormSchema {
 
         return (
           <Stack spacing={0.5}>
-            {buildProductLabel(values) ? (
-              <Typography variant="caption" color="text.secondary">
-                Sản phẩm: {buildProductLabel(values)}
-              </Typography>
-            ) : null}
             <Typography variant="caption" color="text.secondary">
               {field.label}
             </Typography>
