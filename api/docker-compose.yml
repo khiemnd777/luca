@@ -44,6 +44,7 @@ services:
       - .env
     environment:
       APP_ENV: ${APP_ENV}
+      DELIVERY_NOTE_BROWSER_BIN: /usr/bin/chromium
       GOCACHE: ${GOCACHE}
       OBSERVABLE: ${OBSERVABLE:-false}
       OBSERVABILITY_STACK_MANAGED_EXTERNALLY: ${OBSERVABILITY_STACK_MANAGED_EXTERNALLY:-false}

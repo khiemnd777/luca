@@ -75,8 +75,8 @@ registerTable("orders", () => {
     initialSort: { by: "created_at", dir: "desc" },
     // allowUpdating: ["order.update"],
     // allowDeleting: ["order.delete"],
-    onView: (row: OrderModel) => { navigate(`/order/${row.id}`) },
-    onEdit: (row: OrderModel) => openFormDialog("order-edit", { initial: { id: row.id } }),
+    // onView: (row: OrderModel) => { navigate(`/order/${row.id}`) },
+    onEdit: (row: OrderModel) => { navigate(`/order/${row.id}`) },
     rowActions: [
       {
         key: "remake",

@@ -3,6 +3,8 @@ FROM golang:1.24.1-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
+    chromium \
+    fonts-noto-core \
     netcat-openbsd \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*

@@ -3,6 +3,8 @@ package service
 import (
 	"bytes"
 	"encoding/base64"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,6 +100,42 @@ func TestConvertImageToBase64_NotFound(t *testing.T) {
 	_, err := ConvertImageToBase64("/no/such/file.png")
 	if err == nil {
 		t.Fatal("expected error for missing file")
+	}
+}
+
+func TestConvertImageToBase64_PreservesDataURI(t *testing.T) {
+	const dataURI = "data:image/png;base64,abc123"
+
+	got, err := ConvertImageToBase64(dataURI)
+	if err != nil {
+		t.Fatalf("ConvertImageToBase64 returned error: %v", err)
+	}
+	if got != dataURI {
+		t.Fatalf("expected data URI to be returned unchanged, got %q", got)
+	}
+}
+
+func TestConvertImageToBase64_RemoteSVG(t *testing.T) {
+	originalTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     http.Header{"Content-Type": []string{"image/svg+xml"}},
+			Body: io.NopCloser(strings.NewReader(
+				`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><text x="1" y="9">C</text></svg>`,
+			)),
+		}, nil
+	})
+	defer func() {
+		http.DefaultTransport = originalTransport
+	}()
+
+	dataURI, err := ConvertImageToBase64("https://api.dicebear.com/9.x/initials/svg?seed=Company")
+	if err != nil {
+		t.Fatalf("ConvertImageToBase64 returned error: %v", err)
+	}
+	if !strings.HasPrefix(dataURI, "data:image/svg+xml;base64,") {
+		t.Fatalf("unexpected data URI prefix: %s", dataURI[:min(40, len(dataURI))])
 	}
 }
 
@@ -232,28 +270,7 @@ func TestResolveDeliveryNoteShowAmounts_DefaultsToTrue(t *testing.T) {
 	}
 }
 
-func TestBuildQRSlipA5HeaderLine_UsesExpectedFields(t *testing.T) {
-	got := buildQRSlipA5HeaderLine(QRSlipA5Order{
-		Number:      "ORD-003",
-		ClinicName:  "Smile Lab",
-		PatientName: "Nguyen Van A",
-		DentistName: "BS Tran",
-	})
-
-	wantParts := []string{
-		"Mã đơn: ORD-003",
-		"Phòng khám: Smile Lab",
-		"Bệnh nhân: Nguyen Van A",
-		"Bác sĩ: BS Tran",
-	}
-	for _, part := range wantParts {
-		if !strings.Contains(got, part) {
-			t.Fatalf("expected header line to contain %q, got %q", part, got)
-		}
-	}
-}
-
-func TestQRSlipA5Template_RendersSingleLineHeaderAndImage(t *testing.T) {
+func TestQRSlipA5Template_RendersTwoColumnSummaryAndImage(t *testing.T) {
 	tpl, err := getQRSlipA5Template()
 	if err != nil {
 		t.Fatalf("getQRSlipA5Template: %v", err)
@@ -266,6 +283,10 @@ func TestQRSlipA5Template_RendersSingleLineHeaderAndImage(t *testing.T) {
 			PatientName: "Nguyen Van B",
 			DentistName: "BS Le",
 		},
+		Products: []QRSlipA5Item{
+			{Description: "Răng sứ Zirconia", Note: "Răng 11", Quantity: 2},
+			{Description: "Mão tạm", Note: "Hàm trên", Quantity: 1},
+		},
 		QRCode:         "https://example.com/qr",
 		QRCodeImageURL: "https://example.com/qr.png",
 	})
@@ -276,14 +297,38 @@ func TestQRSlipA5Template_RendersSingleLineHeaderAndImage(t *testing.T) {
 	}
 
 	rendered := html.String()
-	if !strings.Contains(rendered, "white-space: nowrap;") {
-		t.Fatal("expected single-line header css to be rendered")
+	if !strings.Contains(rendered, "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);") {
+		t.Fatal("expected two-column summary grid to be rendered")
 	}
-	if !strings.Contains(rendered, "width: 150mm;") {
-		t.Fatal("expected large centered qr image size to be rendered")
+	if !strings.Contains(rendered, "width: 96mm;") {
+		t.Fatal("expected reduced centered qr image size to be rendered")
 	}
-	if !strings.Contains(rendered, "Mã đơn: ORD-004") {
-		t.Fatal("expected header line to contain order number")
+	if !strings.Contains(rendered, "Thông tin đơn hàng") || !strings.Contains(rendered, "Sản phẩm") {
+		t.Fatal("expected two summary column titles to be rendered")
+	}
+	if !strings.Contains(rendered, "Răng sứ Zirconia x2") || !strings.Contains(rendered, "Mão tạm x1") {
+		t.Fatal("expected product list entries to be rendered")
+	}
+	if !strings.Contains(rendered, "Răng 11") || !strings.Contains(rendered, "Hàm trên") {
+		t.Fatal("expected product notes to be rendered on a second line")
+	}
+	if !strings.Contains(rendered, ".product-line-1") || !strings.Contains(rendered, ".product-line-2") {
+		t.Fatal("expected product two-line styles to be rendered")
+	}
+	wantOrderFields := []string{
+		"Mã đơn:",
+		"ORD-004",
+		"Phòng khám:",
+		"Smile Lab",
+		"Bệnh nhân:",
+		"Nguyen Van B",
+		"Bác sĩ:",
+		"BS Le",
+	}
+	for _, field := range wantOrderFields {
+		if !strings.Contains(rendered, field) {
+			t.Fatalf("expected order summary to contain %q", field)
+		}
 	}
 	if !strings.Contains(rendered, "https://example.com/qr.png") {
 		t.Fatal("expected template to render qr image url")
@@ -295,4 +340,10 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

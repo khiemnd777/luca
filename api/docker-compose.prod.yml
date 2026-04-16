@@ -38,6 +38,7 @@ services:
       - .env.prod
     environment:
       APP_ENV: production
+      DELIVERY_NOTE_BROWSER_BIN: /usr/bin/chromium
       GOCACHE: ${GOCACHE}
       OBSERVABLE: ${OBSERVABLE:-false}
       OBSERVABILITY_STACK_MANAGED_EXTERNALLY: ${OBSERVABILITY_STACK_MANAGED_EXTERNALLY:-false}

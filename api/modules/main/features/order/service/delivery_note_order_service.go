@@ -144,8 +144,16 @@ func (s *orderService) GenerateQRSlipA5ByOrderID(ctx context.Context, orderID in
 	if err != nil {
 		return nil, "", err
 	}
+	if orderDTO.LatestOrderItem == nil || orderDTO.LatestOrderItem.ID <= 0 {
+		return nil, "", fmt.Errorf("latest order item not found")
+	}
 
-	slip, err := buildQRSlipA5FromOrder(ctx, s, orderDTO, int(orderID))
+	products, err := s.repo.GetAllOrderProductsByOrderItemID(ctx, orderDTO.LatestOrderItem.ID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	slip, err := buildQRSlipA5FromOrder(orderDTO, products)
 	if err != nil {
 		return nil, "", err
 	}
@@ -260,7 +268,7 @@ func buildDeliveryNoteFromOrder(
 	return note, nil
 }
 
-func buildQRSlipA5FromOrder(ctx context.Context, s *orderService, orderDTO *model.OrderDTO, orderID int) (QRSlipA5, error) {
+func buildQRSlipA5FromOrder(orderDTO *model.OrderDTO, products []*model.OrderItemProductDTO) (QRSlipA5, error) {
 	if orderDTO == nil {
 		return QRSlipA5{}, fmt.Errorf("order not found")
 	}
@@ -273,18 +281,34 @@ func buildQRSlipA5FromOrder(ctx context.Context, s *orderService, orderDTO *mode
 		return QRSlipA5{}, fmt.Errorf("order code is empty")
 	}
 
-	deliveryQRSvc := NewOrderDeliveryQRService(s.deps.Ent.(*generated.Client), s.deps)
-	rawToken, err := deliveryQRSvc.GenerateDeliveryQRToken(ctx, orderID)
-	if err != nil {
-		if errors.Is(err, model.ErrOrderAlreadyDelivered) {
-			return QRSlipA5{}, err
+	qrValue := ""
+	if orderDTO.LatestOrderItem != nil {
+		qrValue = strings.TrimSpace(utils.DerefString(orderDTO.LatestOrderItem.QrCode))
+		if qrValue == "" {
+			qrValue = strings.TrimSpace(utils.DerefString(utils.GenerateQRCodeString(orderDTO.LatestOrderItem.Code)))
 		}
-		return QRSlipA5{}, err
 	}
-
-	qrValue := BuildDeliveryQRStartURL(s.deps.Config.DeliveryQR.ClientBaseURL, rawToken)
 	if strings.TrimSpace(qrValue) == "" {
 		return QRSlipA5{}, fmt.Errorf("qr value is empty")
+	}
+
+	slipProducts := make([]QRSlipA5Item, 0, len(products))
+	for _, product := range products {
+		if product == nil {
+			continue
+		}
+		description := strings.TrimSpace(firstNonEmpty(
+			utils.DerefString(product.ProductName),
+			utils.DerefString(product.ProductCode),
+		))
+		if description == "" {
+			continue
+		}
+		slipProducts = append(slipProducts, QRSlipA5Item{
+			Description: description,
+			Note:        strings.TrimSpace(utils.DerefString(product.Note)),
+			Quantity:    product.Quantity,
+		})
 	}
 
 	return QRSlipA5{
@@ -294,6 +318,7 @@ func buildQRSlipA5FromOrder(ctx context.Context, s *orderService, orderDTO *mode
 			PatientName: strings.TrimSpace(utils.DerefString(orderDTO.PatientName)),
 			DentistName: strings.TrimSpace(utils.DerefString(orderDTO.DentistName)),
 		},
+		Products:       slipProducts,
 		QRCode:         qrValue,
 		QRCodeImageURL: BuildQRCodeImageURL(qrValue, 720),
 	}, nil

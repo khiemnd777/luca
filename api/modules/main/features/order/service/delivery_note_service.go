@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"math"
 	"net/http"
 	"net/url"
@@ -113,9 +114,10 @@ type DeliveryNotePaymentMethod struct {
 }
 
 type QRSlipA5 struct {
-	Order          QRSlipA5Order `json:"order"`
-	QRCode         string        `json:"qr_code"`
-	QRCodeImageURL string        `json:"qr_code_image_url"`
+	Order          QRSlipA5Order  `json:"order"`
+	Products       []QRSlipA5Item `json:"products"`
+	QRCode         string         `json:"qr_code"`
+	QRCodeImageURL string         `json:"qr_code_image_url"`
 }
 
 type QRSlipA5Order struct {
@@ -123,6 +125,12 @@ type QRSlipA5Order struct {
 	ClinicName  string `json:"clinic_name"`
 	PatientName string `json:"patient_name"`
 	DentistName string `json:"dentist_name"`
+}
+
+type QRSlipA5Item struct {
+	Description string `json:"description"`
+	Note        string `json:"note"`
+	Quantity    int    `json:"quantity"`
 }
 
 type deliveryNoteTemplateData struct {
@@ -165,7 +173,8 @@ type deliveryNoteItemView struct {
 type qrSlipA5TemplateData struct {
 	PaperSize      string
 	PageMargin     string
-	HeaderLine     string
+	Order          QRSlipA5Order
+	Products       []QRSlipA5Item
 	QRCode         string
 	QRCodeImageURL string
 }
@@ -306,27 +315,11 @@ func buildQRSlipA5ViewData(data QRSlipA5) qrSlipA5TemplateData {
 	return qrSlipA5TemplateData{
 		PaperSize:      deliveryNotePaperSizeA5,
 		PageMargin:     "8mm 8mm 8mm 8mm",
-		HeaderLine:     buildQRSlipA5HeaderLine(data.Order),
+		Order:          data.Order,
+		Products:       data.Products,
 		QRCode:         strings.TrimSpace(data.QRCode),
 		QRCodeImageURL: strings.TrimSpace(data.QRCodeImageURL),
 	}
-}
-
-func buildQRSlipA5HeaderLine(order QRSlipA5Order) string {
-	parts := make([]string, 0, 4)
-	if v := strings.TrimSpace(order.Number); v != "" {
-		parts = append(parts, "Mã đơn: "+v)
-	}
-	if v := strings.TrimSpace(order.ClinicName); v != "" {
-		parts = append(parts, "Phòng khám: "+v)
-	}
-	if v := strings.TrimSpace(order.PatientName); v != "" {
-		parts = append(parts, "Bệnh nhân: "+v)
-	}
-	if v := strings.TrimSpace(order.DentistName); v != "" {
-		parts = append(parts, "Bác sĩ: "+v)
-	}
-	return strings.Join(parts, " | ")
 }
 
 func GenerateQRSlipA5PDF(data QRSlipA5) ([]byte, error) {
@@ -641,6 +634,12 @@ func ConvertImageToBase64(path string) (string, error) {
 	if p == "" {
 		return "", fmt.Errorf("image path is empty")
 	}
+	if strings.HasPrefix(p, "data:") {
+		return p, nil
+	}
+	if strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+		return convertRemoteImageToBase64(p)
+	}
 
 	p = strings.TrimPrefix(p, "file://")
 	if p == "" {
@@ -673,8 +672,70 @@ func ConvertImageToBase64(path string) (string, error) {
 		return "", fmt.Errorf("unsupported image type %q for file %s (only png, jpg, jpeg)", mimeType, p)
 	}
 
+	return buildImageDataURI(b, mimeType), nil
+}
+
+func convertRemoteImageToBase64(rawURL string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("build image request: %w", err)
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("fetch remote image %q: %w", rawURL, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return "", fmt.Errorf("fetch remote image %q: unexpected status %d", rawURL, resp.StatusCode)
+	}
+
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("read remote image %q: %w", rawURL, err)
+	}
+	if len(b) == 0 {
+		return "", fmt.Errorf("remote image is empty: %s", rawURL)
+	}
+
+	mimeType := normalizeImageMIMEType(resp.Header.Get("Content-Type"), b)
+	if err := validateImageMIMEType(mimeType, rawURL); err != nil {
+		return "", err
+	}
+
+	return buildImageDataURI(b, mimeType), nil
+}
+
+func buildImageDataURI(b []byte, mimeType string) string {
 	encoded := base64.StdEncoding.EncodeToString(b)
-	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded), nil
+	return fmt.Sprintf("data:%s;base64,%s", mimeType, encoded)
+}
+
+func normalizeImageMIMEType(contentType string, b []byte) string {
+	mimeType := strings.TrimSpace(contentType)
+	if idx := strings.Index(mimeType, ";"); idx >= 0 {
+		mimeType = strings.TrimSpace(mimeType[:idx])
+	}
+	if mimeType != "" {
+		return strings.ToLower(mimeType)
+	}
+
+	detected := http.DetectContentType(b)
+	if detected == "text/plain; charset=utf-8" && bytes.Contains(bytes.ToLower(b), []byte("<svg")) {
+		return "image/svg+xml"
+	}
+
+	return strings.ToLower(detected)
+}
+
+func validateImageMIMEType(mimeType, imageRef string) error {
+	switch mimeType {
+	case "image/png", "image/jpeg", "image/svg+xml":
+		return nil
+	default:
+		return fmt.Errorf("unsupported image type %q for file %s (only png, jpg, jpeg, svg)", mimeType, imageRef)
+	}
 }
 
 func BuildQRCodeImageURL(payload string, size int) string {

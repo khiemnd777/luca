@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -78,13 +79,15 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
         </Button>
         <Dialog open={open} onClose={handleClose} maxWidth="xs" fullWidth>
           <DialogTitle>Chọn khổ giấy in</DialogTitle>
-          <DialogContent dividers>
+          <DialogContent dividers sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
             <Typography variant="body2" sx={{ mb: 2 }}>
               Chọn khổ giấy trước khi xuất phiếu giao hàng PDF.
             </Typography>
             <FormControl>
               <RadioGroup
+                row
                 value={paperSize}
+                sx={{ columnGap: 3 }}
                 onChange={(event) => setPaperSize(event.target.value as DeliveryNotePaperSize)}
               >
                 <FormControlLabel
@@ -99,16 +102,17 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
                 />
               </RadioGroup>
             </FormControl>
-            <FormControlLabel
-              sx={{ mt: 1 }}
-              control={(
-                <Checkbox
-                  checked={showAmounts}
-                  onChange={(event) => setShowAmounts(event.target.checked)}
-                />
-              )}
-              label="Hiển thị số tiền trên phiếu giao hàng"
-            />
+            <Box>
+              <FormControlLabel
+                control={(
+                  <Checkbox
+                    checked={showAmounts}
+                    onChange={(event) => setShowAmounts(event.target.checked)}
+                  />
+                )}
+                label="Hiển thị số tiền trên phiếu giao hàng"
+              />
+            </Box>
           </DialogContent>
           <DialogActions>
             <Button onClick={handleClose} disabled={downloading}>

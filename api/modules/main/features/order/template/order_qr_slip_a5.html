@@ -27,17 +27,76 @@
       flex-direction: column;
       align-items: stretch;
       justify-content: flex-start;
+      gap: 8mm;
     }
 
-    .header {
+    .summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8mm;
+      align-items: start;
+    }
+
+    .summary-col {
+      min-width: 0;
+    }
+
+    .summary-title {
       font-size: 11px;
       font-weight: 700;
-      line-height: 1.35;
-      text-align: center;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      margin-bottom: 12mm;
+      text-transform: uppercase;
+      margin-bottom: 3mm;
+    }
+
+    .info-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+    }
+
+    .info-row {
+      display: grid;
+      grid-template-columns: 28mm 1fr;
+      gap: 2mm;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .info-label {
+      font-weight: 700;
+    }
+
+    .products {
+      display: flex;
+      flex-direction: column;
+      gap: 2mm;
+    }
+
+    .products-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .products-list {
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .products-list li + li {
+      margin-top: 2mm;
+    }
+
+    .product-line-1 {
+      font-weight: 700;
+    }
+
+    .product-line-2 {
+      margin-top: 0.6mm;
+      color: #444;
     }
 
     .qr-wrap {
@@ -55,8 +114,8 @@
     }
 
     .qr-box img {
-      width: 150mm;
-      height: 150mm;
+      width: 96mm;
+      height: 96mm;
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
@@ -66,7 +125,48 @@
 </head>
 <body>
   <main class="sheet">
-    <div class="header">{{ .HeaderLine }}</div>
+    <section class="summary">
+      <div class="summary-col">
+        <div class="summary-title">Thông tin đơn hàng</div>
+        <div class="info-list">
+          <div class="info-row">
+            <div class="info-label">Mã đơn:</div>
+            <div>{{ .Order.Number }}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Phòng khám:</div>
+            <div>{{ .Order.ClinicName }}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Bệnh nhân:</div>
+            <div>{{ .Order.PatientName }}</div>
+          </div>
+          <div class="info-row">
+            <div class="info-label">Bác sĩ:</div>
+            <div>{{ .Order.DentistName }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="summary-col">
+        <div class="products">
+          <div class="summary-title">Sản phẩm</div>
+          {{ if .Products }}
+          <ol class="products-list">
+            {{ range .Products }}
+            <li>
+              <div class="product-line-1">{{ .Description }}{{ if gt .Quantity 0 }} x{{ .Quantity }}{{ end }}</div>
+              {{ if .Note }}<div class="product-line-2">{{ .Note }}</div>{{ end }}
+            </li>
+            {{ end }}
+          </ol>
+          {{ else }}
+          <div class="info-row">
+            <div>Không có sản phẩm</div>
+          </div>
+          {{ end }}
+        </div>
+      </div>
+    </section>
     <div class="qr-wrap">
       <div class="qr-box">
         <img src="{{ .QRCodeImageURL }}" alt="qr-slip-a5" />
