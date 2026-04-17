@@ -5,6 +5,7 @@
 This frontend is a modular, route-registered admin application where features compose themselves into the app through shared infrastructure instead of manual wiring.
 
 Agents working in this repo should preserve the existing architecture, prefer shared primitives over custom one-off implementations, and fit new work into the established module, schema, table, widget, mapper, and API client patterns.
+For any UI-facing work under `fe/**`, read `/DESIGN.md` before editing and follow it as the default visual source of truth unless the target module already has a more specific implemented pattern to preserve.
 
 ## Scope
 
@@ -29,6 +30,7 @@ When tradeoffs exist in frontend work, prefer decisions in this order:
 - preserve module registration and route ownership
 - preserve auth, permission, and navigation semantics
 - preserve API contract compatibility and mapper boundaries
+- preserve the current visual language documented in `/DESIGN.md`
 - reuse existing frontend infrastructure and visual language
 - make the smallest coherent change that fully solves the task
 
@@ -109,6 +111,7 @@ Many feature routes use shared page shells such as:
 - `@core/pages/general-page`
 
 Prefer existing page shells before introducing a new layout abstraction.
+Check `/DESIGN.md` before introducing or reshaping page-level UI so spacing, toolbar behavior, surface usage, and information density stay aligned with the current admin design language.
 
 ### 4. Prefer widgets, schemas, and tables over hardcoded screens
 
@@ -214,6 +217,7 @@ This is an internal admin system. Optimize for clarity and operational efficienc
 - explicit loading, error, and empty states
 
 Do not introduce a disconnected design system or heavily stylized UI direction for isolated features.
+Use `/DESIGN.md` as the first reference for visual rules, anti-patterns, and agent prompts when building new UI.
 
 ## Feature Conventions
 
@@ -325,6 +329,7 @@ Abstract only when there is a repeated pattern already visible across modules. D
 
 ### 21. Before making changes
 
+- read `/DESIGN.md` for frontend visual rules when the task affects UI, layout, forms, tables, dialogs, or page composition
 - inspect the target feature's `index.tsx`
 - inspect existing `schemas/`, `tables/`, `widgets/`, and `api/`
 - check whether a shared core abstraction already solves the problem
@@ -333,6 +338,7 @@ Abstract only when there is a repeated pattern already visible across modules. D
 For common frontend changes, inspect at least:
 
 Feature/page changes:
+- `/DESIGN.md`
 - target feature `index.tsx`
 - route metadata and parent/detail route placement
 - nearby `widgets/`, `schemas/`, `tables/`, and `api/`

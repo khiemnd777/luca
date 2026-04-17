@@ -9,6 +9,7 @@ Agents working in this repo should:
 - prefer existing shared infrastructure over one-off implementations
 - fit new work into established module, routing, API, schema, mapper, and registry patterns
 - avoid importing business concepts from the source projects unless they are explicitly present in this new codebase
+- read `DESIGN.md` before frontend or UI-facing work and follow it as the visual source of truth unless the target subtree has narrower instructions
 
 ## Scope
 
@@ -161,6 +162,8 @@ Default to:
 - the existing visual language and interaction style
 
 Optimize for clarity, consistency, and operational usefulness over novelty.
+
+For any work that changes or introduces frontend UI, read `/DESIGN.md` first and treat it as the default visual rulebook for layout, component styling, spacing, and anti-patterns. If local code and `DESIGN.md` diverge, prefer the dominant implemented pattern already present in the target module unless the user explicitly requests a new direction.
 
 ---
 
@@ -370,6 +373,7 @@ Minimum checklists by change type:
 
 Frontend-only changes:
 - target feature `index`
+- `/DESIGN.md`
 - route registration and route metadata
 - shared page/form/table/widget primitives already solving the problem
 - permission and hidden-route implications
@@ -397,6 +401,7 @@ Schema or persistence changes:
 
 Frontend usually:
 - feature `index`
+- `/DESIGN.md`
 - route registration
 - page/widget/schema/table files
 - feature API module
