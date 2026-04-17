@@ -52,6 +52,10 @@ func kMaterialAll(deptID int) []string {
 	}
 }
 
+func kMaterialOverviewByID(deptID int, id int) string {
+	return fmt.Sprintf("order:material-overview:dpt%d:material:%d", deptID, id)
+}
+
 func kMaterialListAll(deptID int) string {
 	return fmt.Sprintf("material:list:dpt%d:*", deptID)
 }
@@ -96,6 +100,7 @@ func (s *materialService) Create(ctx context.Context, deptID int, input model.Ma
 
 	if dto != nil && dto.ID > 0 {
 		cache.InvalidateKeys(kMaterialByID(deptID, dto.ID))
+		cache.InvalidateKeys(kMaterialOverviewByID(deptID, dto.ID))
 	}
 	cache.InvalidateKeys(kMaterialAll(deptID)...)
 
@@ -116,6 +121,7 @@ func (s *materialService) Update(ctx context.Context, deptID int, input model.Ma
 
 	if dto != nil {
 		cache.InvalidateKeys(kMaterialByID(deptID, dto.ID))
+		cache.InvalidateKeys(kMaterialOverviewByID(deptID, dto.ID))
 	}
 	cache.InvalidateKeys(kMaterialAll(deptID)...)
 
@@ -197,6 +203,7 @@ func (s *materialService) Delete(ctx context.Context, deptID int, id int) error 
 	}
 	cache.InvalidateKeys(kMaterialAll(deptID)...)
 	cache.InvalidateKeys(kMaterialByID(deptID, id))
+	cache.InvalidateKeys(kMaterialOverviewByID(deptID, id))
 
 	s.unlinkSearch(id)
 	return nil

@@ -36,6 +36,12 @@ const MATERIAL_STATUS_CHIP_COLOR_MAP = {
   returned: "success",
 } as const;
 
+const MATERIAL_STATUS_COLOR_MAP = {
+  on_loan: "#1976d2",
+  partial_returned: "#ed6c02",
+  returned: "#2e7d32",
+} as const;
+
 const MATERIAL_STATUS_MAP = MATERIAL_STATUSES.reduce<Record<string, string>>(
   (acc, cur) => {
     acc[cur.value] = cur.label;
@@ -52,4 +58,9 @@ export function materialStatusLabel(value?: string | null): string {
 export function materialStatusChipColor(value?: string | null): "default" | "info" | "warning" | "success" {
   if (!value) return "default";
   return MATERIAL_STATUS_CHIP_COLOR_MAP[value as keyof typeof MATERIAL_STATUS_CHIP_COLOR_MAP] ?? "default";
+}
+
+export function materialStatusColor(value?: string | null): string {
+  if (!value) return "#9e9e9e";
+  return MATERIAL_STATUS_COLOR_MAP[value as keyof typeof MATERIAL_STATUS_COLOR_MAP] ?? "#9e9e9e";
 }

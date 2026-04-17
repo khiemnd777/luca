@@ -5,6 +5,7 @@ import { reloadTable } from "@core/table/table-reload";
 import { openFormDialog } from "@core/form/form-dialog.service";
 import type { MaterialModel } from "@features/material/model/material.model";
 import { table, unlink } from "@features/material/api/material.api";
+import { navigate } from "@root/core/navigation/navigate";
 
 const columns: ColumnDef<MaterialModel>[] = [
   { key: "name", header: "Tên vật tư", sortable: true, labelField: true },
@@ -36,6 +37,9 @@ registerTable("materials", () => {
     initialSort: { by: "id", dir: "asc" },
     allowUpdating: ["material.update"],
     allowDeleting: ["material.delete"],
+    onView(row: MaterialModel) {
+      navigate(`/material/${row.id}`);
+    },
     onEdit(row: MaterialModel) {
       openFormDialog("material", { initial: { id: row.id } });
     },

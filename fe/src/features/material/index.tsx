@@ -16,6 +16,16 @@ const mod: ModuleDescriptor = {
       path: "/material",
       icon: <CategoryIcon />,
       priority: 97,
+      children: [
+        {
+          hidden: true,
+          key: "material-detail",
+          permissions: ["material.view"],
+          element: <OneColumnPage />,
+          path: "/material/:id",
+          priority: 98,
+        },
+      ],
       // children: [
       //   {
       //     key: "supplier",

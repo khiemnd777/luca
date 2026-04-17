@@ -1,7 +1,7 @@
 import * as React from "react";
+import InsightsRoundedIcon from "@mui/icons-material/InsightsRounded";
+import PrecisionManufacturingRoundedIcon from "@mui/icons-material/PrecisionManufacturingRounded";
 import Inventory2RoundedIcon from "@mui/icons-material/Inventory2Rounded";
-import ManufacturingRoundedIcon from "@mui/icons-material/PrecisionManufacturingRounded";
-import CategoryRoundedIcon from "@mui/icons-material/CategoryRounded";
 import HistoryRoundedIcon from "@mui/icons-material/HistoryRounded";
 import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import TimelineRoundedIcon from "@mui/icons-material/TimelineRounded";
@@ -10,23 +10,26 @@ import {
   Box,
   Button,
   Chip,
-  Divider,
-  LinearProgress,
-  Skeleton,
   Stack,
   Typography,
+  LinearProgress,
+  Skeleton,
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { useAsync } from "@root/core/hooks/use-async";
 import { useAuthStore } from "@store/auth-store";
-import { overview as getOverview } from "@features/product/api/product.api";
+import { overview as getOverview } from "@features/material/api/material.api";
 import type {
-  ProductOverviewModel,
-  ProductOverviewOrderStatusBreakdownModel,
-  ProductOverviewProcessLoadModel,
-  ProductOverviewRecentOrderModel,
-} from "@features/product/model/product-overview.model";
+  MaterialOverviewMaterialStatusBreakdownModel,
+  MaterialOverviewModel,
+  MaterialOverviewProcessLoadModel,
+  MaterialOverviewRecentOrderModel,
+} from "@features/material/model/material-overview.model";
+import {
+  materialStatusColor,
+  materialStatusLabel,
+} from "@features/material/utils/material.utils";
 import { SectionCard } from "@shared/components/ui/section-card";
 import { ResponsiveGrid } from "@root/shared/components/ui/responsive-grid";
 import { StatCard } from "@features/dashboard/components/stat-card";
@@ -35,7 +38,8 @@ import { formatDateTime, relTime } from "@root/shared/utils/datetime.utils";
 import { statusColor, statusLabel } from "@root/shared/utils/order.utils";
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
-const ORDER_STATUS_SEQUENCE = ["received", "in_progress", "qc", "rework", "completed"] as const;
+const ORDER_STATUS_SEQUENCE = ["received", "in_progress", "qc", "rework"] as const;
+const MATERIAL_STATUS_SEQUENCE = ["on_loan", "partial_returned", "returned"] as const;
 
 function formatNumber(value?: number | null) {
   return numberFormatter.format(Number(value ?? 0));
@@ -57,11 +61,7 @@ function loadingSkeletonCards() {
   );
 }
 
-function StatSummarySection({
-  data,
-}: {
-  data: ProductOverviewModel;
-}) {
+function StatSummarySection({ data }: { data: MaterialOverviewModel }) {
   const summary = data.summary;
   const scope = data.scope;
 
@@ -71,7 +71,7 @@ function StatSummarySection({
       extra={(
         <Chip
           size="small"
-          label={scope.scopeLabel || "Phạm vi hiện tại"}
+          label={scope.scopeLabel || "Vật tư đang theo dõi"}
           sx={{ fontWeight: 600 }}
         />
       )}
@@ -80,20 +80,20 @@ function StatSummarySection({
         <StatCard
           title="Đang trong đơn"
           value={formatNumber(summary.openOrders)}
-          caption={`${formatNumber(summary.completedOrders)} đơn đã hoàn thành`}
-          icon={<Inventory2RoundedIcon fontSize="small" />}
+          caption={`${formatNumber(summary.returnedOrders)} đơn đã thu hồi`}
+          icon={<InsightsRoundedIcon fontSize="small" />}
         />
         <StatCard
           title="Đơn đang gia công"
           value={formatNumber(summary.inProductionOrders)}
-          caption="Đơn đang chạy trong xưởng"
-          icon={<ManufacturingRoundedIcon fontSize="small" />}
+          caption="Đơn còn chạy trong xưởng"
+          icon={<PrecisionManufacturingRoundedIcon fontSize="small" />}
         />
         <StatCard
-          title="SL đang chạy"
-          value={formatNumber(summary.openQuantity)}
-          caption={`${formatNumber(summary.lifetimeQuantity)} sản phẩm lịch sử`}
-          icon={<CategoryRoundedIcon fontSize="small" />}
+          title="SL đang mượn"
+          value={formatNumber(summary.onLoanQuantity)}
+          caption={`${formatNumber(summary.partialReturnedOrders)} đơn thu hồi một phần`}
+          icon={<Inventory2RoundedIcon fontSize="small" />}
         />
         <StatCard
           title="Công đoạn đang mở"
@@ -104,13 +104,13 @@ function StatSummarySection({
         <StatCard
           title="Tiến độ gia công"
           value={`${formatNumber(summary.completionPercent)}%`}
-          caption="Theo workload đang mở"
-          icon={<ManufacturingRoundedIcon fontSize="small" />}
+          caption="Theo các đơn còn mở"
+          icon={<PrecisionManufacturingRoundedIcon fontSize="small" />}
         />
         <StatCard
           title="Tổng đơn lịch sử"
           value={formatNumber(summary.lifetimeOrders)}
-          caption={`${formatNumber(summary.remakeOrders)} đơn làm lại`}
+          caption="Tổng số đơn từng dùng vật tư này"
           icon={<HistoryRoundedIcon fontSize="small" />}
         />
       </ResponsiveGrid>
@@ -122,8 +122,8 @@ function OrderStatusSection({
   summary,
   statusBreakdown,
 }: {
-  summary: ProductOverviewModel["summary"];
-  statusBreakdown: ProductOverviewOrderStatusBreakdownModel[];
+  summary: MaterialOverviewModel["summary"];
+  statusBreakdown: MaterialOverviewModel["orderStatusBreakdown"];
 }) {
   const statusMap = React.useMemo(() => {
     return statusBreakdown.reduce<Record<string, number>>((acc, item) => {
@@ -165,7 +165,65 @@ function OrderStatusSection({
         })}
         {summary.openOrders === 0 ? (
           <Typography variant="body2" color="text.secondary">
-            Không có đơn đang mở chứa sản phẩm này.
+            Không có đơn đang mở chứa vật tư này.
+          </Typography>
+        ) : null}
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function MaterialStatusSection({
+  breakdown,
+}: {
+  breakdown: MaterialOverviewMaterialStatusBreakdownModel[];
+}) {
+  const total = React.useMemo(
+    () => breakdown.reduce((sum, item) => sum + Number(item.count ?? 0), 0),
+    [breakdown]
+  );
+  const statusMap = React.useMemo(() => {
+    return breakdown.reduce<Record<string, number>>((acc, item) => {
+      acc[item.status] = item.count;
+      return acc;
+    }, {});
+  }, [breakdown]);
+
+  return (
+    <SectionCard title="Trạng thái vật tư">
+      <Stack spacing={1.5}>
+        {MATERIAL_STATUS_SEQUENCE.map((status) => {
+          const count = statusMap[status] ?? 0;
+          const percent = total > 0 ? (count / total) * 100 : 0;
+          const color = materialStatusColor(status);
+          return (
+            <Box key={status}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 0.75 }}>
+                <Typography variant="body2" fontWeight={600}>
+                  {materialStatusLabel(status) || status}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {formatNumber(count)} bản ghi
+                </Typography>
+              </Stack>
+              <LinearProgress
+                variant="determinate"
+                value={percent}
+                sx={{
+                  height: 8,
+                  borderRadius: 999,
+                  bgcolor: alpha(color, 0.14),
+                  "& .MuiLinearProgress-bar": {
+                    bgcolor: color,
+                  },
+                }}
+              />
+            </Box>
+          );
+        })}
+        {total === 0 ? (
+          <Typography variant="body2" color="text.secondary">
+            Chưa có dữ liệu mượn hoặc thu hồi cho vật tư này.
           </Typography>
         ) : null}
       </Stack>
@@ -210,7 +268,7 @@ function ProcessMetricChip({
   );
 }
 
-function ProcessLoadRow({ item }: { item: ProductOverviewProcessLoadModel }) {
+function ProcessLoadRow({ item }: { item: MaterialOverviewProcessLoadModel }) {
   const completionPercent = item.total > 0 ? Math.round((item.completed / item.total) * 100) : 0;
 
   return (
@@ -265,7 +323,7 @@ function ProcessLoadRow({ item }: { item: ProductOverviewProcessLoadModel }) {
 function ProcessLoadSection({
   processLoad,
 }: {
-  processLoad: ProductOverviewProcessLoadModel[];
+  processLoad: MaterialOverviewProcessLoadModel[];
 }) {
   return (
     <SectionCard title="Tải gia công theo công đoạn">
@@ -290,10 +348,11 @@ function RecentOrderRow({
   item,
   onOpen,
 }: {
-  item: ProductOverviewRecentOrderModel;
-  onOpen: (orderId: number) => void;
+  item: MaterialOverviewRecentOrderModel;
+  onOpen: (item: MaterialOverviewRecentOrderModel) => void;
 }) {
-  const color = statusColor(item.status);
+  const orderTone = statusColor(item.status);
+  const materialTone = materialStatusColor(item.materialStatus);
   const latestRelative = item.latestCheckpointAt ? relTime(item.latestCheckpointAt).text : "";
   const latestLabel = item.latestCheckpointAt
     ? latestRelative
@@ -303,7 +362,7 @@ function RecentOrderRow({
 
   return (
     <Box
-      onClick={() => onOpen(item.orderId)}
+      onClick={() => onOpen(item)}
       sx={{
         border: "1px solid",
         borderColor: "divider",
@@ -318,23 +377,35 @@ function RecentOrderRow({
       }}
     >
       <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.25}>
-        <Stack spacing={0.5}>
+        <Stack spacing={0.75}>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
             <Typography fontWeight={700}>
-              {item.orderCode || `#${item.orderId}`}
+              {item.orderItemCode || item.orderCode || `#${item.orderItemId}`}
             </Typography>
             <Chip
               size="small"
               label={statusLabel(item.status) || item.status || "Chưa rõ"}
               sx={{
-                bgcolor: alpha(color, 0.12),
-                color,
+                bgcolor: alpha(orderTone, 0.12),
+                color: orderTone,
+                fontWeight: 600,
+              }}
+            />
+            <Chip
+              size="small"
+              label={materialStatusLabel(item.materialStatus) || item.materialStatus || "Chưa rõ"}
+              sx={{
+                bgcolor: alpha(materialTone, 0.12),
+                color: materialTone,
                 fontWeight: 600,
               }}
             />
           </Stack>
           <Typography variant="body2" color="text.secondary">
             {item.currentProcessName || "Chưa xác định công đoạn hiện tại"}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {item.clinicName || "Chưa có nha khoa"}{item.patientName ? ` • ${item.patientName}` : ""}
           </Typography>
         </Stack>
 
@@ -354,23 +425,25 @@ function RecentOrderRow({
 function RecentOrdersSection({
   recentOrders,
 }: {
-  recentOrders: ProductOverviewRecentOrderModel[];
+  recentOrders: MaterialOverviewRecentOrderModel[];
 }) {
   const navigate = useNavigate();
 
   return (
-    <SectionCard title="Đơn liên quan gần đây">
+    <SectionCard title="Đơn liên quan">
       {recentOrders.length === 0 ? (
         <EmptyState
           title="Chưa có đơn liên quan"
-          description="Sản phẩm này chưa xuất hiện trong đơn hàng nào để hiển thị gần đây."
+          description="Vật tư này chưa xuất hiện trong đơn hàng nào để hiển thị gần đây."
         />
       ) : (
         <Stack spacing={1.25}>
           {recentOrders.map((item, index) => (
-            <React.Fragment key={`${item.orderId}-${index}`}>
-              <RecentOrderRow item={item} onOpen={(orderId) => navigate(`/order/${orderId}`)} />
-              {index < recentOrders.length - 1 ? <Divider sx={{ display: "none" }} /> : null}
+            <React.Fragment key={`${item.orderId}-${item.orderItemId}-${index}`}>
+              <RecentOrderRow
+                item={item}
+                onOpen={(target) => navigate(`/order/${target.orderId}/historical/${target.orderItemId}`)}
+              />
             </React.Fragment>
           ))}
         </Stack>
@@ -400,21 +473,21 @@ function OverviewErrorState({
   );
 }
 
-export function ProductDetailOverview({
-  productId,
+export function MaterialDetailOverview({
+  materialId,
 }: {
-  productId?: number;
+  materialId?: number;
 }) {
   const canViewOrder = useAuthStore((state) => state.hasPermission("order.view"));
 
-  const { data, loading, error, reload } = useAsync<ProductOverviewModel | null>(
+  const { data, loading, error, reload } = useAsync<MaterialOverviewModel | null>(
     () => {
-      if (!productId || !canViewOrder) return Promise.resolve(null);
-      return getOverview(productId);
+      if (!materialId || !canViewOrder) return Promise.resolve(null);
+      return getOverview(materialId);
     },
-    [productId, canViewOrder],
+    [materialId, canViewOrder],
     {
-      key: `product-detail-overview:${productId ?? "new"}`,
+      key: `material-detail-overview:${materialId ?? "new"}`,
     }
   );
 
@@ -428,7 +501,8 @@ export function ProductDetailOverview({
   const hasData = Boolean(
     data?.summary?.lifetimeOrders ||
     data?.processLoad?.length ||
-    data?.recentOrders?.length
+    data?.recentOrders?.length ||
+    data?.materialStatusBreakdown?.length
   );
 
   if (!canViewOrder || isForbidden) {
@@ -436,7 +510,7 @@ export function ProductDetailOverview({
       <SectionCard title="Tổng quan vận hành">
         <EmptyState
           title="Không có quyền xem dữ liệu vận hành"
-          description="Bạn cần quyền xem đơn hàng để theo dõi tải gia công và các đơn liên quan của sản phẩm này."
+          description="Bạn cần quyền xem đơn hàng để theo dõi tải gia công và các đơn liên quan của vật tư này."
           icon={<LockOutlinedIcon fontSize="inherit" />}
         />
       </SectionCard>
@@ -446,7 +520,7 @@ export function ProductDetailOverview({
   if (error && !data) {
     return (
       <OverviewErrorState
-        message="Không tải được insight vận hành của sản phẩm."
+        message="Không tải được insight vận hành của vật tư."
         onRetry={() => void reload()}
       />
     );
@@ -461,7 +535,7 @@ export function ProductDetailOverview({
       <SectionCard title="Tổng quan vận hành">
         <EmptyState
           title="Chưa có dữ liệu"
-          description="Không có dữ liệu tổng quan cho sản phẩm này."
+          description="Không có dữ liệu tổng quan cho vật tư này."
         />
       </SectionCard>
     );
@@ -473,13 +547,14 @@ export function ProductDetailOverview({
       {!hasData ? (
         <SectionCard title="Tổng quan vận hành">
           <EmptyState
-            title="Sản phẩm chưa có dữ liệu vận hành"
-            description="Chưa có đơn hàng hoặc công đoạn phát sinh cho sản phẩm này trong hệ thống."
+            title="Vật tư chưa có dữ liệu vận hành"
+            description="Chưa có đơn hàng hoặc công đoạn phát sinh cho vật tư này trong hệ thống."
           />
         </SectionCard>
       ) : (
         <>
           <OrderStatusSection summary={data.summary} statusBreakdown={data.orderStatusBreakdown} />
+          <MaterialStatusSection breakdown={data.materialStatusBreakdown} />
           <ProcessLoadSection processLoad={data.processLoad} />
           <RecentOrdersSection recentOrders={data.recentOrders} />
         </>
