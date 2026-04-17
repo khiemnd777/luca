@@ -67,6 +67,7 @@ type OrderRepository interface {
 	AdvancedSearchReportBreakdown(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error)
 	GetProductCatalogOverview(ctx context.Context, deptID int) (*model.ProductCatalogOverviewDTO, error)
+	GetProcessCatalogOverview(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewDTO, error)
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
@@ -138,6 +139,18 @@ func productCatalogOverviewScopeLabel() string {
 
 func materialCatalogOverviewScopeLabel() string {
 	return "Toàn bộ catalog vật tư"
+}
+
+func processCatalogOverviewScopeLabel() string {
+	return "Toàn bộ danh mục công đoạn"
+}
+
+func processCatalogJoinNameExpr(alias string) string {
+	return fmt.Sprintf(`LOWER(BTRIM(COALESCE(NULLIF(%[1]s.process_name, ''), '')))`, alias)
+}
+
+func processCatalogNameExpr(alias string) string {
+	return fmt.Sprintf(`LOWER(BTRIM(COALESCE(NULLIF(%[1]s.name, ''), NULLIF(%[1]s.code, ''), '')))`, alias)
 }
 
 func sectionCatalogOverviewScopeLabel() string {
@@ -1509,6 +1522,35 @@ func (r *orderRepository) GetProductCatalogOverview(ctx context.Context, deptID 
 	}, nil
 }
 
+func (r *orderRepository) GetProcessCatalogOverview(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewDTO, error) {
+	coverage, err := r.getProcessCatalogOverviewCoverage(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getProcessCatalogOverviewSummary(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getProcessCatalogOverviewOrderStatusBreakdown(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	processLoads, err := r.getProcessCatalogOverviewProcessLoads(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ProcessCatalogOverviewDTO{
+		Coverage:             coverage,
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		ProcessLoads:         processLoads,
+	}, nil
+}
+
 func (r *orderRepository) GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error) {
 	scope, err := r.resolveMaterialOverviewScope(ctx, deptID, materialID)
 	if err != nil {
@@ -2228,6 +2270,107 @@ SELECT
 	return summary, nil
 }
 
+func (r *orderRepository) getProcessCatalogOverviewCoverage(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewCoverageDTO, error) {
+	query := fmt.Sprintf(`
+SELECT
+	COALESCE((
+		SELECT COUNT(*)
+		FROM processes p
+		WHERE p.department_id = $1
+		  AND p.deleted_at IS NULL
+	), 0) AS total_processes,
+	COALESCE((
+		SELECT COUNT(DISTINCT p.id)
+		FROM processes p
+		JOIN order_item_processes op
+			ON %s = %s
+		JOIN orders o
+			ON o.id = op.order_id
+		   AND o.deleted_at IS NULL
+		   AND o.department_id = $1
+		WHERE p.department_id = $1
+		  AND p.deleted_at IS NULL
+	), 0) AS processes_with_orders
+`, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"))
+
+	coverage := &model.ProcessCatalogOverviewCoverageDTO{
+		ScopeLabel: processCatalogOverviewScopeLabel(),
+	}
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID).Scan(
+		&coverage.TotalProcesses,
+		&coverage.ProcessesWithOrders,
+	); err != nil {
+		return nil, err
+	}
+
+	return coverage, nil
+}
+
+func (r *orderRepository) getProcessCatalogOverviewSummary(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewSummaryDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_processes AS (
+	SELECT
+		op.id,
+		op.order_id,
+		%s AS order_status,
+		%s AS process_status,
+		COALESCE(MAX(o.remake_count), 0) AS remake_count
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	JOIN processes p
+		ON %s = %s
+	   AND p.department_id = $1
+	   AND p.deleted_at IS NULL
+	GROUP BY op.id, op.order_id, %s, %s
+),
+scoped_orders AS (
+	SELECT
+		order_id,
+		MAX(order_status) AS order_status,
+		MAX(remake_count) AS remake_count
+	FROM scoped_processes
+	GROUP BY order_id
+)
+SELECT
+	COALESCE((SELECT COUNT(*) FROM scoped_orders), 0) AS lifetime_orders,
+	COALESCE((SELECT COUNT(*) FROM scoped_orders WHERE order_status <> 'completed'), 0) AS open_orders,
+	COALESCE((SELECT COUNT(*) FROM scoped_orders WHERE order_status IN ('in_progress', 'qc', 'rework')), 0) AS in_production_orders,
+	COALESCE((SELECT COUNT(*) FROM scoped_orders WHERE order_status = 'completed'), 0) AS completed_orders,
+	COALESCE((SELECT COUNT(*) FROM scoped_orders WHERE remake_count > 0), 0) AS remake_orders,
+	COALESCE((SELECT COUNT(*) FROM scoped_processes WHERE process_status <> 'completed'), 0) AS open_processes,
+	COALESCE((SELECT COUNT(*) FROM scoped_processes), 0) AS total_processes,
+	COALESCE((SELECT COUNT(*) FROM scoped_processes WHERE process_status = 'completed'), 0) AS completed_processes
+`, orderStatusExpr, processStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"), orderStatusExpr, processStatusExpr)
+
+	summary := &model.ProcessCatalogOverviewSummaryDTO{}
+	var totalProcesses int
+	var completedProcesses int
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID).Scan(
+		&summary.LifetimeOrders,
+		&summary.OpenOrders,
+		&summary.InProductionOrders,
+		&summary.CompletedOrders,
+		&summary.RemakeOrders,
+		&summary.OpenProcesses,
+		&totalProcesses,
+		&completedProcesses,
+	); err != nil {
+		return nil, err
+	}
+
+	if totalProcesses > 0 {
+		summary.CompletionPercent = int(math.Round((float64(completedProcesses) / float64(totalProcesses)) * 100))
+	}
+
+	return summary, nil
+}
+
 func (r *orderRepository) getMaterialOverviewSummary(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewSummaryDTO, error) {
 	materialStatusExpr := normalizedMaterialStatusExpr("om")
 	orderStatusExpr := normalizedOrderStatusExpr("o")
@@ -2625,6 +2768,52 @@ ORDER BY total DESC, order_status ASC
 	result := make([]*model.SectionCatalogOverviewOrderStatusBreakdownDTO, 0, 4)
 	for rows.Next() {
 		row := &model.SectionCatalogOverviewOrderStatusBreakdownDTO{}
+		if err := rows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getProcessCatalogOverviewOrderStatusBreakdown(
+	ctx context.Context,
+	deptID int,
+) ([]*model.ProcessCatalogOverviewOrderStatusBreakdownDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		%s AS order_status
+	FROM orders o
+	JOIN order_item_processes op
+		ON op.order_id = o.id
+	JOIN processes p
+		ON %s = %s
+	   AND p.department_id = $1
+	   AND p.deleted_at IS NULL
+	WHERE o.deleted_at IS NULL
+	  AND o.department_id = $1
+	GROUP BY o.id, %s
+)
+SELECT order_status, COUNT(*) AS total
+FROM scoped_orders
+WHERE order_status <> 'completed'
+GROUP BY order_status
+ORDER BY total DESC, order_status ASC
+`, orderStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"), orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProcessCatalogOverviewOrderStatusBreakdownDTO, 0, 4)
+	for rows.Next() {
+		row := &model.ProcessCatalogOverviewOrderStatusBreakdownDTO{}
 		if err := rows.Scan(&row.Status, &row.Count); err != nil {
 			return nil, err
 		}
@@ -3181,6 +3370,95 @@ ORDER BY step_number ASC, process_name ASC
 			&row.ActiveOrders,
 		); err != nil {
 			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getProcessCatalogOverviewProcessLoads(
+	ctx context.Context,
+	deptID int,
+) ([]*model.ProcessCatalogOverviewProcessLoadDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH process_rows AS (
+	SELECT
+		p.id AS process_id,
+		NULLIF(p.code, '') AS process_code,
+		COALESCE(NULLIF(p.name, ''), NULLIF(p.code, ''), 'Công đoạn') AS process_name,
+		NULLIF(p.section_name, '') AS section_name,
+		o.id AS order_id,
+		%s AS order_status,
+		%s AS process_status
+	FROM processes p
+	JOIN order_item_processes op
+		ON %s = %s
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	WHERE p.department_id = $1
+	  AND p.deleted_at IS NULL
+)
+SELECT
+	process_id,
+	process_code,
+	process_name,
+	section_name,
+	COUNT(DISTINCT order_id) AS active_orders,
+	COUNT(DISTINCT order_id) FILTER (WHERE order_status IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+	COUNT(*) FILTER (WHERE process_status <> 'completed') AS open_processes,
+	COUNT(*) AS total_processes,
+	COUNT(*) FILTER (WHERE process_status = 'completed') AS completed_processes
+FROM process_rows
+GROUP BY process_id, process_code, process_name, section_name
+ORDER BY open_processes DESC, active_orders DESC, process_name ASC
+LIMIT 6
+`, orderStatusExpr, processStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"))
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProcessCatalogOverviewProcessLoadDTO, 0, 6)
+	for rows.Next() {
+		row := &model.ProcessCatalogOverviewProcessLoadDTO{}
+		var (
+			processCode        stdsql.NullString
+			processName        stdsql.NullString
+			sectionName        stdsql.NullString
+			totalProcesses     int
+			completedProcesses int
+		)
+		if err := rows.Scan(
+			&row.ProcessID,
+			&processCode,
+			&processName,
+			&sectionName,
+			&row.ActiveOrders,
+			&row.InProductionOrders,
+			&row.OpenProcesses,
+			&totalProcesses,
+			&completedProcesses,
+		); err != nil {
+			return nil, err
+		}
+		if processCode.Valid {
+			row.ProcessCode = &processCode.String
+		}
+		if processName.Valid {
+			row.ProcessName = &processName.String
+		}
+		if sectionName.Valid {
+			row.SectionName = &sectionName.String
+		}
+		if totalProcesses > 0 {
+			row.CompletionPercent = int(math.Round((float64(completedProcesses) / float64(totalProcesses)) * 100))
 		}
 		result = append(result, row)
 	}

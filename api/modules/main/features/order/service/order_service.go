@@ -50,6 +50,7 @@ type OrderService interface {
 	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
 	GetProductCatalogOverview(ctx context.Context, deptID int) (*model.ProductCatalogOverviewDTO, error)
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
+	GetProcessCatalogOverview(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewDTO, error)
 	GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
 	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
@@ -88,6 +89,7 @@ func kOrderAll(deptID int) []string {
 		"order:advanced-report:summary:*",
 		"order:advanced-report:breakdown:*",
 		"order:product-overview:*",
+		"order:process-overview:*",
 		"order:material-overview:*",
 		"order:section-overview:*",
 		"order:staff-overview:*",
@@ -175,6 +177,10 @@ func kOrderProductOverview(deptID int, productID int) string {
 
 func kOrderProductCatalogOverview(deptID int) string {
 	return fmt.Sprintf("order:product-overview:dpt%d:catalog", deptID)
+}
+
+func kOrderProcessCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:process-overview:dpt%d:catalog", deptID)
 }
 
 func kOrderMaterialOverview(deptID int, materialID int) string {
@@ -268,6 +274,12 @@ func (s *orderService) GetProductOverview(ctx context.Context, deptID int, produ
 func (s *orderService) GetProductCatalogOverview(ctx context.Context, deptID int) (*model.ProductCatalogOverviewDTO, error) {
 	return cache.Get(kOrderProductCatalogOverview(deptID), cache.TTLShort, func() (*model.ProductCatalogOverviewDTO, error) {
 		return s.repo.GetProductCatalogOverview(ctx, deptID)
+	})
+}
+
+func (s *orderService) GetProcessCatalogOverview(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewDTO, error) {
+	return cache.Get(kOrderProcessCatalogOverview(deptID), cache.TTLShort, func() (*model.ProcessCatalogOverviewDTO, error) {
+		return s.repo.GetProcessCatalogOverview(ctx, deptID)
 	})
 }
 

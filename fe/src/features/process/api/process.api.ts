@@ -1,5 +1,6 @@
 import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
+import type { ProcessCatalogOverviewModel } from "@features/process/model/process-catalog-overview.model";
 import type { ProcessImportResult, ProcessModel } from "@features/process/model/process.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
@@ -33,6 +34,12 @@ export async function id(id: number): Promise<ProcessModel> {
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/process/${id}`);
   const result = mapper.map<any, ProcessModel>("Process", data, "dto_to_model");
   return result;
+}
+
+export async function catalogOverview(): Promise<ProcessCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/process-overview`);
+  return mapper.map<any, ProcessCatalogOverviewModel>("ProcessCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: ProcessModel): Promise<void> {

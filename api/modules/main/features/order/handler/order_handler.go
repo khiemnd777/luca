@@ -44,6 +44,7 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/summary", h.AdvancedSearchReportSummary)
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/breakdown", h.AdvancedSearchReportBreakdown)
 	app.RouterGet(router, "/:dept_id<int>/order/product-overview", h.GetProductCatalogOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/process-overview", h.GetProcessCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/product-overview/:product_id<int>", h.GetProductOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview", h.GetMaterialCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview/:material_id<int>", h.GetMaterialOverview)
@@ -262,6 +263,19 @@ func (h *OrderHandler) GetProductCatalogOverview(c *fiber.Ctx) error {
 
 	deptID, _ := utils.GetDeptIDInt(c)
 	res, err := h.svc.GetProductCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetProcessCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetProcessCatalogOverview(c.UserContext(), deptID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
