@@ -50,6 +50,7 @@ type OrderService interface {
 	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
+	GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
 }
@@ -84,6 +85,7 @@ func kOrderAll(deptID int) []string {
 		"order:advanced-report:breakdown:*",
 		"order:product-overview:*",
 		"order:material-overview:*",
+		"order:staff-overview:*",
 		kOrderSectionAll(),
 		kOrderPromotionAll(),
 		fmt.Sprintf("order:assigned:dpt%d:*", deptID),
@@ -170,6 +172,10 @@ func kOrderMaterialOverview(deptID int, materialID int) string {
 	return fmt.Sprintf("order:material-overview:dpt%d:material:%d", deptID, materialID)
 }
 
+func kOrderStaffOverview(deptID int, staffID int64) string {
+	return fmt.Sprintf("order:staff-overview:dpt%d:staff:%d", deptID, staffID)
+}
+
 func (s *orderService) Create(ctx context.Context, deptID int, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, userID, input)
 	if err != nil {
@@ -241,6 +247,12 @@ func (s *orderService) GetProductOverview(ctx context.Context, deptID int, produ
 func (s *orderService) GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error) {
 	return cache.Get(kOrderMaterialOverview(deptID, materialID), cache.TTLShort, func() (*model.MaterialOverviewDTO, error) {
 		return s.repo.GetMaterialOverview(ctx, deptID, materialID)
+	})
+}
+
+func (s *orderService) GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error) {
+	return cache.Get(kOrderStaffOverview(deptID, staffID), cache.TTLShort, func() (*model.StaffOverviewDTO, error) {
+		return s.repo.GetStaffOverview(ctx, deptID, staffID)
 	})
 }
 

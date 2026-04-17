@@ -5,6 +5,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	"github.com/khiemnd777/noah_api/modules/main/department/model"
+	staffrepo "github.com/khiemnd777/noah_api/modules/main/features/staff/repository"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
@@ -37,29 +38,19 @@ func NewDepartmentRepository(db *generated.Client, deps *module.ModuleDeps[confi
 }
 
 func (r *departmentRepo) Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
-	q := r.db.Department.Create().
-		SetActive(input.Active).
-		SetName(input.Name).
-		SetNillableLogo(input.Logo).
-		SetNillableLogoRect(input.LogoRect).
-		SetNillableAddress(input.Address).
-		SetNillablePhoneNumber(input.PhoneNumber).
-		SetNillableParentID(input.ParentID).
-		SetNillableAdministratorID(input.AdministratorID)
-
-	entity, err := q.Save(ctx)
-
+	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
 
-	departmentDTO := mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity)
-
-	return departmentDTO, nil
-}
-
-func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
-	entity, err := r.db.Department.UpdateOneID(input.ID).
+	entity, err := tx.Department.Create().
 		SetActive(input.Active).
 		SetName(input.Name).
 		SetNillableLogo(input.Logo).
@@ -69,14 +60,53 @@ func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) 
 		SetNillableParentID(input.ParentID).
 		SetNillableAdministratorID(input.AdministratorID).
 		Save(ctx)
-
 	if err != nil {
 		return nil, err
 	}
 
-	departmentDTO := mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity)
+	if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
+		if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+			return nil, err
+		}
+	}
 
-	return departmentDTO, nil
+	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+}
+
+func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
+	tx, err := r.db.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	entity, err := tx.Department.UpdateOneID(input.ID).
+		SetActive(input.Active).
+		SetName(input.Name).
+		SetNillableLogo(input.Logo).
+		SetNillableLogoRect(input.LogoRect).
+		SetNillableAddress(input.Address).
+		SetNillablePhoneNumber(input.PhoneNumber).
+		SetNillableParentID(input.ParentID).
+		SetNillableAdministratorID(input.AdministratorID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
+		if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
 }
 
 func (r *departmentRepo) GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error) {

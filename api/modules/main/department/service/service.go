@@ -102,10 +102,26 @@ func invalidateDept(id int) {
 	)
 }
 
+func invalidateAdminSync(adminID *int) {
+	if adminID == nil || *adminID <= 0 {
+		return
+	}
+
+	cache.InvalidateKeys(
+		keyMyFirstDept(*adminID),
+		fmt.Sprintf("staff:id:%d", *adminID),
+		fmt.Sprintf("section:staff:%d:*", *adminID),
+		"staff:list:*",
+		"staff:search:*",
+		"staff:section:*",
+	)
+}
+
 func (s *departmentService) Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
 	res, err := s.repo.Create(ctx, input)
 	if err == nil {
 		invalidateDept(res.ID)
+		invalidateAdminSync(res.AdministratorID)
 	}
 	return res, err
 }
@@ -115,6 +131,7 @@ func (s *departmentService) Update(ctx context.Context, input model.DepartmentDT
 	if err == nil {
 		invalidateDept(res.ID)
 		cache.InvalidateKeys(keyMyFirstDept(userID))
+		invalidateAdminSync(res.AdministratorID)
 	}
 	return res, err
 }

@@ -436,17 +436,13 @@ func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, adminID int, de
 		}
 	}()
 
-	const deleteQuery = `DELETE FROM department_members WHERE user_id = $1`
-	if _, err = tx.ExecContext(ctx, deleteQuery, adminID); err != nil {
+	if _, err = tx.Department.UpdateOneID(departmentID).
+		SetAdministratorID(adminID).
+		Save(ctx); err != nil {
 		return err
 	}
 
-	const insertQuery = `INSERT INTO department_members (user_id, department_id, created_at) VALUES ($1, $2, NOW())`
-	if _, err = tx.ExecContext(ctx, insertQuery, adminID, departmentID); err != nil {
-		return err
-	}
-
-	return nil
+	return SyncDepartmentAdminInTx(ctx, tx, adminID, departmentID)
 }
 
 func (r *staffRepo) ChangePassword(ctx context.Context, id int, newPassword string) error {

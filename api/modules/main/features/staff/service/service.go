@@ -178,7 +178,14 @@ func (s *staffService) AssignAdminToDepartment(ctx context.Context, adminID int,
 		return err
 	}
 
-	cache.InvalidateKeys(fmt.Sprintf("department:first_of_user:%d", adminID))
+	cache.InvalidateKeys(
+		fmt.Sprintf("department:first_of_user:%d", adminID),
+		fmt.Sprintf("staff:id:%d", adminID),
+		fmt.Sprintf("section:staff:%d:*", adminID),
+		kStaffListAll(),
+		kStaffSearchAll(),
+		kStaffSectionAll(),
+	)
 	return nil
 }
 

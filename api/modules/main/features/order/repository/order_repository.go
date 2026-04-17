@@ -68,6 +68,7 @@ type OrderRepository interface {
 	AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error)
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
+	GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error)
 	Delete(ctx context.Context, id int64) error
 }
 
@@ -1497,6 +1498,81 @@ func (r *orderRepository) GetMaterialOverview(ctx context.Context, deptID int, m
 		MaterialStatusBreakdown: materialStatusBreakdown,
 		ProcessLoad:             processLoad,
 		RecentOrders:            recentOrders,
+	}, nil
+}
+
+func (r *orderRepository) GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error) {
+	query := `
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		COALESCE(o.total_price, 0) AS total_revenue,
+		MAX(op.completed_at) AS latest_completed_at
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	WHERE op.assigned_id = $2
+	  AND op.completed_at IS NOT NULL
+	  AND op.order_id IS NOT NULL
+	GROUP BY o.id, o.total_price
+)
+SELECT
+	COUNT(*) AS lifetime_orders,
+	COALESCE(SUM(total_revenue), 0) AS lifetime_revenue,
+	COALESCE(AVG(total_revenue), 0) AS average_order_value,
+	COUNT(*) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '1 month') AS orders_1m,
+	COALESCE(SUM(total_revenue) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '1 month'), 0) AS revenue_1m,
+	COUNT(*) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '3 months') AS orders_3m,
+	COALESCE(SUM(total_revenue) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '3 months'), 0) AS revenue_3m,
+	COUNT(*) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '6 months') AS orders_6m,
+	COALESCE(SUM(total_revenue) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '6 months'), 0) AS revenue_6m,
+	COUNT(*) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '12 months') AS orders_12m,
+	COALESCE(SUM(total_revenue) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '12 months'), 0) AS revenue_12m
+FROM scoped_orders
+`
+
+	var (
+		summary   model.StaffOverviewSummaryDTO
+		orders1   int
+		orders3   int
+		orders6   int
+		orders12  int
+		revenue1  float64
+		revenue3  float64
+		revenue6  float64
+		revenue12 float64
+	)
+
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID, staffID).Scan(
+		&summary.LifetimeOrders,
+		&summary.LifetimeRevenue,
+		&summary.AverageOrderValue,
+		&orders1,
+		&revenue1,
+		&orders3,
+		&revenue3,
+		&orders6,
+		&revenue6,
+		&orders12,
+		&revenue12,
+	); err != nil {
+		return nil, err
+	}
+
+	summary.RecentOrderCount = orders1
+	summary.RecentRevenue = revenue1
+
+	return &model.StaffOverviewDTO{
+		StaffID: staffID,
+		Summary: &summary,
+		RevenueWindows: []*model.StaffOverviewRevenueWindowDTO{
+			{Key: "1m", Label: "1 tháng", Months: 1, OrderCount: orders1, TotalRevenue: revenue1},
+			{Key: "3m", Label: "3 tháng", Months: 3, OrderCount: orders3, TotalRevenue: revenue3},
+			{Key: "6m", Label: "6 tháng", Months: 6, OrderCount: orders6, TotalRevenue: revenue6},
+			{Key: "12m", Label: "12 tháng", Months: 12, OrderCount: orders12, TotalRevenue: revenue12},
+		},
 	}, nil
 }
 

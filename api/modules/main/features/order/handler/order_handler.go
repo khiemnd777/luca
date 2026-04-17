@@ -45,6 +45,7 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/breakdown", h.AdvancedSearchReportBreakdown)
 	app.RouterGet(router, "/:dept_id<int>/order/product-overview/:product_id<int>", h.GetProductOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview/:material_id<int>", h.GetMaterialOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/staff-overview/:staff_id<int>", h.GetStaffOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/remake/prepare", h.PrepareForRemakeByOrderID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>", h.GetByOrderIDAndOrderItemID)
@@ -262,6 +263,24 @@ func (h *OrderHandler) GetMaterialOverview(c *fiber.Ctx) error {
 	}
 
 	res, err := h.svc.GetMaterialOverview(c.UserContext(), deptID, materialID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetStaffOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	staffID, _ := utils.GetParamAsInt(c, "staff_id")
+	if staffID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid staff id")
+	}
+
+	res, err := h.svc.GetStaffOverview(c.UserContext(), deptID, int64(staffID))
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

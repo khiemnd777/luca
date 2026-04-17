@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
@@ -10,6 +12,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/logger"
+	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
 )
@@ -21,6 +24,14 @@ type CollectionHandler struct {
 
 func NewCollectionHandler(s *service.CollectionService, deps *module.ModuleDeps[config.ModuleConfig]) *CollectionHandler {
 	return &CollectionHandler{svc: s, deps: deps}
+}
+
+func respondCollectionError(c *fiber.Ctx, err error) error {
+	if errors.Is(err, sql.ErrNoRows) || errors.Is(err, customfields.ErrCollectionNotFound) {
+		return client_error.ResponseError(c, fiber.StatusNotFound, err, "collection not found")
+	}
+
+	return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 }
 
 // Mount dưới /metadata
@@ -116,14 +127,14 @@ func (h *CollectionHandler) GetOne(c *fiber.Ctx) error {
 	if id, err := strconv.Atoi(idOrSlug); err == nil {
 		out, err := h.svc.GetByID(c.UserContext(), id, withFields, tag, table, form)
 		if err != nil {
-			return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+			return respondCollectionError(c, err)
 		}
 		return c.JSON(out)
 	}
 	// slug
 	out, err := h.svc.GetBySlug(c.UserContext(), idOrSlug, withFields, tag, table, form)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+		return respondCollectionError(c, err)
 	}
 	return c.Status(fiber.StatusOK).JSON(out)
 }
@@ -161,14 +172,14 @@ func (h *CollectionHandler) GetAvailableOne(c *fiber.Ctx) error {
 	if id, err := strconv.Atoi(idOrSlug); err == nil {
 		out, err := h.svc.GetAvailableByID(c.UserContext(), id, withFields, tag, table, form, entityPtr)
 		if err != nil {
-			return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+			return respondCollectionError(c, err)
 		}
 		return c.JSON(out)
 	}
 	// slug
 	out, err := h.svc.GetByAvailableSlug(c.UserContext(), idOrSlug, withFields, tag, table, form, entityPtr)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+		return respondCollectionError(c, err)
 	}
 	return c.Status(fiber.StatusOK).JSON(out)
 }
