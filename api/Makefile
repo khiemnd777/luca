@@ -35,12 +35,10 @@ docker-up-observable-prod: observability-up
 	OBSERVABLE=true OBSERVABILITY_STACK_MANAGED_EXTERNALLY=true $(COMPOSE) --env-file $(PROD_ENV_FILE) -f docker-compose.prod.yml up --build -d
 
 observability-up:
-	mkdir -p ./tmp/observability/logs ./tmp/observability/loki ./tmp/observability/promtail ./tmp/observability/grafana
-	touch ./tmp/observability/logs/noah_api.json.log
-	$(COMPOSE) -f docker-compose.observability.yml up -d
+	./observability_up.sh
 
 observability-down:
-	$(COMPOSE) -f docker-compose.observability.yml down
+	./observability_down.sh
 
 wait-postgres:
 	$(COMPOSE) up -d $(POSTGRES_SERVICE)

@@ -5,6 +5,8 @@
 .env.*
 !.env.sample
 !**/.env.sample
+deploy/config/project.env
+deploy/tmp/
 
 # Local data and caches
 .data/

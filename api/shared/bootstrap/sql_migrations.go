@@ -231,6 +231,7 @@ func loadSQLMigrations() ([]sqlMigration, error) {
 	}
 
 	migrations := make([]sqlMigration, 0, len(entries))
+	seenVersions := make(map[int]string, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
@@ -245,6 +246,10 @@ func loadSQLMigrations() ([]sqlMigration, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse migration version %q failed: %w", entry.Name(), err)
 		}
+		if prev, exists := seenVersions[version]; exists {
+			return nil, fmt.Errorf("duplicate SQL migration version V%d: %s conflicts with %s", version, entry.Name(), prev)
+		}
+		seenVersions[version] = entry.Name()
 
 		path := filepath.Join(dir, entry.Name())
 		body, err := os.ReadFile(path)

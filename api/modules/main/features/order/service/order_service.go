@@ -55,6 +55,7 @@ type OrderService interface {
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
 	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
 	GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error)
+	GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error)
 	GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
@@ -203,6 +204,10 @@ func kOrderStaffOverview(deptID int, staffID int64) string {
 	return fmt.Sprintf("order:staff-overview:dpt%d:staff:%d", deptID, staffID)
 }
 
+func kOrderStaffCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:staff-overview:dpt%d:catalog", deptID)
+}
+
 func (s *orderService) Create(ctx context.Context, deptID int, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, userID, input)
 	if err != nil {
@@ -304,6 +309,12 @@ func (s *orderService) GetSectionOverview(ctx context.Context, deptID int, secti
 func (s *orderService) GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error) {
 	return cache.Get(kOrderSectionCatalogOverview(deptID), cache.TTLShort, func() (*model.SectionCatalogOverviewDTO, error) {
 		return s.repo.GetSectionCatalogOverview(ctx, deptID)
+	})
+}
+
+func (s *orderService) GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error) {
+	return cache.Get(kOrderStaffCatalogOverview(deptID), cache.TTLShort, func() (*model.StaffCatalogOverviewDTO, error) {
+		return s.repo.GetStaffCatalogOverview(ctx, deptID)
 	})
 }
 

@@ -237,8 +237,9 @@ func (h *OrderItemProcessHandler) ProcessesForStaff(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
+	deptID, _ := utils.GetDeptIDInt(c)
 	staffID, _ := utils.GetParamAsInt(c, "staff_id")
-	res, err := h.svc.GetProcessesByAssignedID(c.UserContext(), int64(staffID))
+	res, err := h.svc.GetProcessesByAssignedID(c.UserContext(), deptID, int64(staffID))
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
@@ -249,6 +250,7 @@ func (h *OrderItemProcessHandler) ProcessesForStaffTimeline(c *fiber.Ctx) error 
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
+	deptID, _ := utils.GetDeptIDInt(c)
 	staffID, _ := utils.GetParamAsInt(c, "staff_id")
 	if staffID <= 0 {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
@@ -272,7 +274,7 @@ func (h *OrderItemProcessHandler) ProcessesForStaffTimeline(c *fiber.Ctx) error 
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid to_date")
 	}
 
-	res, err := h.svc.GetProcessesByStaffTimeline(c.UserContext(), int64(staffID), fromDate, toDate)
+	res, err := h.svc.GetProcessesByStaffTimeline(c.UserContext(), deptID, int64(staffID), fromDate, toDate)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

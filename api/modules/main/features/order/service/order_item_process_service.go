@@ -32,10 +32,12 @@ type OrderItemProcessService interface {
 
 	GetProcessesByAssignedID(
 		ctx context.Context,
+		deptID int,
 		assignedID int64,
 	) ([]*model.OrderItemProcessDTO, error)
 	GetProcessesByStaffTimeline(
 		ctx context.Context,
+		deptID int,
 		staffID int64,
 		from time.Time,
 		to time.Time,
@@ -178,22 +180,24 @@ func (s *orderItemProcessService) GetProcessesByOrderItemID(
 
 func (s *orderItemProcessService) GetProcessesByAssignedID(
 	ctx context.Context,
+	deptID int,
 	assignedID int64,
 ) ([]*model.OrderItemProcessDTO, error) {
-	return cache.GetList(fmt.Sprintf("order:assigned:%d:processes", assignedID), cache.TTLShort, func() ([]*model.OrderItemProcessDTO, error) {
-		return s.repo.GetProcessesByAssignedID(ctx, nil, assignedID)
+	return cache.GetList(fmt.Sprintf("order:assigned:dpt%d:%d:processes", deptID, assignedID), cache.TTLShort, func() ([]*model.OrderItemProcessDTO, error) {
+		return s.repo.GetProcessesByAssignedID(ctx, nil, deptID, assignedID)
 	})
 }
 
 func (s *orderItemProcessService) GetProcessesByStaffTimeline(
 	ctx context.Context,
+	deptID int,
 	staffID int64,
 	from time.Time,
 	to time.Time,
 ) ([]*model.OrderItemProcessDTO, error) {
-	key := fmt.Sprintf("order:assigned:%d:timeline:%d:%d", staffID, from.Unix(), to.Unix())
+	key := fmt.Sprintf("order:assigned:dpt%d:%d:timeline:%d:%d", deptID, staffID, from.Unix(), to.Unix())
 	return cache.GetList(key, cache.TTLShort, func() ([]*model.OrderItemProcessDTO, error) {
-		return s.repo.GetProcessesByStaffTimeline(ctx, nil, staffID, from, to)
+		return s.repo.GetProcessesByStaffTimeline(ctx, nil, deptID, staffID, from, to)
 	})
 }
 

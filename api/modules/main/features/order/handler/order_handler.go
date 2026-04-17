@@ -50,6 +50,7 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview/:material_id<int>", h.GetMaterialOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/section-overview", h.GetSectionCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/section-overview/:section_id<int>", h.GetSectionOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/staff-overview", h.GetStaffCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/staff-overview/:staff_id<int>", h.GetStaffOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/remake/prepare", h.PrepareForRemakeByOrderID)
@@ -338,6 +339,19 @@ func (h *OrderHandler) GetSectionCatalogOverview(c *fiber.Ctx) error {
 
 	deptID, _ := utils.GetDeptIDInt(c)
 	res, err := h.svc.GetSectionCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetStaffCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetStaffCatalogOverview(c.UserContext(), deptID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

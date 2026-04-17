@@ -5,6 +5,7 @@ import type { InProgressOrderModel } from "@features/order/model/inprogress-orde
 import type { NewestOrderModel } from "@features/order/model/newest-order.model";
 import type { CompletedOrderModel } from "@features/order/model/completed-order.model";
 import type { StaffOverviewModel } from "@features/order/model/staff-overview.model";
+import type { StaffCatalogOverviewModel } from "@features/order/model/staff-catalog-overview.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -275,6 +276,12 @@ export async function getStaffOverview(staffId: number): Promise<StaffOverviewMo
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/staff-overview/${staffId}`);
   return mapper.map<any, StaffOverviewModel>("StaffOverview", data, "dto_to_model");
+}
+
+export async function getStaffCatalogOverview(): Promise<StaffCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/staff-overview`);
+  return mapper.map<any, StaffCatalogOverviewModel>("StaffCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: OrderUpsertModel): Promise<OrderModel> {

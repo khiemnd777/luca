@@ -1,0 +1,122 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build frontend
+        working-directory: fe
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: api/go.mod
+
+      - name: Run API tests
+        working-directory: api
+        run: go test ./...
+
+      - name: Install SSH deploy tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass rsync
+
+      - name: Sync source snapshot to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+        run: |
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_PATH'"
+          sshpass -p "$VPS_PASSWORD" rsync -az --delete \
+            --exclude ".git/" \
+            --exclude "deploy/config/project.env" \
+            -e "ssh -o StrictHostKeyChecking=no -p $VPS_PORT" \
+            ./ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/"
+
+      - name: Write remote deploy env
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+          VPS_SUDO_PASSWORD: ${{ secrets.VPS_SUDO_PASSWORD }}
+          PROJECT_ENV_B64: ${{ secrets.PROJECT_ENV_B64 }}
+          LETSENCRYPT_EMAIL: ${{ secrets.LETSENCRYPT_EMAIL }}
+        run: |
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "cat > '$VPS_DEPLOY_PATH/.deploy.env'" <<EOF
+          VPS_SUDO_PASSWORD=$VPS_SUDO_PASSWORD
+          PROJECT_ENV_B64=$PROJECT_ENV_B64
+          LETSENCRYPT_EMAIL=$LETSENCRYPT_EMAIL
+          EOF
+
+      - name: Provision and deploy on VPS
+        id: remote_deploy
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+        run: |
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "cd '$VPS_DEPLOY_PATH' && bash deploy/scripts/provision-and-deploy.sh"
+
+      - name: Prepare notification context
+        if: always()
+        run: |
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "DEPLOY_STATUS=SUCCESS" >> "$GITHUB_ENV"
+          else
+            echo "DEPLOY_STATUS=FAILED" >> "$GITHUB_ENV"
+          fi
+          echo "RUN_URL=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
+
+      - name: Send deploy notification
+        if: always()
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[DEPLOY ${{ env.DEPLOY_STATUS }}] ${{ github.event.repository.name }} ${{ github.ref_name }} #${{ github.run_number }}"
+          to: ${{ secrets.SMTP_TO }}
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            Repository: ${{ github.repository }}
+            Branch: ${{ github.ref_name }}
+            Actor: ${{ github.actor }}
+            Commit: ${{ env.SHORT_SHA }}
+            Run Number: ${{ github.run_number }}
+            Status: ${{ env.DEPLOY_STATUS }}
+            Actions Run: ${{ env.RUN_URL }}

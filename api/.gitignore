@@ -37,6 +37,8 @@
 !docker-compose.observability.yml
 !observability/
 !observability/**/*.yaml
+observability/promtail-config.yaml
+observability/grafana/provisioning/datasources/loki.yaml
 
 # === IDEs ===
 .vscode/

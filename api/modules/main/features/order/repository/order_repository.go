@@ -5,6 +5,7 @@ import (
 	stdsql "database/sql"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -73,6 +74,7 @@ type OrderRepository interface {
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
 	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
 	GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error)
+	GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error)
 	GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error)
 	Delete(ctx context.Context, id int64) error
 }
@@ -186,6 +188,61 @@ func normalizedProcessStatusExpr(alias string) string {
 
 func normalizedMaterialStatusExpr(alias string) string {
 	return fmt.Sprintf(`COALESCE(NULLIF(%s.status, ''), 'on_loan')`, alias)
+}
+
+func catalogProcessMapCTE() string {
+	return fmt.Sprintf(`product_categories AS (
+	SELECT
+		id AS product_id,
+		category_id
+	FROM products
+	WHERE department_id = $1
+	  AND deleted_at IS NULL
+),
+process_candidates AS (
+	SELECT
+		pc.product_id,
+		cp.process_id,
+		1 AS source_priority,
+		cp.display_order
+	FROM product_categories pc
+	JOIN %s cp
+		ON cp.category_id = pc.category_id
+
+	UNION ALL
+
+	SELECT
+		pc.product_id,
+		pp.process_id,
+		2 AS source_priority,
+		pp.display_order
+	FROM product_categories pc
+	JOIN %s pp
+		ON pp.product_id = pc.product_id
+),
+ranked_processes AS (
+	SELECT
+		product_id,
+		process_id,
+		source_priority,
+		display_order,
+		ROW_NUMBER() OVER (
+			PARTITION BY product_id, process_id
+			ORDER BY source_priority ASC, display_order ASC, process_id ASC
+		) AS rn
+	FROM process_candidates
+),
+catalog_process_map AS (
+	SELECT
+		product_id,
+		process_id,
+		ROW_NUMBER() OVER (
+			PARTITION BY product_id
+			ORDER BY source_priority ASC, display_order ASC, process_id ASC
+		) AS step_number
+	FROM ranked_processes
+	WHERE rn = 1
+)`, categoryprocess.Table, productprocess.Table)
 }
 
 func materialOverviewScopeLabel(materialType *string, isImplant bool) string {
@@ -1703,6 +1760,125 @@ func (r *orderRepository) GetSectionCatalogOverview(ctx context.Context, deptID 
 	}, nil
 }
 
+type staffCatalogBaseRow struct {
+	StaffID      int64
+	Name         string
+	Active       bool
+	SectionNames []string
+}
+
+type staffCatalogMetricsRow struct {
+	StaffID                  int64
+	OpenProcesses            int
+	WaitingCount             int
+	InProgressCount          int
+	QCCount                  int
+	ReworkCount              int
+	RecentCompletedProcesses int
+	RecentOrders             int
+	RecentRevenue            float64
+}
+
+func (r *orderRepository) GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error) {
+	staffs, err := r.getStaffCatalogOverviewBase(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	metricsByStaffID, backlogCounts, err := r.getStaffCatalogOverviewMetrics(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	sectionLoads, err := r.getStaffCatalogOverviewSectionLoads(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	workforceSections, err := r.getStaffCatalogOverviewWorkforceSections(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := &model.StaffCatalogOverviewSummaryDTO{
+		BacklogStatusCounts: map[string]int{
+			"waiting":     backlogCounts["waiting"],
+			"in_progress": backlogCounts["in_progress"],
+			"qc":          backlogCounts["qc"],
+			"rework":      backlogCounts["rework"],
+			"completed":   0,
+		},
+		SectionLoads:      sectionLoads,
+		WorkforceSections: workforceSections,
+		Coverage: &model.StaffCatalogOverviewCoverageDTO{
+			ExpectedStaffs:      len(staffs),
+			StaffsWithOrderData: len(metricsByStaffID),
+			FailedStaffs:        0,
+		},
+	}
+
+	performers := make([]*model.StaffCatalogOverviewPerformerDTO, 0, len(staffs))
+
+	for _, staff := range staffs {
+		summary.TotalStaff += 1
+		if staff.Active {
+			summary.ActiveStaff += 1
+		}
+
+		if metric, ok := metricsByStaffID[staff.StaffID]; ok {
+			if metric.OpenProcesses > 0 {
+				summary.AssignedStaffCount += 1
+			}
+			summary.TotalOpenProcesses += metric.OpenProcesses
+			summary.TotalRecentCompletedProcesses += metric.RecentCompletedProcesses
+			summary.TotalRecentOrders += metric.RecentOrders
+			summary.TotalRecentRevenue += metric.RecentRevenue
+
+			performers = append(performers, &model.StaffCatalogOverviewPerformerDTO{
+				StaffID:                  staff.StaffID,
+				Name:                     staff.Name,
+				OpenProcesses:            metric.OpenProcesses,
+				RecentCompletedProcesses: metric.RecentCompletedProcesses,
+				RecentOrders:             metric.RecentOrders,
+				RecentRevenue:            metric.RecentRevenue,
+			})
+		}
+	}
+
+	summary.InactiveStaff = summary.TotalStaff - summary.ActiveStaff
+	summary.IdleStaffCount = summary.TotalStaff - summary.AssignedStaffCount
+	if summary.AssignedStaffCount > 0 {
+		summary.AvgOpenProcessesPerAssigned = float64(summary.TotalOpenProcesses) / float64(summary.AssignedStaffCount)
+	}
+	if summary.ActiveStaff > 0 {
+		summary.EngagementRate = (float64(summary.AssignedStaffCount) / float64(summary.ActiveStaff)) * 100
+	}
+
+	sort.Slice(performers, func(i, j int) bool {
+		left := performers[i]
+		right := performers[j]
+		if left.RecentCompletedProcesses != right.RecentCompletedProcesses {
+			return left.RecentCompletedProcesses > right.RecentCompletedProcesses
+		}
+		if left.RecentOrders != right.RecentOrders {
+			return left.RecentOrders > right.RecentOrders
+		}
+		if left.RecentRevenue != right.RecentRevenue {
+			return left.RecentRevenue > right.RecentRevenue
+		}
+		if left.OpenProcesses != right.OpenProcesses {
+			return left.OpenProcesses > right.OpenProcesses
+		}
+		return strings.Compare(left.Name, right.Name) < 0
+	})
+	if len(performers) > 5 {
+		performers = performers[:5]
+	}
+	summary.TopPerformers = performers
+
+	return &model.StaffCatalogOverviewDTO{Summary: summary}, nil
+}
+
 func (r *orderRepository) GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error) {
 	query := `
 WITH scoped_orders AS (
@@ -1776,6 +1952,227 @@ FROM scoped_orders
 			{Key: "12m", Label: "12 tháng", Months: 12, OrderCount: orders12, TotalRevenue: revenue12},
 		},
 	}, nil
+}
+
+func (r *orderRepository) getStaffCatalogOverviewBase(ctx context.Context, deptID int) ([]staffCatalogBaseRow, error) {
+	query := `
+SELECT
+	s.user_staff,
+	u.name,
+	COALESCE(u.active, FALSE) AS active,
+	COALESCE(s.section_names, '') AS section_names
+FROM staffs s
+JOIN users u
+	ON u.id = s.user_staff
+WHERE s.department_id = $1
+ORDER BY s.id ASC
+`
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]staffCatalogBaseRow, 0)
+	for rows.Next() {
+		var (
+			row             staffCatalogBaseRow
+			sectionNamesRaw string
+		)
+		if err := rows.Scan(&row.StaffID, &row.Name, &row.Active, &sectionNamesRaw); err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(sectionNamesRaw) == "" {
+			row.SectionNames = []string{"Chưa gán bộ phận"}
+		} else {
+			row.SectionNames = strings.Split(sectionNamesRaw, "|")
+		}
+		result = append(result, row)
+	}
+
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getStaffCatalogOverviewMetrics(ctx context.Context, deptID int) (map[int64]*staffCatalogMetricsRow, map[string]int, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_processes AS (
+	SELECT
+		op.assigned_id AS staff_id,
+		%s AS process_status,
+		op.completed_at,
+		o.id AS order_id,
+		COALESCE(o.total_price, 0) AS total_revenue
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	JOIN staffs s
+		ON s.user_staff = op.assigned_id
+	   AND s.department_id = $1
+	WHERE op.assigned_id IS NOT NULL
+),
+recent_orders AS (
+	SELECT
+		staff_id,
+		COUNT(*) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '30 day') AS recent_orders,
+		COALESCE(SUM(total_revenue) FILTER (WHERE latest_completed_at >= NOW() - INTERVAL '30 day'), 0) AS recent_revenue
+	FROM (
+		SELECT
+			staff_id,
+			order_id,
+			MAX(completed_at) AS latest_completed_at,
+			MAX(total_revenue) AS total_revenue
+		FROM scoped_processes
+		WHERE completed_at IS NOT NULL
+		GROUP BY staff_id, order_id
+	) order_totals
+	GROUP BY staff_id
+)
+SELECT
+	sp.staff_id,
+	COUNT(*) FILTER (WHERE sp.process_status <> 'completed') AS open_processes,
+	COUNT(*) FILTER (WHERE sp.process_status = 'waiting') AS waiting_count,
+	COUNT(*) FILTER (WHERE sp.process_status = 'in_progress') AS in_progress_count,
+	COUNT(*) FILTER (WHERE sp.process_status = 'qc') AS qc_count,
+	COUNT(*) FILTER (WHERE sp.process_status = 'rework') AS rework_count,
+	COUNT(*) FILTER (WHERE sp.completed_at >= NOW() - INTERVAL '30 day') AS recent_completed_processes,
+	COALESCE(ro.recent_orders, 0) AS recent_orders,
+	COALESCE(ro.recent_revenue, 0) AS recent_revenue
+FROM scoped_processes sp
+LEFT JOIN recent_orders ro
+	ON ro.staff_id = sp.staff_id
+GROUP BY sp.staff_id, ro.recent_orders, ro.recent_revenue
+`, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	metricsByStaffID := make(map[int64]*staffCatalogMetricsRow)
+	backlogCounts := map[string]int{
+		"waiting":     0,
+		"in_progress": 0,
+		"qc":          0,
+		"rework":      0,
+	}
+
+	for rows.Next() {
+		row := &staffCatalogMetricsRow{}
+		if err := rows.Scan(
+			&row.StaffID,
+			&row.OpenProcesses,
+			&row.WaitingCount,
+			&row.InProgressCount,
+			&row.QCCount,
+			&row.ReworkCount,
+			&row.RecentCompletedProcesses,
+			&row.RecentOrders,
+			&row.RecentRevenue,
+		); err != nil {
+			return nil, nil, err
+		}
+
+		backlogCounts["waiting"] += row.WaitingCount
+		backlogCounts["in_progress"] += row.InProgressCount
+		backlogCounts["qc"] += row.QCCount
+		backlogCounts["rework"] += row.ReworkCount
+		metricsByStaffID[row.StaffID] = row
+	}
+
+	return metricsByStaffID, backlogCounts, rows.Err()
+}
+
+func (r *orderRepository) getStaffCatalogOverviewSectionLoads(ctx context.Context, deptID int) ([]*model.StaffCatalogOverviewSectionLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_processes AS (
+	SELECT
+		op.assigned_id AS staff_id,
+		COALESCE(NULLIF(op.section_name, ''), 'Chưa gán bộ phận') AS section_name,
+		%s AS process_status
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	JOIN staffs s
+		ON s.user_staff = op.assigned_id
+	   AND s.department_id = $1
+	WHERE op.assigned_id IS NOT NULL
+)
+SELECT
+	section_name,
+	COUNT(DISTINCT staff_id) AS staff_count,
+	COUNT(*) AS open_processes
+FROM scoped_processes
+WHERE process_status <> 'completed'
+GROUP BY section_name
+ORDER BY open_processes DESC, staff_count DESC, section_name ASC
+`, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.StaffCatalogOverviewSectionLoadDTO, 0)
+	for rows.Next() {
+		row := &model.StaffCatalogOverviewSectionLoadDTO{}
+		if err := rows.Scan(&row.SectionName, &row.StaffCount, &row.OpenProcesses); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getStaffCatalogOverviewWorkforceSections(ctx context.Context, deptID int) ([]*model.StaffCatalogOverviewSectionLoadDTO, error) {
+	query := `
+WITH expanded_sections AS (
+	SELECT
+		s.user_staff AS staff_id,
+		UNNEST(
+			CASE
+				WHEN COALESCE(NULLIF(s.section_names, ''), '') = '' THEN ARRAY['Chưa gán bộ phận']
+				ELSE string_to_array(s.section_names, '|')
+			END
+		) AS section_name
+	FROM staffs s
+	WHERE s.department_id = $1
+)
+SELECT
+	section_name,
+	COUNT(DISTINCT staff_id) AS staff_count
+FROM expanded_sections
+GROUP BY section_name
+ORDER BY staff_count DESC, section_name ASC
+`
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.StaffCatalogOverviewSectionLoadDTO, 0)
+	for rows.Next() {
+		row := &model.StaffCatalogOverviewSectionLoadDTO{}
+		if err := rows.Scan(&row.SectionName, &row.StaffCount); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+
+	return result, rows.Err()
 }
 
 func (r *orderRepository) resolveSectionOverviewScope(ctx context.Context, deptID int, sectionID int) (*sectionOverviewScope, error) {
@@ -2272,6 +2669,7 @@ SELECT
 
 func (r *orderRepository) getProcessCatalogOverviewCoverage(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewCoverageDTO, error) {
 	query := fmt.Sprintf(`
+WITH %s
 SELECT
 	COALESCE((
 		SELECT COUNT(*)
@@ -2281,17 +2679,20 @@ SELECT
 	), 0) AS total_processes,
 	COALESCE((
 		SELECT COUNT(DISTINCT p.id)
-		FROM processes p
+		FROM catalog_process_map cpm
 		JOIN order_item_processes op
-			ON %s = %s
+			ON op.product_id = cpm.product_id
+		   AND op.step_number = cpm.step_number
 		JOIN orders o
 			ON o.id = op.order_id
 		   AND o.deleted_at IS NULL
 		   AND o.department_id = $1
-		WHERE p.department_id = $1
-		  AND p.deleted_at IS NULL
+		JOIN processes p
+			ON p.id = cpm.process_id
+		   AND p.department_id = $1
+		   AND p.deleted_at IS NULL
 	), 0) AS processes_with_orders
-`, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"))
+`, catalogProcessMapCTE())
 
 	coverage := &model.ProcessCatalogOverviewCoverageDTO{
 		ScopeLabel: processCatalogOverviewScopeLabel(),
@@ -2311,20 +2712,24 @@ func (r *orderRepository) getProcessCatalogOverviewSummary(ctx context.Context, 
 	processStatusExpr := normalizedProcessStatusExpr("op")
 
 	query := fmt.Sprintf(`
-WITH scoped_processes AS (
+WITH %s,
+scoped_processes AS (
 	SELECT
 		op.id,
 		op.order_id,
 		%s AS order_status,
 		%s AS process_status,
 		COALESCE(MAX(o.remake_count), 0) AS remake_count
-	FROM order_item_processes op
+	FROM catalog_process_map cpm
+	JOIN order_item_processes op
+		ON op.product_id = cpm.product_id
+	   AND op.step_number = cpm.step_number
 	JOIN orders o
 		ON o.id = op.order_id
 	   AND o.deleted_at IS NULL
 	   AND o.department_id = $1
 	JOIN processes p
-		ON %s = %s
+		ON p.id = cpm.process_id
 	   AND p.department_id = $1
 	   AND p.deleted_at IS NULL
 	GROUP BY op.id, op.order_id, %s, %s
@@ -2346,7 +2751,7 @@ SELECT
 	COALESCE((SELECT COUNT(*) FROM scoped_processes WHERE process_status <> 'completed'), 0) AS open_processes,
 	COALESCE((SELECT COUNT(*) FROM scoped_processes), 0) AS total_processes,
 	COALESCE((SELECT COUNT(*) FROM scoped_processes WHERE process_status = 'completed'), 0) AS completed_processes
-`, orderStatusExpr, processStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"), orderStatusExpr, processStatusExpr)
+`, catalogProcessMapCTE(), orderStatusExpr, processStatusExpr, orderStatusExpr, processStatusExpr)
 
 	summary := &model.ProcessCatalogOverviewSummaryDTO{}
 	var totalProcesses int
@@ -2783,19 +3188,23 @@ func (r *orderRepository) getProcessCatalogOverviewOrderStatusBreakdown(
 	orderStatusExpr := normalizedOrderStatusExpr("o")
 
 	query := fmt.Sprintf(`
-WITH scoped_orders AS (
+WITH %s,
+scoped_orders AS (
 	SELECT
 		o.id AS order_id,
 		%s AS order_status
-	FROM orders o
+	FROM catalog_process_map cpm
 	JOIN order_item_processes op
-		ON op.order_id = o.id
+		ON op.product_id = cpm.product_id
+	   AND op.step_number = cpm.step_number
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
 	JOIN processes p
-		ON %s = %s
+		ON p.id = cpm.process_id
 	   AND p.department_id = $1
 	   AND p.deleted_at IS NULL
-	WHERE o.deleted_at IS NULL
-	  AND o.department_id = $1
 	GROUP BY o.id, %s
 )
 SELECT order_status, COUNT(*) AS total
@@ -2803,7 +3212,7 @@ FROM scoped_orders
 WHERE order_status <> 'completed'
 GROUP BY order_status
 ORDER BY total DESC, order_status ASC
-`, orderStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"), orderStatusExpr)
+`, catalogProcessMapCTE(), orderStatusExpr, orderStatusExpr)
 
 	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
 	if err != nil {
@@ -3384,7 +3793,8 @@ func (r *orderRepository) getProcessCatalogOverviewProcessLoads(
 	processStatusExpr := normalizedProcessStatusExpr("op")
 
 	query := fmt.Sprintf(`
-WITH process_rows AS (
+WITH %s,
+process_rows AS (
 	SELECT
 		p.id AS process_id,
 		NULLIF(p.code, '') AS process_code,
@@ -3393,9 +3803,12 @@ WITH process_rows AS (
 		o.id AS order_id,
 		%s AS order_status,
 		%s AS process_status
-	FROM processes p
+	FROM catalog_process_map cpm
 	JOIN order_item_processes op
-		ON %s = %s
+		ON op.product_id = cpm.product_id
+	   AND op.step_number = cpm.step_number
+	JOIN processes p
+		ON p.id = cpm.process_id
 	JOIN orders o
 		ON o.id = op.order_id
 	   AND o.deleted_at IS NULL
@@ -3417,7 +3830,7 @@ FROM process_rows
 GROUP BY process_id, process_code, process_name, section_name
 ORDER BY open_processes DESC, active_orders DESC, process_name ASC
 LIMIT 6
-`, orderStatusExpr, processStatusExpr, processCatalogNameExpr("p"), processCatalogJoinNameExpr("op"))
+`, catalogProcessMapCTE(), orderStatusExpr, processStatusExpr)
 
 	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/categoryprocess"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocess"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/product"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/productprocess"
@@ -100,11 +101,13 @@ type OrderItemProcessRepository interface {
 	GetProcessesByAssignedID(
 		ctx context.Context,
 		tx *generated.Tx,
+		deptID int,
 		assignedID int64,
 	) ([]*model.OrderItemProcessDTO, error)
 	GetProcessesByStaffTimeline(
 		ctx context.Context,
 		tx *generated.Tx,
+		deptID int,
 		staffID int64,
 		from time.Time,
 		to time.Time,
@@ -545,6 +548,7 @@ func (r *orderItemProcessRepository) GetProcessesByOrderItemID(
 func (r *orderItemProcessRepository) GetProcessesByAssignedID(
 	ctx context.Context,
 	tx *generated.Tx,
+	deptID int,
 	assignedID int64,
 ) ([]*model.OrderItemProcessDTO, error) {
 	var oipC *generated.OrderItemProcessClient
@@ -557,6 +561,14 @@ func (r *orderItemProcessRepository) GetProcessesByAssignedID(
 		Query().
 		Where(
 			orderitemprocess.AssignedID(assignedID),
+			func(s *sql.Selector) {
+				orderTable := sql.Table(order.Table)
+				s.Join(orderTable).On(s.C(orderitemprocess.FieldOrderID), orderTable.C(order.FieldID))
+				s.Where(sql.And(
+					sql.IsNull(orderTable.C(order.FieldDeletedAt)),
+					sql.EQ(orderTable.C(order.FieldDepartmentID), deptID),
+				))
+			},
 		).
 		Order(
 			orderitemprocess.ByProductName(sql.OrderAsc()),
@@ -576,6 +588,7 @@ func (r *orderItemProcessRepository) GetProcessesByAssignedID(
 func (r *orderItemProcessRepository) GetProcessesByStaffTimeline(
 	ctx context.Context,
 	tx *generated.Tx,
+	deptID int,
 	staffID int64,
 	from time.Time,
 	to time.Time,
@@ -594,6 +607,14 @@ func (r *orderItemProcessRepository) GetProcessesByStaffTimeline(
 			orderitemprocess.AssignedID(staffID),
 			orderitemprocess.StartedAtGTE(from),
 			orderitemprocess.StartedAtLT(to),
+			func(s *sql.Selector) {
+				orderTable := sql.Table(order.Table)
+				s.Join(orderTable).On(s.C(orderitemprocess.FieldOrderID), orderTable.C(order.FieldID))
+				s.Where(sql.And(
+					sql.IsNull(orderTable.C(order.FieldDeletedAt)),
+					sql.EQ(orderTable.C(order.FieldDepartmentID), deptID),
+				))
+			},
 		).
 		Order(
 			orderitemprocess.ByStartedAt(sql.OrderAsc()),

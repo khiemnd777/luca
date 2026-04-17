@@ -96,6 +96,7 @@ export function deliveryStatusDisplayOrder(value?: string | null): number {
 }
 
 const ORDER_STATUS_PALETTE = [
+  "#9e9e9e", // waiting - gray
   "#607d8b", // received - blue gray
   "#1976d2", // in progress - blue
   "#f9a825", // qc - amber
@@ -106,15 +107,17 @@ const ORDER_STATUS_PALETTE = [
 
 // status
 const ORDER_STATUSES = [
-  { value: "received", label: "Đã nhận đơn", displayOrder: 1, },
-  { value: "in_progress", label: "Đang gia công", displayOrder: 2, },
-  { value: "qc", label: "Đang kiểm thử", displayOrder: 3, },
-  { value: "issue", label: "Sự cố", displayOrder: 4, },
-  { value: "rework", label: "Làm lại", displayOrder: 5, },
-  { value: "completed", label: "Đã hoàn thành", displayOrder: 6, },
+  { value: "waiting", label: "Đang chờ", displayOrder: 1, },
+  { value: "received", label: "Đã nhận đơn", displayOrder: 2, },
+  { value: "in_progress", label: "Đang gia công", displayOrder: 3, },
+  { value: "qc", label: "Đang kiểm thử", displayOrder: 4, },
+  { value: "issue", label: "Sự cố", displayOrder: 5, },
+  { value: "rework", label: "Làm lại", displayOrder: 6, },
+  { value: "completed", label: "Đã hoàn thành", displayOrder: 7, },
 ] as const;
 
 const ORDER_STATUS_HELPERS = [
+  { value: "waiting", label: "Số lượng đơn đang chờ xử lý" },
   { value: "received", label: "Số lượng đơn đã nhận" },
   { value: "in_progress", label: "Số lượng đơn đang được gia công" },
   { value: "qc", label: "Số lượng đơn đang kiểm tra chất lượng" },

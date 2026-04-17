@@ -16,35 +16,28 @@ import {
   Typography,
 } from "@mui/material";
 import { useAsync } from "@core/hooks/use-async/use-async";
-import { registerSlot } from "@root/core/module/registry";
-import { getStaffOverview } from "@features/order/api/order.api";
-import { processesForStaff } from "@features/order/api/order-item-process.api";
+import { getStaffCatalogOverview } from "@features/order/api/order.api";
 import { StatCard } from "@features/dashboard/components/stat-card";
-import { table as fetchStaffTable } from "@features/staff/api/staff.api";
 import { SectionCard } from "@shared/components/ui/section-card";
 import { ResponsiveGrid } from "@shared/components/ui/responsive-grid";
 import { prefixCurrency } from "@shared/utils/currency.utils";
 import { statusColor, statusLabel } from "@shared/utils/order.utils";
 import { useAuthStore } from "@store/auth-store";
-import type { StaffModel } from "@features/staff/model/staff.model";
 import {
-  buildStaffInsightSummary,
-  type StaffInsightCoverage,
-  type StaffInsightOrderSnapshot,
   type StaffInsightStatusKey,
-  type StaffInsightSummary,
 } from "@features/staff/utils/staff-insight.utils";
+import type {
+  StaffCatalogOverviewCoverageModel,
+  StaffCatalogOverviewModel,
+  StaffCatalogOverviewSummaryModel,
+} from "@features/order/model/staff-catalog-overview.model";
 
-const STAFF_PAGE_LIMIT = 200;
-const ORDER_FETCH_BATCH = 6;
 const numberFormatter = new Intl.NumberFormat("vi-VN");
 const currencyFormatter = new Intl.NumberFormat("vi-VN");
 const STATUS_SEQUENCE: StaffInsightStatusKey[] = ["waiting", "in_progress", "qc", "rework"];
 
-type StaffInsightPayload = {
-  canViewOrder: boolean;
-  summary: StaffInsightSummary;
-};
+type StaffInsightSummary = StaffCatalogOverviewSummaryModel;
+type StaffInsightCoverage = StaffCatalogOverviewCoverageModel;
 
 function formatNumber(value?: number | null) {
   return numberFormatter.format(Number(value ?? 0));
@@ -73,56 +66,6 @@ function buildNarrative(summary: StaffInsightSummary, canViewOrder: boolean) {
   }
 
   return `${formatNumber(summary.assignedStaffCount)} trên ${formatNumber(summary.activeStaff)} nhân sự đang trực tiếp xử lý ${formatNumber(summary.totalOpenProcesses)} công đoạn mở. Trong 30 ngày gần nhất, đội ngũ hoàn tất ${formatNumber(summary.totalRecentCompletedProcesses)} công đoạn, đóng góp ${formatNumber(summary.totalRecentOrders)} đơn và ${formatCurrency(summary.totalRecentRevenue)}. Tải hiện tập trung nhiều nhất ở ${busiestSection}, nhân sự dẫn đầu là ${topPerformer}.`;
-}
-
-async function fetchAllStaffs() {
-  const staffs: StaffModel[] = [];
-  let total = Number.POSITIVE_INFINITY;
-  let page = 0;
-
-  while (staffs.length < total) {
-    const result = await fetchStaffTable({
-      limit: STAFF_PAGE_LIMIT,
-      page,
-      orderBy: "id",
-      direction: "asc",
-    });
-
-    staffs.push(...result.items);
-    total = result.total ?? staffs.length;
-    page += 1;
-
-    if (result.items.length === 0) {
-      break;
-    }
-  }
-
-  return staffs;
-}
-
-async function mapOrderSnapshots(staffs: StaffModel[]) {
-  const snapshots: StaffInsightOrderSnapshot[] = [];
-
-  for (let index = 0; index < staffs.length; index += ORDER_FETCH_BATCH) {
-    const batch = staffs.slice(index, index + ORDER_FETCH_BATCH);
-    const settled = await Promise.all(batch.map(async (staff) => {
-      const [overviewResult, processesResult] = await Promise.allSettled([
-        getStaffOverview(staff.id),
-        processesForStaff(staff.id),
-      ]);
-
-      return {
-        staffId: staff.id,
-        overview: overviewResult.status === "fulfilled" ? overviewResult.value : null,
-        processes: processesResult.status === "fulfilled" ? processesResult.value : [],
-        failed: overviewResult.status === "rejected" || processesResult.status === "rejected",
-      } satisfies StaffInsightOrderSnapshot;
-    }));
-
-    snapshots.push(...settled);
-  }
-
-  return snapshots;
 }
 
 function LoadingState() {
@@ -219,7 +162,7 @@ function SectionLoadPanel({
     ? summary.sectionLoads
     : summary.workforceSections;
   const maxOpenProcesses = Math.max(1, ...source.map((item) => item.openProcesses));
-  const title = canViewOrder ? "Phân bổ theo bộ phận" : "Phân bổ headcount theo bộ phận";
+  const title = canViewOrder ? "Phân bổ theo bộ phận" : "Phân bổ nhân sự theo bộ phận";
 
   return (
     <SectionCard title={title} sx={{ height: "100%" }}>
@@ -320,14 +263,12 @@ function TopPerformersPanel({
   );
 }
 
-function StaffInsightWidget() {
+export function StaffInsightWidget() {
   const canViewOrder = useAuthStore((state) => state.hasPermission("order.view"));
 
-  const { data, error, loading, reload } = useAsync<StaffInsightPayload>(async () => {
-    const staffs = await fetchAllStaffs();
-    const snapshots = canViewOrder ? await mapOrderSnapshots(staffs) : [];
-    const summary = buildStaffInsightSummary(staffs, snapshots);
-    return { canViewOrder, summary };
+  const { data, error, loading, reload } = useAsync<StaffCatalogOverviewModel | null>(async () => {
+    if (!canViewOrder) return null;
+    return getStaffCatalogOverview();
   }, [canViewOrder], {
     key: `staff-insight:${canViewOrder ? "order-view" : "basic"}`,
   });
@@ -353,13 +294,12 @@ function StaffInsightWidget() {
     );
   }
 
+  if (!canViewOrder) return null;
   const payload = data;
   if (!payload) return null;
 
   const summary = payload.summary;
-  const coverageLabel = payload.canViewOrder
-    ? `${formatNumber(summary.coverage.staffsWithOrderData)}/${formatNumber(summary.coverage.expectedStaffs)} nhân sự có dữ liệu đơn hàng`
-    : `${formatNumber(summary.workforceSections.length)} bộ phận đang có nhân sự`;
+  const coverageLabel = `${formatNumber(summary.coverage.staffsWithOrderData)}/${formatNumber(summary.coverage.expectedStaffs)} nhân sự có dữ liệu đơn hàng`;
 
   return (
     <Stack spacing={2}>
@@ -389,7 +329,7 @@ function StaffInsightWidget() {
       >
         {loading ? <LinearProgress sx={{ mb: 2 }} /> : null}
         <Typography variant="body2" color="text.secondary">
-          {buildNarrative(summary, payload.canViewOrder)}
+          {buildNarrative(summary, canViewOrder)}
         </Typography>
       </SectionCard>
 
@@ -397,7 +337,7 @@ function StaffInsightWidget() {
         <StatCard
           title="Tổng nhân sự"
           value={formatNumber(summary.totalStaff)}
-          caption="headcount đang được quản lý"
+          caption="nhân sự đang được quản lý"
           delta={`${formatNumber(summary.inactiveStaff)} chưa kích hoạt`}
           tone="default"
           icon={<BadgeOutlinedIcon fontSize="small" />}
@@ -412,37 +352,37 @@ function StaffInsightWidget() {
         />
         <StatCard
           title="Nhân sự có đơn hàng"
-          value={payload.canViewOrder ? formatNumber(summary.assignedStaffCount) : "-"}
-          caption={payload.canViewOrder ? `${formatNumber(summary.idleStaffCount)} đang nhàn tải` : "cần quyền order.view"}
-          delta={payload.canViewOrder ? formatPercent(summary.engagementRate) : undefined}
+          value={formatNumber(summary.assignedStaffCount)}
+          caption={`${formatNumber(summary.idleStaffCount)} đang nhàn tải`}
+          delta={formatPercent(summary.engagementRate)}
           tone="info"
           icon={<AssignmentIndOutlinedIcon fontSize="small" />}
         />
         <StatCard
           title="Công đoạn đang mở"
-          value={payload.canViewOrder ? formatNumber(summary.totalOpenProcesses) : "-"}
-          caption={payload.canViewOrder ? `${summary.avgOpenProcessesPerAssigned.toFixed(1)} công đoạn / người có tải` : "workload gia công chưa khả dụng"}
-          delta={payload.canViewOrder ? (summary.sectionLoads[0]?.sectionName ?? "Chưa có bộ phận tải cao") : undefined}
+          value={formatNumber(summary.totalOpenProcesses)}
+          caption={`${summary.avgOpenProcessesPerAssigned.toFixed(1)} công đoạn / người có tải`}
+          delta={summary.sectionLoads[0]?.sectionName ?? "Chưa có bộ phận tải cao"}
           tone="warning"
           icon={<PrecisionManufacturingOutlinedIcon fontSize="small" />}
         />
         <StatCard
           title="Tổng năng suất 30 ngày"
-          value={payload.canViewOrder ? formatNumber(summary.totalRecentCompletedProcesses) : "-"}
-          caption={payload.canViewOrder ? `${formatNumber(summary.totalRecentOrders)} đơn, ${formatCurrency(summary.totalRecentRevenue)} đóng góp` : "cần quyền order.view"}
-          delta={payload.canViewOrder ? "công đoạn hoàn tất" : undefined}
+          value={formatNumber(summary.totalRecentCompletedProcesses)}
+          caption={`${formatNumber(summary.totalRecentOrders)} đơn, ${formatCurrency(summary.totalRecentRevenue)} đóng góp`}
+          delta="công đoạn hoàn tất"
           tone="success"
           icon={<BoltOutlinedIcon fontSize="small" />}
         />
       </ResponsiveGrid>
 
       <ResponsiveGrid xs={1} sm={1} md={1} lg={3} xl={3}>
-        <WorkloadStatusPanel summary={summary} canViewOrder={payload.canViewOrder} />
-        <SectionLoadPanel summary={summary} canViewOrder={payload.canViewOrder} />
-        <TopPerformersPanel summary={summary} canViewOrder={payload.canViewOrder} />
+        <WorkloadStatusPanel summary={summary} canViewOrder={canViewOrder} />
+        <SectionLoadPanel summary={summary} canViewOrder={canViewOrder} />
+        <TopPerformersPanel summary={summary} canViewOrder={canViewOrder} />
       </ResponsiveGrid>
 
-      {payload.canViewOrder && summary.coverage.failedStaffs > 0 ? (
+      {summary.coverage.failedStaffs > 0 ? (
         <SectionCard>
           <Stack direction={{ xs: "column", sm: "row" }} spacing={1} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }}>
             <Stack spacing={0.35}>
@@ -465,10 +405,3 @@ function StaffInsightWidget() {
     </Stack>
   );
 }
-
-registerSlot({
-  id: "staff-insight-header",
-  name: "staff:header",
-  priority: 1,
-  render: () => <StaffInsightWidget />,
-});

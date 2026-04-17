@@ -41,30 +41,52 @@ Services local:
 - Postgres: `localhost:5431`
 - Redis: `localhost:6378`
 
-## Production-like
+## Production topology
+
+Production compose chạy toàn bộ stack:
+
+- `frontend`
+- `api`
+- `postgres`
+- `redis`
+
+File chính:
+
+- `api/docker-compose.prod.yml`
+
+Frontend production được build bằng `fe/Dockerfile.prod`, serve bằng nginx trong container FE, rồi host-level nginx trên VPS reverse proxy:
+
+- `/` -> frontend container
+- `/api` -> backend gateway
+- `/ws` -> backend websocket path
+
+Frontend public host port được tách riêng bằng `FRONTEND_HOST_PORT`. Backend vẫn publish `PORT`, còn Postgres và Redis chỉ giữ internal ports `5432` và `6379` trong Docker network.
+
+## Production-like local run
 
 Chạy:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml up --build -d
+docker compose --env-file api/.env.prod -f api/docker-compose.prod.yml up --build -d
 ```
 
 Dừng:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml down
+docker compose --env-file api/.env.prod -f api/docker-compose.prod.yml down
 ```
 
 Xóa containers và named volumes:
 
 ```bash
-docker compose --env-file .env.prod -f docker-compose.prod.yml down -v
+docker compose --env-file api/.env.prod -f api/docker-compose.prod.yml down -v
 ```
 
 ## Notes
 
 - Dev mặc định dùng bộ file không hậu tố: `/api/.env`, `/api/Dockerfile`, `/api/docker-compose.yml`.
 - Production-like dùng bộ file hậu tố `.prod`: `/api/.env.prod`, `/api/Dockerfile.prod`, `/api/docker-compose.prod.yml`.
+- Trong zero-touch flow, `/.env.prod` và `/api/.env.prod` được render từ `deploy/config/project.env` bằng `deploy/scripts/render-production-config.sh`. Không điền tay các file runtime này trên VPS.
 - Dữ liệu Postgres và Redis được mount từ `PGDATA_DIR` và `REDISDATA_DIR` trong file env tương ứng.
 - Với dev, Compose đọc trực tiếp `.env`; với production-like, hãy luôn chạy kèm `--env-file .env.prod`.
 - `run.sh` và `start_app.sh` sẽ nạp `./.env` mặc định, và tự chuyển sang `./.env.prod` khi `APP_ENV=production`.
@@ -80,6 +102,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down -v
 - Flow khởi động hiện tại là `wait dependencies -> init_project.sh -> run.sh -> Ent auto-migrate + app-managed SQL migrations + bootstrap seed`.
 - Khi dùng `make docker-up-observable`, observability stack sẽ được bật từ host bằng `docker-compose.observability.yml`, còn app container chỉ bật chế độ `--observable` để mirror log ra `tmp/observability/logs/noah_api.json.log`.
 - Với Docker, không để container tự gọi `observability_up.sh`; observability compose được quản lý riêng để tránh chạy Docker bên trong container.
+- FE production build vẫn là deploy gate trong GitHub Actions. Việc FE container được build lại trên VPS chỉ là runtime packaging, không thay thế build gate trên CI.
 - App sẽ tự đọc các file `migrations/sql/V*.sql`, apply theo version và ghi nhận vào bảng `schema_migrations` trong Postgres.
 - Nếu trước đó đã từng chạy compose với service migration cũ, có thể dọn orphan bằng:
 
