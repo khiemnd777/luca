@@ -48,8 +48,12 @@ type OrderService interface {
 	AdvancedSearchReportSummary(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportSummaryDTO, error)
 	AdvancedSearchReportBreakdown(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
+	GetProductCatalogOverview(ctx context.Context, deptID int) (*model.ProductCatalogOverviewDTO, error)
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
+	GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
+	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
+	GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error)
 	GetStaffOverview(ctx context.Context, deptID int, staffID int64) (*model.StaffOverviewDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
@@ -85,6 +89,7 @@ func kOrderAll(deptID int) []string {
 		"order:advanced-report:breakdown:*",
 		"order:product-overview:*",
 		"order:material-overview:*",
+		"order:section-overview:*",
 		"order:staff-overview:*",
 		kOrderSectionAll(),
 		kOrderPromotionAll(),
@@ -168,8 +173,24 @@ func kOrderProductOverview(deptID int, productID int) string {
 	return fmt.Sprintf("order:product-overview:dpt%d:product:%d", deptID, productID)
 }
 
+func kOrderProductCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:product-overview:dpt%d:catalog", deptID)
+}
+
 func kOrderMaterialOverview(deptID int, materialID int) string {
 	return fmt.Sprintf("order:material-overview:dpt%d:material:%d", deptID, materialID)
+}
+
+func kOrderMaterialCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:material-overview:dpt%d:catalog", deptID)
+}
+
+func kOrderSectionOverview(deptID int, sectionID int) string {
+	return fmt.Sprintf("order:section-overview:dpt%d:section:%d", deptID, sectionID)
+}
+
+func kOrderSectionCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:section-overview:dpt%d:catalog", deptID)
 }
 
 func kOrderStaffOverview(deptID int, staffID int64) string {
@@ -244,9 +265,33 @@ func (s *orderService) GetProductOverview(ctx context.Context, deptID int, produ
 	})
 }
 
+func (s *orderService) GetProductCatalogOverview(ctx context.Context, deptID int) (*model.ProductCatalogOverviewDTO, error) {
+	return cache.Get(kOrderProductCatalogOverview(deptID), cache.TTLShort, func() (*model.ProductCatalogOverviewDTO, error) {
+		return s.repo.GetProductCatalogOverview(ctx, deptID)
+	})
+}
+
 func (s *orderService) GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error) {
 	return cache.Get(kOrderMaterialOverview(deptID, materialID), cache.TTLShort, func() (*model.MaterialOverviewDTO, error) {
 		return s.repo.GetMaterialOverview(ctx, deptID, materialID)
+	})
+}
+
+func (s *orderService) GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error) {
+	return cache.Get(kOrderMaterialCatalogOverview(deptID), cache.TTLShort, func() (*model.MaterialCatalogOverviewDTO, error) {
+		return s.repo.GetMaterialCatalogOverview(ctx, deptID)
+	})
+}
+
+func (s *orderService) GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error) {
+	return cache.Get(kOrderSectionOverview(deptID, sectionID), cache.TTLShort, func() (*model.SectionOverviewDTO, error) {
+		return s.repo.GetSectionOverview(ctx, deptID, sectionID)
+	})
+}
+
+func (s *orderService) GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error) {
+	return cache.Get(kOrderSectionCatalogOverview(deptID), cache.TTLShort, func() (*model.SectionCatalogOverviewDTO, error) {
+		return s.repo.GetSectionCatalogOverview(ctx, deptID)
 	})
 }
 

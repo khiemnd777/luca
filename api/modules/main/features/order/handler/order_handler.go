@@ -43,8 +43,12 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report", h.AdvancedSearchReport)
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/summary", h.AdvancedSearchReportSummary)
 	app.RouterGet(router, "/:dept_id<int>/order/advanced-search/report/breakdown", h.AdvancedSearchReportBreakdown)
+	app.RouterGet(router, "/:dept_id<int>/order/product-overview", h.GetProductCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/product-overview/:product_id<int>", h.GetProductOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/material-overview", h.GetMaterialCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview/:material_id<int>", h.GetMaterialOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/section-overview", h.GetSectionCatalogOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/section-overview/:section_id<int>", h.GetSectionOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/staff-overview/:staff_id<int>", h.GetStaffOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/:id<int>", h.GetByID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/remake/prepare", h.PrepareForRemakeByOrderID)
@@ -251,6 +255,19 @@ func (h *OrderHandler) GetProductOverview(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(res)
 }
 
+func (h *OrderHandler) GetProductCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetProductCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
 func (h *OrderHandler) GetMaterialOverview(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
@@ -263,6 +280,50 @@ func (h *OrderHandler) GetMaterialOverview(c *fiber.Ctx) error {
 	}
 
 	res, err := h.svc.GetMaterialOverview(c.UserContext(), deptID, materialID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetMaterialCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetMaterialCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetSectionOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	sectionID, _ := utils.GetParamAsInt(c, "section_id")
+	if sectionID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid section id")
+	}
+
+	res, err := h.svc.GetSectionOverview(c.UserContext(), deptID, sectionID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetSectionCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetSectionCatalogOverview(c.UserContext(), deptID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

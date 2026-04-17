@@ -1,6 +1,8 @@
 import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import type { SectionImportResult, SectionModel } from "@features/section/model/section.model";
+import type { SectionOverviewModel } from "@features/section/model/section-overview.model";
+import type { SectionCatalogOverviewModel } from "@features/section/model/section-catalog-overview.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -35,6 +37,18 @@ export async function id(id: number): Promise<SectionModel> {
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/section/${id}`);
   const result = mapper.map<any, SectionModel>("Section", data, "dto_to_model");
   return result;
+}
+
+export async function overview(sectionId: number): Promise<SectionOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/section-overview/${sectionId}`);
+  return mapper.map<any, SectionOverviewModel>("SectionOverview", data, "dto_to_model");
+}
+
+export async function catalogOverview(): Promise<SectionCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/section-overview`);
+  return mapper.map<any, SectionCatalogOverviewModel>("SectionCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: SectionModel): Promise<void> {

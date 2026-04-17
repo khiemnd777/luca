@@ -6,14 +6,28 @@ import { AutoTable } from "@core/table/auto-table";
 import { registerSlot } from "@root/core/module/registry";
 import { IfPermission } from "@root/core/auth/if-permission";
 import { TabContainer } from "@root/shared/components/ui/tab-container";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import { MaterialInsightWidget } from "@features/material/widgets/material-insight.widget";
 
 function MaterialWidget() {
   return (
     <>
       <TabContainer
+        defaultValue="insight"
+        tabSx={{ mb: 2, borderBottom: 0 }}
+        contentSx={{ mt: 0 }}
         tabs={[
           {
+            label: "Insight",
+            icon: <InsightsOutlinedIcon />,
+            value: "insight",
+            content: <MaterialInsightWidget />,
+          },
+          {
             label: "Vật tư",
+            icon: <CategoryOutlinedIcon />,
             value: "materials",
             content: (
               <SectionCard
@@ -39,6 +53,7 @@ function MaterialWidget() {
           },
           {
             label: "Vật tư đang mượn",
+            icon: <Inventory2OutlinedIcon />,
             value: "order-loaner-materials-on-loan",
             content: (
               <SectionCard>

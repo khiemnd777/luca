@@ -6,6 +6,7 @@ import type {
   ProductUpsertModel,
 } from "@features/product/model/product.model";
 import type { ProductOverviewModel as ProductOverviewDataModel } from "@features/product/model/product-overview.model";
+import type { ProductCatalogOverviewModel as ProductCatalogOverviewDataModel } from "@features/product/model/product-catalog-overview.model";
 import { apiClient, invalidateApiCache } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -48,6 +49,12 @@ export async function overview(productId: number): Promise<ProductOverviewDataMo
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/product-overview/${productId}`);
   return mapper.map<any, ProductOverviewDataModel>("ProductOverview", data, "dto_to_model");
+}
+
+export async function catalogOverview(): Promise<ProductCatalogOverviewDataModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/product-overview`);
+  return mapper.map<any, ProductCatalogOverviewDataModel>("ProductCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: ProductUpsertModel): Promise<void> {

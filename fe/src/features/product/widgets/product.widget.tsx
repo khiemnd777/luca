@@ -11,6 +11,10 @@ import { UploadDialog } from "@root/shared/components/dialog/upload-dialog";
 import toast from "react-hot-toast";
 import { importExcel } from "@features/product/api/product.api";
 import { reloadTable } from "@core/table/table-reload";
+import { TabContainer } from "@root/shared/components/ui/tab-container";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import { ProductInsightWidget } from "@features/product/widgets/product-insight.widget";
 
 function SampleWidget() {
   const [openUpload, setOpenUpload] = React.useState(false);
@@ -34,43 +38,61 @@ function SampleWidget() {
   };
 
   return (
-    <>
-      <SectionCard extra={
-        <Stack direction="row" spacing={1}>
-          <IfPermission permissions={["product.create"]}>
-            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => {
-              openFormDialog("product");
-            }} >Thêm Sản phẩm</Button>
-          </IfPermission>
-          <IfPermission permissions={["product.create"]}>
-            <Button
-              variant="outlined"
-              startIcon={<UploadFileIcon />}
-              onClick={() => setOpenUpload(true)}
-            >
-              Import Excel
-            </Button>
-          </IfPermission>
-        </Stack>
-      }>
-        <IfPermission permissions={["product.create"]}>
-          <UploadDialog
-            open={openUpload}
-            onClose={() => setOpenUpload(false)}
-            title="Import sản phẩm"
-            accept=".xlsx,.xls"
-            onUpload={handleUpload}
-            uploadLabel="Import Excel"
-            uploadingLabel="Đang import..."
-            addLabel="Thêm file"
-            cancelLabel="Hủy"
-            emptyText="Chưa có file Excel nào"
-            clearOnUpload
-          />
-        </IfPermission>
-        <AutoTable name="products" />
-      </SectionCard>
-    </>
+    <TabContainer
+      defaultValue="insight"
+      tabSx={{ mb: 2, borderBottom: 0 }}
+      contentSx={{ mt: 0 }}
+      tabs={[
+        {
+          label: "Insight",
+          icon: <InsightsOutlinedIcon />,
+          value: "insight",
+          content: <ProductInsightWidget />,
+        },
+        {
+          label: "Danh sách products",
+          icon: <Inventory2OutlinedIcon />,
+          value: "products",
+          content: (
+            <SectionCard extra={
+              <Stack direction="row" spacing={1}>
+                <IfPermission permissions={["product.create"]}>
+                  <Button variant="outlined" startIcon={<AddIcon />} onClick={() => {
+                    openFormDialog("product");
+                  }} >Thêm Sản phẩm</Button>
+                </IfPermission>
+                <IfPermission permissions={["product.create"]}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<UploadFileIcon />}
+                    onClick={() => setOpenUpload(true)}
+                  >
+                    Import Excel
+                  </Button>
+                </IfPermission>
+              </Stack>
+            }>
+              <IfPermission permissions={["product.create"]}>
+                <UploadDialog
+                  open={openUpload}
+                  onClose={() => setOpenUpload(false)}
+                  title="Import sản phẩm"
+                  accept=".xlsx,.xls"
+                  onUpload={handleUpload}
+                  uploadLabel="Import Excel"
+                  uploadingLabel="Đang import..."
+                  addLabel="Thêm file"
+                  cancelLabel="Hủy"
+                  emptyText="Chưa có file Excel nào"
+                  clearOnUpload
+                />
+              </IfPermission>
+              <AutoTable name="products" />
+            </SectionCard>
+          ),
+        },
+      ]}
+    />
   );
 }
 

@@ -2,6 +2,7 @@ import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import type { MaterialModel } from "@features/material/model/material.model";
 import type { MaterialOverviewModel } from "@features/material/model/material-overview.model";
+import type { MaterialCatalogOverviewModel } from "@features/material/model/material-catalog-overview.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -41,6 +42,12 @@ export async function overview(materialId: number): Promise<MaterialOverviewMode
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/material-overview/${materialId}`);
   return mapper.map<any, MaterialOverviewModel>("MaterialOverview", data, "dto_to_model");
+}
+
+export async function catalogOverview(): Promise<MaterialCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/material-overview`);
+  return mapper.map<any, MaterialCatalogOverviewModel>("MaterialCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: MaterialModel): Promise<void> {
