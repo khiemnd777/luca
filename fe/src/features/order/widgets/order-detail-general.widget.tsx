@@ -22,6 +22,7 @@ import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import HistoryOutlinedIcon from "@mui/icons-material/HistoryOutlined";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import { OrderDetailDeliveryStatusBoard } from "../components/order-delivery-status-board.component";
 import { AuditLogListInfinite } from "@core/auditlog";
 import { apiClient } from "@core/network/api-client";
@@ -29,6 +30,7 @@ import type { OrderModel } from "../model/order.model";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 import { useAuthStore } from "@store/auth-store";
 import { OrderPrescriptionFilesSection } from "../components/order-prescription-files-section.component";
+import { OrderDetailInsight } from "../components/order-detail-insight.component";
 
 export function OrderDetailBodyWidget() {
   const { orderId } = useParams();
@@ -56,9 +58,19 @@ export function OrderDetailBodyWidget() {
       <Section>
         <TabContainer
           key={orderId ?? "order-detail"}
-          defaultValue="info"
+          defaultValue="overview"
           tabSx={{ mb: 2 }}
           tabs={[
+            {
+              label: "Tổng quan",
+              icon: <InsightsOutlinedIcon />,
+              value: "overview",
+              content: (
+                <Box>
+                  <OrderDetailInsight detail={detail} loading={loading} />
+                </Box>
+              ),
+            },
             {
               label: "Thông tin đơn hàng",
               icon: <InfoOutlinedIcon />,

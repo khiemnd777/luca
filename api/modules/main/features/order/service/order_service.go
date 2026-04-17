@@ -48,6 +48,7 @@ type OrderService interface {
 	AdvancedSearchReportSummary(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportSummaryDTO, error)
 	AdvancedSearchReportBreakdown(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportDTO, error)
+	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	Delete(ctx context.Context, deptID int, id int64) error
 	SyncPrice(ctx context.Context, orderID int64) (float64, error)
 }
@@ -80,6 +81,7 @@ func kOrderAll(deptID int) []string {
 		kOrderSearchAll(deptID),
 		"order:advanced-report:summary:*",
 		"order:advanced-report:breakdown:*",
+		"order:product-overview:*",
 		kOrderSectionAll(),
 		kOrderPromotionAll(),
 		fmt.Sprintf("order:assigned:dpt%d:*", deptID),
@@ -158,6 +160,10 @@ func kOrderAdvancedReportBreakdown(filter model.OrderAdvancedSearchFilter) strin
 	return fmt.Sprintf("order:advanced-report:breakdown:%s", serializeAdvancedSearchFilter(filter))
 }
 
+func kOrderProductOverview(deptID int, productID int) string {
+	return fmt.Sprintf("order:product-overview:dpt%d:product:%d", deptID, productID)
+}
+
 func (s *orderService) Create(ctx context.Context, deptID int, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, userID, input)
 	if err != nil {
@@ -218,6 +224,12 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 	})
 
 	return dto, nil
+}
+
+func (s *orderService) GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error) {
+	return cache.Get(kOrderProductOverview(deptID, productID), cache.TTLShort, func() (*model.ProductOverviewDTO, error) {
+		return s.repo.GetProductOverview(ctx, deptID, productID)
+	})
 }
 
 func (s *orderService) Update(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {

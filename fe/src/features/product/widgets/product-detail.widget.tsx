@@ -17,6 +17,10 @@ import { Spacer } from "@root/shared/components/ui/spacer";
 import { SafeButton } from "@root/shared/components/button/safe-button";
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined';
 import { TabContainer } from "@root/shared/components/ui/tab-container";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
+import { ProductDetailOverview } from "@features/product/components/product-detail-overview.component";
 
 function ProductDetailWidget() {
   const frmProductRef = React.useRef<AutoFormRef>(null);
@@ -42,12 +46,23 @@ function ProductDetailWidget() {
         <>
           <TabContainer
             key={`${productId}-${detail?.isTemplate ? "template" : "single"}`}
-            defaultValue="product"
+            defaultValue="overview"
             tabSx={{ mb: 2, borderBottom: 0 }}
             contentSx={{ mt: 0 }}
             tabs={[
               {
+                label: "Tổng quan",
+                icon: <InsightsOutlinedIcon />,
+                value: "overview",
+                content: (
+                  <Box>
+                    <ProductDetailOverview productId={productId} />
+                  </Box>
+                ),
+              },
+              {
                 label: "Sản phẩm",
+                icon: <Inventory2OutlinedIcon />,
                 value: "product",
                 content: (
                   <Box>
@@ -74,6 +89,7 @@ function ProductDetailWidget() {
               },
               ...(detail?.isTemplate === true ? [{
                 label: "Biến thể",
+                icon: <CategoryOutlinedIcon />,
                 value: "variants",
                 content: (
                   <Box>

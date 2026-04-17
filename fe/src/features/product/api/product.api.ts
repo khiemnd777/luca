@@ -5,6 +5,7 @@ import type {
   ProductModel,
   ProductUpsertModel,
 } from "@features/product/model/product.model";
+import type { ProductOverviewModel as ProductOverviewDataModel } from "@features/product/model/product-overview.model";
 import { apiClient, invalidateApiCache } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -41,6 +42,12 @@ export async function id(id: number): Promise<ProductModel> {
   });
   const result = mapper.map<any, ProductModel>("Product", data, "dto_to_model");
   return result;
+}
+
+export async function overview(productId: number): Promise<ProductOverviewDataModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/product-overview/${productId}`);
+  return mapper.map<any, ProductOverviewDataModel>("ProductOverview", data, "dto_to_model");
 }
 
 export async function create(model: ProductUpsertModel): Promise<void> {

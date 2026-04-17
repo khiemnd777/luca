@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	stdsql "database/sql"
 	"fmt"
 	"math"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/features/promotion/engine"
 	promotionrepo "github.com/khiemnd777/noah_api/modules/main/features/promotion/repository"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/categoryprocess"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/material"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
@@ -23,6 +25,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemproduct"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/predicate"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/product"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/productprocess"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/logger"
 	"github.com/khiemnd777/noah_api/shared/mapper"
@@ -63,6 +66,7 @@ type OrderRepository interface {
 	AdvancedSearchReportSummary(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportSummaryDTO, error)
 	AdvancedSearchReportBreakdown(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportBreakdownDTO, error)
 	AdvancedSearchReport(ctx context.Context, filter model.OrderAdvancedSearchFilter) (*model.OrderAdvancedSearchReportDTO, error)
+	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	Delete(ctx context.Context, id int64) error
 }
 
@@ -84,6 +88,49 @@ type orderAdvancedSearchScope struct {
 	Predicates []predicate.Order
 	WhereSQL   string
 	Args       []any
+}
+
+type productOverviewScope struct {
+	RootProductID    int
+	RootProductName  *string
+	IsTemplate       bool
+	IncludesVariants bool
+	VariantCount     int
+	ScopedProductIDs []int
+	ScopeLabel       string
+}
+
+func productOverviewScopeLabel(isTemplate bool, variantCount int) string {
+	if !isTemplate {
+		return "Biến thể hiện tại"
+	}
+	if variantCount <= 0 {
+		return "Template"
+	}
+	return fmt.Sprintf("Template + %d biến thể", variantCount)
+}
+
+func normalizedOrderStatusExpr(alias string) string {
+	return fmt.Sprintf(`CASE
+		WHEN COALESCE(NULLIF(%[1]s.status_latest, ''), 'received') = 'issue' THEN 'rework'
+		ELSE COALESCE(NULLIF(%[1]s.status_latest, ''), 'received')
+	END`, alias)
+}
+
+func normalizedProcessStatusExpr(alias string) string {
+	raw := fmt.Sprintf("COALESCE(NULLIF(%s.custom_fields->>'status', ''), NULLIF(%s.status, ''))", alias, alias)
+	return fmt.Sprintf(`CASE
+		WHEN %[1]s.completed_at IS NOT NULL THEN 'completed'
+		WHEN %[2]s = 'completed' THEN 'completed'
+		WHEN %[2]s = 'qc' THEN 'qc'
+		WHEN %[2]s = 'rework' THEN 'rework'
+		WHEN %[2]s = 'issue' THEN 'rework'
+		WHEN %[2]s = 'in_progress' THEN 'in_progress'
+		WHEN %[2]s = 'pending' THEN 'waiting'
+		WHEN %[2]s = 'waiting' THEN 'waiting'
+		WHEN %[1]s.started_at IS NOT NULL THEN 'in_progress'
+		ELSE 'waiting'
+	END`, alias, raw)
 }
 
 func NewOrderRepository(
@@ -1320,6 +1367,513 @@ LIMIT 5
 	}
 
 	return report, nil
+}
+
+func (r *orderRepository) GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error) {
+	scope, err := r.resolveProductOverviewScope(ctx, deptID, productID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getProductOverviewSummary(ctx, deptID, scope.ScopedProductIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	statusBreakdown, err := r.getProductOverviewStatusBreakdown(ctx, deptID, scope.ScopedProductIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	processLoad, err := r.getProductOverviewProcessLoad(ctx, deptID, scope.ScopedProductIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(processLoad) == 0 {
+		processLoad, err = r.getProductOverviewFallbackProcessLoad(ctx, scope.ScopedProductIDs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	recentOrders, err := r.getProductOverviewRecentOrders(ctx, deptID, scope.ScopedProductIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ProductOverviewDTO{
+		Scope: &model.ProductOverviewScopeDTO{
+			RootProductID:    scope.RootProductID,
+			RootProductName:  scope.RootProductName,
+			IsTemplate:       scope.IsTemplate,
+			IncludesVariants: scope.IncludesVariants,
+			VariantCount:     scope.VariantCount,
+			ScopedProductIDs: scope.ScopedProductIDs,
+			ScopeLabel:       scope.ScopeLabel,
+		},
+		Summary:              summary,
+		OrderStatusBreakdown: statusBreakdown,
+		ProcessLoad:          processLoad,
+		RecentOrders:         recentOrders,
+	}, nil
+}
+
+func (r *orderRepository) resolveProductOverviewScope(ctx context.Context, deptID int, productID int) (*productOverviewScope, error) {
+	query := `
+SELECT
+	p.id,
+	COALESCE(NULLIF(p.name, ''), NULLIF(p.code, ''), 'Sản phẩm') AS root_product_name,
+	p.is_template
+FROM products p
+WHERE p.id = $1
+  AND p.department_id = $2
+  AND p.deleted_at IS NULL
+`
+
+	scope := &productOverviewScope{}
+	if err := r.deps.DB.QueryRowContext(ctx, query, productID, deptID).Scan(
+		&scope.RootProductID,
+		&scope.RootProductName,
+		&scope.IsTemplate,
+	); err != nil {
+		return nil, err
+	}
+
+	if !scope.IsTemplate {
+		scope.ScopedProductIDs = []int{scope.RootProductID}
+		scope.ScopeLabel = productOverviewScopeLabel(false, 0)
+		return scope, nil
+	}
+
+	rows, err := r.deps.DB.QueryContext(ctx, `
+SELECT p.id
+FROM products p
+WHERE p.department_id = $1
+  AND p.deleted_at IS NULL
+  AND (p.id = $2 OR p.template_id = $2)
+ORDER BY CASE WHEN p.id = $2 THEN 0 ELSE 1 END, p.id ASC
+`, deptID, productID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int, 0, 8)
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(ids) == 0 {
+		ids = []int{scope.RootProductID}
+	}
+
+	scope.ScopedProductIDs = ids
+	if len(ids) > 1 {
+		scope.VariantCount = len(ids) - 1
+	}
+	scope.IncludesVariants = scope.VariantCount > 0
+	scope.ScopeLabel = productOverviewScopeLabel(true, scope.VariantCount)
+	return scope, nil
+}
+
+func (r *orderRepository) getProductOverviewSummary(ctx context.Context, deptID int, scopedProductIDs []int) (*model.ProductOverviewSummaryDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		%s AS order_status,
+		COALESCE(SUM(COALESCE(oip.quantity, 0)), 0) AS quantity,
+		COALESCE(MAX(o.remake_count), 0) AS remake_count
+	FROM orders o
+	JOIN order_items oi
+		ON oi.order_id = o.id
+	   AND oi.deleted_at IS NULL
+	JOIN order_item_products oip
+		ON oip.order_id = o.id
+	   AND oip.order_item_id = oi.id
+	WHERE o.deleted_at IS NULL
+	  AND o.department_id = $1
+	  AND oip.product_id = ANY($2)
+	GROUP BY o.id, %s
+),
+open_order_processes AS (
+	SELECT
+		COUNT(*) AS total_processes,
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) FILTER (WHERE %s <> 'completed') AS open_processes
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	WHERE op.product_id = ANY($2)
+	  AND %s <> 'completed'
+)
+SELECT
+	COUNT(*) AS lifetime_orders,
+	COALESCE(SUM(quantity), 0) AS lifetime_quantity,
+	COUNT(*) FILTER (WHERE order_status <> 'completed') AS open_orders,
+	COUNT(*) FILTER (WHERE order_status IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+	COALESCE(SUM(quantity) FILTER (WHERE order_status <> 'completed'), 0) AS open_quantity,
+	COUNT(*) FILTER (WHERE order_status = 'completed') AS completed_orders,
+	COUNT(*) FILTER (WHERE remake_count > 0) AS remake_orders,
+	COALESCE((SELECT open_processes FROM open_order_processes), 0) AS open_processes,
+	COALESCE((SELECT total_processes FROM open_order_processes), 0) AS total_processes,
+	COALESCE((SELECT completed_processes FROM open_order_processes), 0) AS completed_processes
+FROM scoped_orders
+`, orderStatusExpr, orderStatusExpr, processStatusExpr, processStatusExpr, orderStatusExpr)
+
+	summary := &model.ProductOverviewSummaryDTO{}
+	var totalProcesses int
+	var completedProcesses int
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID, pq.Array(scopedProductIDs)).Scan(
+		&summary.LifetimeOrders,
+		&summary.LifetimeQuantity,
+		&summary.OpenOrders,
+		&summary.InProductionOrders,
+		&summary.OpenQuantity,
+		&summary.CompletedOrders,
+		&summary.RemakeOrders,
+		&summary.OpenProcesses,
+		&totalProcesses,
+		&completedProcesses,
+	); err != nil {
+		return nil, err
+	}
+
+	if totalProcesses > 0 {
+		summary.CompletionPercent = int(math.Round((float64(completedProcesses) / float64(totalProcesses)) * 100))
+	}
+
+	return summary, nil
+}
+
+func (r *orderRepository) getProductOverviewStatusBreakdown(
+	ctx context.Context,
+	deptID int,
+	scopedProductIDs []int,
+) ([]*model.ProductOverviewOrderStatusBreakdownDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		%s AS order_status
+	FROM orders o
+	JOIN order_items oi
+		ON oi.order_id = o.id
+	   AND oi.deleted_at IS NULL
+	JOIN order_item_products oip
+		ON oip.order_id = o.id
+	   AND oip.order_item_id = oi.id
+	WHERE o.deleted_at IS NULL
+	  AND o.department_id = $1
+	  AND oip.product_id = ANY($2)
+	GROUP BY o.id, %s
+)
+SELECT order_status, COUNT(*) AS total
+FROM scoped_orders
+WHERE order_status <> 'completed'
+GROUP BY order_status
+ORDER BY total DESC, order_status ASC
+`, orderStatusExpr, orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, pq.Array(scopedProductIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProductOverviewOrderStatusBreakdownDTO, 0, 4)
+	for rows.Next() {
+		row := &model.ProductOverviewOrderStatusBreakdownDTO{}
+		if err := rows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getProductOverviewProcessLoad(
+	ctx context.Context,
+	deptID int,
+	scopedProductIDs []int,
+) ([]*model.ProductOverviewProcessLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+
+	query := fmt.Sprintf(`
+WITH open_product_processes AS (
+	SELECT
+		COALESCE(NULLIF(op.process_name, ''), 'Công đoạn') AS process_name,
+		op.step_number,
+		%s AS process_status,
+		op.order_id
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	WHERE op.product_id = ANY($2)
+	  AND %s <> 'completed'
+)
+SELECT
+	process_name,
+	step_number,
+	COUNT(*) FILTER (WHERE process_status = 'waiting') AS waiting,
+	COUNT(*) FILTER (WHERE process_status = 'in_progress') AS in_progress,
+	COUNT(*) FILTER (WHERE process_status = 'qc') AS qc,
+	COUNT(*) FILTER (WHERE process_status = 'rework') AS rework,
+	COUNT(*) FILTER (WHERE process_status = 'completed') AS completed,
+	COUNT(*) AS total,
+	COUNT(DISTINCT order_id) AS active_orders
+FROM open_product_processes
+GROUP BY step_number, process_name
+ORDER BY step_number ASC, process_name ASC
+`, processStatusExpr, orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, pq.Array(scopedProductIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProductOverviewProcessLoadDTO, 0, 8)
+	for rows.Next() {
+		row := &model.ProductOverviewProcessLoadDTO{}
+		if err := rows.Scan(
+			&row.ProcessName,
+			&row.StepNumber,
+			&row.Waiting,
+			&row.InProgress,
+			&row.QC,
+			&row.Rework,
+			&row.Completed,
+			&row.Total,
+			&row.ActiveOrders,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getProductOverviewFallbackProcessLoad(
+	ctx context.Context,
+	scopedProductIDs []int,
+) ([]*model.ProductOverviewProcessLoadDTO, error) {
+	query := fmt.Sprintf(`
+WITH product_categories AS (
+	SELECT
+		id AS product_id,
+		category_id
+	FROM products
+	WHERE id = ANY($1)
+	  AND deleted_at IS NULL
+),
+process_candidates AS (
+	SELECT
+		pc.product_id,
+		cp.process_id,
+		1 AS source_priority,
+		COALESCE(cp.display_order, 0) AS display_order
+	FROM product_categories pc
+	JOIN %s cp
+		ON cp.category_id = pc.category_id
+
+	UNION ALL
+
+	SELECT
+		pc.product_id,
+		pp.process_id,
+		2 AS source_priority,
+		COALESCE(pp.display_order, 0) AS display_order
+	FROM product_categories pc
+	JOIN %s pp
+		ON pp.product_id = pc.product_id
+),
+ranked_processes AS (
+	SELECT
+		product_id,
+		process_id,
+		source_priority,
+		display_order,
+		ROW_NUMBER() OVER (
+			PARTITION BY product_id, process_id
+			ORDER BY source_priority ASC, display_order ASC, process_id ASC
+		) AS rn
+	FROM process_candidates
+),
+unique_processes AS (
+	SELECT
+		p.id AS process_id,
+		COALESCE(NULLIF(p.name, ''), NULLIF(p.code, ''), 'Công đoạn') AS process_name,
+		MIN(rp.source_priority) AS source_priority,
+		MIN(rp.display_order) AS display_order
+	FROM ranked_processes rp
+	JOIN processes p
+		ON p.id = rp.process_id
+	WHERE rp.rn = 1
+	  AND p.deleted_at IS NULL
+	GROUP BY p.id, process_name
+)
+SELECT process_name
+FROM unique_processes
+ORDER BY source_priority ASC, display_order ASC, process_id ASC
+`, categoryprocess.Table, productprocess.Table)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, pq.Array(scopedProductIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProductOverviewProcessLoadDTO, 0, 8)
+	stepNumber := 1
+	for rows.Next() {
+		row := &model.ProductOverviewProcessLoadDTO{}
+		if err := rows.Scan(&row.ProcessName); err != nil {
+			return nil, err
+		}
+		row.StepNumber = stepNumber
+		stepNumber++
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getProductOverviewRecentOrders(
+	ctx context.Context,
+	deptID int,
+	scopedProductIDs []int,
+) ([]*model.ProductOverviewRecentOrderDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		MIN(NULLIF(o.code_latest, '')) AS order_code,
+		%s AS order_status,
+		COALESCE(SUM(COALESCE(oip.quantity, 0)), 0) AS quantity,
+		COALESCE(MAX(o.updated_at), MAX(o.created_at)) AS updated_at
+	FROM orders o
+	JOIN order_items oi
+		ON oi.order_id = o.id
+	   AND oi.deleted_at IS NULL
+	JOIN order_item_products oip
+		ON oip.order_id = o.id
+	   AND oip.order_item_id = oi.id
+	WHERE o.deleted_at IS NULL
+	  AND o.department_id = $1
+	  AND oip.product_id = ANY($2)
+	GROUP BY o.id, %s
+),
+latest_process AS (
+	SELECT DISTINCT ON (op.order_id)
+		op.order_id,
+		COALESCE(NULLIF(op.process_name, ''), NULLIF(o.process_name_latest, ''), 'Công đoạn') AS current_process_name,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) AS latest_checkpoint_at
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	LEFT JOIN LATERAL (
+		SELECT
+			ip.completed_at,
+			ip.started_at,
+			ip.created_at
+		FROM order_item_process_in_progresses ip
+		WHERE ip.process_id = op.id
+		ORDER BY COALESCE(ip.completed_at, ip.started_at, ip.created_at) DESC, ip.id DESC
+		LIMIT 1
+	) ip ON TRUE
+	WHERE op.product_id = ANY($2)
+	ORDER BY
+		op.order_id,
+		CASE %s
+			WHEN 'in_progress' THEN 1
+			WHEN 'qc' THEN 2
+			WHEN 'rework' THEN 3
+			WHEN 'waiting' THEN 4
+			WHEN 'completed' THEN 5
+			ELSE 6
+		END,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) DESC,
+		op.step_number ASC,
+		op.id DESC
+)
+SELECT
+	so.order_id,
+	so.order_code,
+	so.order_status,
+	so.quantity,
+	lp.current_process_name,
+	COALESCE(lp.latest_checkpoint_at, so.updated_at) AS latest_checkpoint_at
+FROM scoped_orders so
+LEFT JOIN latest_process lp
+	ON lp.order_id = so.order_id
+ORDER BY COALESCE(lp.latest_checkpoint_at, so.updated_at) DESC, so.order_id DESC
+LIMIT 5
+`, orderStatusExpr, orderStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, pq.Array(scopedProductIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ProductOverviewRecentOrderDTO, 0, 5)
+	for rows.Next() {
+		row := &model.ProductOverviewRecentOrderDTO{}
+		var (
+			orderCode          stdsql.NullString
+			status             stdsql.NullString
+			currentProcessName stdsql.NullString
+			latestCheckpointAt stdsql.NullTime
+		)
+
+		if err := rows.Scan(
+			&row.OrderID,
+			&orderCode,
+			&status,
+			&row.Quantity,
+			&currentProcessName,
+			&latestCheckpointAt,
+		); err != nil {
+			return nil, err
+		}
+
+		if orderCode.Valid {
+			row.OrderCode = &orderCode.String
+		}
+		if status.Valid {
+			row.Status = &status.String
+		}
+		if currentProcessName.Valid {
+			row.CurrentProcessName = &currentProcessName.String
+		}
+		if latestCheckpointAt.Valid {
+			row.LatestCheckpointAt = &latestCheckpointAt.Time
+		}
+
+		result = append(result, row)
+	}
+	return result, rows.Err()
 }
 
 func (r *orderRepository) buildAdvancedSearchScope(filter model.OrderAdvancedSearchFilter) orderAdvancedSearchScope {

@@ -20,7 +20,9 @@ import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import QrCode2OutlinedIcon from "@mui/icons-material/QrCode2Outlined";
 import TaskAltOutlinedIcon from "@mui/icons-material/TaskAltOutlined";
 import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
+import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
+import { OrderDetailInsight } from "../components/order-detail-insight.component";
 
 export function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
@@ -49,9 +51,19 @@ export function OrderDetailHistoricalGeneralWidget() {
       <Section>
         <TabContainer
           key={`${orderId ?? "order"}-${orderItemId ?? "item"}`}
-          defaultValue="info"
+          defaultValue="overview"
           tabSx={{ mb: 2 }}
           tabs={[
+            {
+              label: "Tổng quan",
+              icon: <InsightsOutlinedIcon />,
+              value: "overview",
+              content: (
+                <Box>
+                  <OrderDetailInsight detail={detail} loading={loading} />
+                </Box>
+              ),
+            },
             {
               label: "Thông tin đơn hàng",
               icon: <InfoOutlinedIcon />,
