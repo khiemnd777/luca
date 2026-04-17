@@ -30,6 +30,12 @@ export const MATERIAL_STATUSES = [
   { label: "Đã thu hồi", value: "returned" },
 ] as const;
 
+const MATERIAL_STATUS_CHIP_COLOR_MAP = {
+  on_loan: "info",
+  partial_returned: "warning",
+  returned: "success",
+} as const;
+
 const MATERIAL_STATUS_MAP = MATERIAL_STATUSES.reduce<Record<string, string>>(
   (acc, cur) => {
     acc[cur.value] = cur.label;
@@ -41,4 +47,9 @@ const MATERIAL_STATUS_MAP = MATERIAL_STATUSES.reduce<Record<string, string>>(
 export function materialStatusLabel(value?: string | null): string {
   if (!value) return "";
   return MATERIAL_STATUS_MAP[value] ?? value;
+}
+
+export function materialStatusChipColor(value?: string | null): "default" | "info" | "warning" | "success" {
+  if (!value) return "default";
+  return MATERIAL_STATUS_CHIP_COLOR_MAP[value as keyof typeof MATERIAL_STATUS_CHIP_COLOR_MAP] ?? "default";
 }

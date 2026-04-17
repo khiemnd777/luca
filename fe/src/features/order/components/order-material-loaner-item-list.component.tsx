@@ -1,6 +1,7 @@
 import type { FormContext } from "@core/form/types";
+import { materialStatusChipColor, materialStatusLabel } from "@features/material/utils/material.utils";
 import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
-import { Typography } from "@mui/material";
+import { Chip, Typography } from "@mui/material";
 import { OrderItemTableEditor } from "./order-item-table-editor.component";
 
 export type OrderMaterialItemListProps = {
@@ -116,8 +117,27 @@ export function OrderLoanerMaterialItemList({
               {
                 key: "status",
                 header: "Trạng thái",
-                width: 140,
-                render: (item: OrderItemMaterialModel) => item.status || "—",
+                width: 180,
+                render: (item: OrderItemMaterialModel) =>
+                  item.status ? (
+                    <Chip
+                      size="small"
+                      variant="outlined"
+                      color={materialStatusChipColor(item.status)}
+                      label={materialStatusLabel(item.status)}
+                      sx={{
+                        height: 22,
+                        maxWidth: "none",
+                        width: "fit-content",
+                        "& .MuiChip-label": {
+                          overflow: "visible",
+                          textOverflow: "clip",
+                        },
+                      }}
+                    />
+                  ) : (
+                    "—"
+                  ),
               },
             ]
           : []),

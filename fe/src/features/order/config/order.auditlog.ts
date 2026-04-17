@@ -16,6 +16,13 @@ function orderItemLabel(row: AuditLog): string {
     ?? "không xác định";
 }
 
+function productLabel(row: AuditLog): string {
+  return dataValue(row, "product_name")
+    ?? dataValue(row, "product_code")
+    ?? dataValue(row, "product_id")
+    ?? "không xác định";
+}
+
 const orderAuditRenderers: AuditRenderer[] = [
   {
     match: { module: "order", action: "created" },
@@ -85,14 +92,18 @@ const orderAuditRenderers: AuditRenderer[] = [
     moduleLabel: "Order",
     actionLabel: () => "Checkout",
     summary: (row) => {
+      const product = productLabel(row);
       const sectionName = dataValue(row, "section_name") ?? "không xác định";
       const processName = dataValue(row, "process_name") ?? "không xác định";
-      return `Đơn hàng đã checkout khỏi khâu ${sectionName} - ${processName}.`;
+      return `Đơn hàng đã checkout sản phẩm ${product} khỏi khâu ${sectionName} - ${processName}.`;
     },
     fields: [
       { key: "order_id", label: "Order ID" },
       { key: "order_item_id", label: "Order Item ID" },
       { key: "order_item_code", label: "Order Item Code" },
+      { key: "product_id", label: "Product ID" },
+      { key: "product_code", label: "Product Code" },
+      { key: "product_name", label: "Product Name" },
       { key: "section_name", label: "Section" },
       { key: "process_name", label: "Process" },
     ],
@@ -102,14 +113,18 @@ const orderAuditRenderers: AuditRenderer[] = [
     moduleLabel: "Order",
     actionLabel: () => "Checkin",
     summary: (row) => {
+      const product = productLabel(row);
       const sectionName = dataValue(row, "section_name") ?? "không xác định";
       const processName = dataValue(row, "process_name") ?? "không xác định";
-      return `Đơn hàng đã checkin vào khâu ${sectionName} - ${processName}.`;
+      return `Đơn hàng đã checkin sản phẩm ${product} vào khâu ${sectionName} - ${processName}.`;
     },
     fields: [
       { key: "order_id", label: "Order ID" },
       { key: "order_item_id", label: "Order Item ID" },
       { key: "order_item_code", label: "Order Item Code" },
+      { key: "product_id", label: "Product ID" },
+      { key: "product_code", label: "Product Code" },
+      { key: "product_name", label: "Product Name" },
       { key: "section_name", label: "Section" },
       { key: "process_name", label: "Process" },
     ],
