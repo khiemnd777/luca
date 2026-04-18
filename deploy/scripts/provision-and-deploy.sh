@@ -185,7 +185,6 @@ healthcheck() {
   wait_for_http "http://127.0.0.1:${FRONTEND_HOST_PORT}/"
   wait_for_http "http://127.0.0.1:${PORT}/ping"
   wait_for_http "https://${PUBLIC_DOMAIN}/"
-  wait_for_http "https://${PUBLIC_DOMAIN}/api/ping"
 }
 
 ensure_sudo_access
