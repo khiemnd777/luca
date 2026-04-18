@@ -56,12 +56,16 @@ jobs:
           VPS_PORT: ${{ secrets.VPS_PORT }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_PASSWORD: ${{ secrets.VPS_PASSWORD }}
+          VPS_SUDO_PASSWORD: ${{ secrets.VPS_SUDO_PASSWORD }}
           VPS_DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
         run: |
-          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" "mkdir -p '$VPS_DEPLOY_PATH'"
+          sshpass -p "$VPS_PASSWORD" ssh -o StrictHostKeyChecking=no -p "$VPS_PORT" "$VPS_USER@$VPS_HOST" \
+            "printf '%s\n' '$VPS_SUDO_PASSWORD' | sudo -S install -d -m 755 -o '$VPS_USER' -g '$VPS_USER' '$VPS_DEPLOY_PATH'"
           sshpass -p "$VPS_PASSWORD" rsync -az --delete \
             --exclude ".git/" \
             --exclude "deploy/config/project.env" \
+            --exclude "api/.data/" \
+            --exclude "api/tmp/observability/logs/" \
             -e "ssh -o StrictHostKeyChecking=no -p $VPS_PORT" \
             ./ "$VPS_USER@$VPS_HOST:$VPS_DEPLOY_PATH/"
 
