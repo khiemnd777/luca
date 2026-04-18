@@ -1,0 +1,48 @@
+server:
+  host: "${M_MAIN_HOST}"
+  port: ${M_MAIN_PORT}
+  route: "/api/department"
+
+external: true
+
+storage:
+  photo_path: "${PHOTO_STORAGE_PATH}"
+
+delivery_qr:
+  session_ttl_minutes: ${M_MAIN_DELIVERY_QR_SESSION_TTL_MINUTES}
+  proof_image_max_size_mb: ${M_MAIN_DELIVERY_QR_PROOF_IMAGE_MAX_SIZE_MB}
+  client_base_url: "${M_MAIN_CLIENT_BASE_URL}"
+
+features:
+  enabled: [
+    "section", 
+    "clinic",
+    "dentist",
+    "patient",
+    "staff",
+    "material",
+    "supplier",
+    "relation",
+    "customer",
+    "category",
+    "product",
+    "process",
+    "order",
+    "promotion",
+    "dashboard",
+    "restoration_type",
+    "brand",
+    "raw_material",
+    "technique",
+  ]
+
+database:
+  provider: "${DB_PROVIDER}"
+  automigrate: ${DB_AUTOMIGRATE}
+  postgres:
+    host: "${PG_HOST}"
+    port: ${PG_PORT}
+    user: "${PG_USER}"
+    password: "${PG_PASSWORD}"
+    name: "${PG_DBNAME}"
+    sslmode: "${PG_SSL}"

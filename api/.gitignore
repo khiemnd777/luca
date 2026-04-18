@@ -33,6 +33,8 @@
 *.secret.yaml
 *.yaml
 !version.yaml
+!config.yaml
+!/modules/**/config.yaml
 !docker-compose.observability.yml
 !observability/
 !observability/**/*.yaml

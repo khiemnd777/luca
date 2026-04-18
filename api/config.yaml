@@ -1,0 +1,106 @@
+project:
+  name: "${PROJECT_NAME}"
+  baseapiprefix: "${BASE_API_PREFIX}"
+  version: "${API_VERSION}"
+
+server:
+  host: "${HOST}"
+  port: ${PORT}
+  body_limit_mb: ${BODY_LIMIT_MB}
+
+auth:
+  secret: "${JWT_TOKEN_SECRET}"
+  internalauthtoken: "${INTERNAL_AUTH_TOKEN}"
+  internallogtoken: "${AUTH_LOG_TOKEN}"
+
+retry:
+  maxattempts: ${RETRY_MAX_ATTEMPTS}
+  delay: ${RETRY_DELAY}
+
+database:
+  provider: "${DB_PROVIDER}"
+  automigrate: ${DB_AUTOMIGRATE}
+  postgres:
+    host: "${PG_HOST}"
+    port: ${PG_PORT}
+    user: "${PG_USER}"
+    password: "${PG_PASSWORD}"
+    name: "${PG_DBNAME}"
+    sslmode: "${PG_SSL}"
+  mongodb:
+    uri: "${MONGO_URI}"
+    database: "${MONGO_DATABASE}"
+  mysql:
+    host: "${MYSQL_HOST}"
+    port: ${MYSQL_PORT}
+    user: "${MYSQL_USER}"
+    password: "${MYSQL_PASSWORD}"
+    name: "${MYSQL_DBNAME}"
+
+cron:
+  clear_refresh_token:
+    enabled: ${CRON_CLEAR_REFRESH_TOKEN_ENABLED}
+    schedule: "${CRON_CLEAR_REFRESH_TOKEN_SCHEDULE}"
+  clear_deleted_photo:
+    enabled: ${CRON_CLEAR_DELETED_PHOTO_ENABLED}
+    schedule: "${CRON_CLEAR_DELETED_PHOTO_SCHEDULE}"
+
+cache:
+  ttl:
+    short: ${CACHE_TTL_SHORT}
+    medium: ${CACHE_TTL_MEDIUM}
+    long: ${CACHE_TTL_LONG}
+    static: ${CACHE_TTL_STATIC}
+
+redis:
+  instances:
+    cache:
+      host: "${REDIS_HOST}"
+      port: ${REDIS_PORT}
+      username: "${REDIS_USERNAME}"
+      password: "${REDIS_PASSWORD}"
+      db: ${REDIS_CACHE_DB}
+      iscluster: ${REDIS_IS_CLUSTER}
+      usetls: ${REDIS_USE_TLS}
+    pubsub:
+      host: "${REDIS_HOST}"
+      port: ${REDIS_PORT}
+      username: "${REDIS_USERNAME}"
+      password: "${REDIS_PASSWORD}"
+      db: ${REDIS_PUBSUB_DB}
+      iscluster: ${REDIS_IS_CLUSTER}
+      usetls: ${REDIS_USE_TLS}
+    status:
+      host: "${REDIS_HOST}"
+      port: ${REDIS_PORT}
+      username: "${REDIS_USERNAME}"
+      password: "${REDIS_PASSWORD}"
+      db: ${REDIS_STATUS_DB}
+      iscluster: ${REDIS_IS_CLUSTER}
+      usetls: ${REDIS_USE_TLS}
+
+circuitbreaker:
+  interval: ${CB_INTERVAL}
+  timeout: ${CB_TIMEOUT}
+  consecutivefailures: ${CB_CONSECUTIVE_FAILURES}
+
+observability:
+  service_name: "${OBSERVABILITY_SERVICE_NAME}"
+  environment: "${APP_ENV}"
+  logs:
+    enabled: ${OBSERVABILITY_LOGS_ENABLED}
+    level: "${OBSERVABILITY_LOG_LEVEL}"
+    redact_fields:
+      - authorization
+      - cookie
+      - password
+      - token
+      - secret
+      - otp
+  loki:
+    base_url: "${LOKI_BASE_URL}"
+    tenant_id: "${LOKI_TENANT_ID}"
+    bearer_token: "${LOKI_BEARER_TOKEN}"
+    timeout: ${LOKI_TIMEOUT}
+    stream_selector: '${LOKI_STREAM_SELECTOR}'
+    max_query_limit: ${LOKI_MAX_QUERY_LIMIT}

@@ -1,0 +1,15 @@
+server:
+  host: "${M_SEARCH_HOST}"
+  port: ${M_SEARCH_PORT}
+  route: "/api/search"
+external: true
+database:
+  provider: "${DB_PROVIDER}"
+  automigrate: ${DB_AUTOMIGRATE}
+  postgres:
+    host: "${PG_HOST}"
+    port: ${PG_PORT}
+    user: "${PG_USER}"
+    password: "${PG_PASSWORD}"
+    name: "${PG_DBNAME}"
+    sslmode: "${PG_SSL}"

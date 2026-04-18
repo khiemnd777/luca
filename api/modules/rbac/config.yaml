@@ -1,0 +1,17 @@
+server:
+  host: "${M_RBAC_HOST}"
+  port: ${M_RBAC_PORT}
+  route: "/api/rbac"
+
+external: true
+
+database:
+  provider: "${DB_PROVIDER}"
+  automigrate: ${DB_AUTOMIGRATE}
+  postgres:
+    host: "${PG_HOST}"
+    port: ${PG_PORT}
+    user: "${PG_USER}"
+    password: "${PG_PASSWORD}"
+    name: "${PG_DBNAME}"
+    sslmode: "${PG_SSL}"
