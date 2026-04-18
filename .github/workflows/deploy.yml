@@ -37,6 +37,10 @@ jobs:
         with:
           go-version-file: api/go.mod
 
+      - name: Bootstrap API for CI
+        working-directory: api
+        run: INIT_PROJECT_MODE=ci bash ./init_project.sh
+
       - name: Run API tests
         working-directory: api
         run: go test ./...

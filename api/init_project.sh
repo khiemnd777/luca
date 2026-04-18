@@ -3,6 +3,11 @@ set -euo pipefail
 
 export GOCACHE="${PWD}/.gocache"
 export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
+INIT_PROJECT_MODE="${INIT_PROJECT_MODE:-full}"
+
+run_db_bootstrap_steps() {
+  [[ "$INIT_PROJECT_MODE" == "full" ]]
+}
 
 go_mod_sync() {
   local attempt
@@ -41,6 +46,7 @@ go_mod_sync() {
 }
 
 echo "🚀 Initializing project..."
+echo "🧭 init_project mode: ${INIT_PROJECT_MODE}"
 
 # Step 0: Delete vendor folder
 if [ -d "vendor" ]; then
@@ -52,9 +58,13 @@ fi
 echo "👉 Generating Ent for shared"
 go run -mod=mod entgo.io/ent/cmd/ent generate ./shared/db/ent/schema --target ./shared/db/ent/generated --feature sql/execquery
 
-# Step 1.1: Init database
-echo "👉 Initializing database"
-GOFLAGS=-mod=mod go run scripts/init_db/main.go
+if run_db_bootstrap_steps; then
+  # Step 1.1: Init database
+  echo "👉 Initializing database"
+  GOFLAGS=-mod=mod go run scripts/init_db/main.go
+else
+  echo "⏭️ Skipping database init in ${INIT_PROJECT_MODE} mode"
+fi
 
 # Step 2: Auto generate Ent for all modules with ent/schema
 for schema_dir in $(find modules -type d -path "*/ent/schema"); do
@@ -65,19 +75,31 @@ for schema_dir in $(find modules -type d -path "*/ent/schema"); do
   echo "👉 Generating Ent for $module_dir"
   go run -mod=mod entgo.io/ent/cmd/ent generate "$schema_path" --target "$target_path"
 
-  echo "⚙️ Running auto-migrate for $module_dir"
-  (cd "$module_dir" && GOFLAGS=-mod=mod go run ./ent/cmd/migrate.go)
+  if run_db_bootstrap_steps; then
+    echo "⚙️ Running auto-migrate for $module_dir"
+    (cd "$module_dir" && GOFLAGS=-mod=mod go run ./ent/cmd/migrate.go)
+  else
+    echo "⏭️ Skipping auto-migrate for $module_dir in ${INIT_PROJECT_MODE} mode"
+  fi
 done
 
 # Step 3: Tidy & Vendor
 go_mod_sync
 
-# Step 4: Init roles
-echo "👉 Initializing roles"
-GOFLAGS=-mod=mod go run scripts/init_roles/main.go
+if run_db_bootstrap_steps; then
+  # Step 4: Init roles
+  echo "👉 Initializing roles"
+  GOFLAGS=-mod=mod go run scripts/init_roles/main.go
+else
+  echo "⏭️ Skipping role init in ${INIT_PROJECT_MODE} mode"
+fi
 
-# Step 5: Build all
-echo "👉 Building all modules"
-GOFLAGS=-mod=mod go build ./...
+if [[ "$INIT_PROJECT_MODE" == "full" || "$INIT_PROJECT_MODE" == "ci" ]]; then
+  # Step 5: Build all
+  echo "👉 Building all modules"
+  GOFLAGS=-mod=mod go build ./...
+else
+  echo "⏭️ Skipping build in ${INIT_PROJECT_MODE} mode"
+fi
 
 echo "✅ Project initialized successfully!"
