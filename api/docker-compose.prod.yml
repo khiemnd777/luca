@@ -6,8 +6,16 @@ services:
       context: ../fe
       dockerfile: Dockerfile.prod
     container_name: ${APP_NAME}_frontend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     ports:
-      - "${FRONTEND_HOST_PORT:-8080}:80"
+      - target: 80
+        published: "${FRONTEND_HOST_PORT:-8080}"
+        host_ip: 127.0.0.1
+        protocol: tcp
     restart: unless-stopped
 
   postgres:
@@ -61,8 +69,17 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:${PORT}/ping >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
     ports:
-      - "${PORT}:${PORT}"
+      - target: ${PORT}
+        published: "${PORT}"
+        host_ip: 127.0.0.1
+        protocol: tcp
     volumes:
       - api_storage:${STORAGE_ROOT}
       - api_gocache:${GOCACHE}

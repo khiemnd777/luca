@@ -4,6 +4,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     ca-certificates \
     chromium \
+    curl \
     fonts-noto-core \
     netcat-openbsd \
     postgresql-client \

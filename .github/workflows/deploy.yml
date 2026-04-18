@@ -102,7 +102,7 @@ jobs:
           echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_ENV"
 
       - name: Send deploy notification
-        if: always()
+        if: always() && secrets.SMTP_HOST != '' && secrets.SMTP_PORT != '' && secrets.SMTP_USERNAME != '' && secrets.SMTP_PASSWORD != '' && secrets.SMTP_FROM != '' && secrets.SMTP_TO != ''
         uses: dawidd6/action-send-mail@v6
         with:
           server_address: ${{ secrets.SMTP_HOST }}

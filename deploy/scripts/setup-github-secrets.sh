@@ -18,6 +18,8 @@ if [[ ! -f "$ENV_FILE" ]]; then
   exit 1
 fi
 
+load_env_file "$ENV_FILE"
+
 if ! gh auth status >/dev/null 2>&1; then
   gh auth login
 fi

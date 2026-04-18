@@ -18,7 +18,9 @@ require_env_vars \
   VPS_DEPLOY_PATH \
   LETSENCRYPT_EMAIL
 
-PROJECT_ENV_B64="$(base64 < "$ENV_FILE" | tr -d '\n')"
+PROJECT_ENV_B64="$(
+  grep -v '^GH_TOKEN=' "$ENV_FILE" | base64 | tr -d '\n'
+)"
 
 set_secret() {
   local name="$1"

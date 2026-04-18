@@ -11,6 +11,8 @@ PROJECT_ENV_FILE="$(project_env_file)"
 NGINX_TEMPLATE="$REPO_ROOT/deploy/templates/nginx-site.conf.tmpl"
 GENERATED_DIR="$REPO_ROOT/deploy/tmp"
 GENERATED_NGINX_CONF="$GENERATED_DIR/nginx.conf"
+FORENSICS_SCRIPT="$REPO_ROOT/deploy/scripts/compose-forensics.sh"
+FORENSICS_ON_ERROR_RAN=false
 
 if [[ ! -f "$DEPLOY_ENV_FILE" ]]; then
   echo "Missing $DEPLOY_ENV_FILE" >&2
@@ -30,6 +32,23 @@ require_env_vars PUBLIC_DOMAIN PORT FRONTEND_HOST_PORT VPS_SUDO_PASSWORD
 sudo_run() {
   printf '%s\n' "$VPS_SUDO_PASSWORD" | sudo -S "$@"
 }
+
+dump_forensics_on_error() {
+  local exit_code="$1"
+
+  if [[ "$FORENSICS_ON_ERROR_RAN" == "true" ]]; then
+    return 0
+  fi
+
+  if [[ -x "$FORENSICS_SCRIPT" && -f "$REPO_ROOT/api/.env.prod" ]]; then
+    FORENSICS_ON_ERROR_RAN=true
+    "$FORENSICS_SCRIPT" failure || true
+  fi
+
+  return "$exit_code"
+}
+
+trap 'dump_forensics_on_error "$?"' ERR
 
 ensure_sudo_access() {
   sudo_run -v >/dev/null
@@ -111,7 +130,30 @@ ensure_tls() {
 compose_up() {
   cd "$REPO_ROOT/api"
   resolve_compose_cmd
-  "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f docker-compose.prod.yml up -d --build
+  local log_session_pid=""
+
+  "$FORENSICS_SCRIPT" pre-up
+
+  "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f docker-compose.prod.yml logs -f --tail=100 api frontend &
+  log_session_pid=$!
+
+  set +e
+  "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f docker-compose.prod.yml up -d --build --wait
+  local exit_code=$?
+  set -e
+
+  if [[ -n "$log_session_pid" ]]; then
+    kill "$log_session_pid" >/dev/null 2>&1 || true
+    wait "$log_session_pid" >/dev/null 2>&1 || true
+  fi
+
+  "$FORENSICS_SCRIPT" post-up
+
+  if [[ $exit_code -ne 0 ]]; then
+    FORENSICS_ON_ERROR_RAN=true
+    "$FORENSICS_SCRIPT" failure
+    return "$exit_code"
+  fi
 }
 
 wait_for_http() {
