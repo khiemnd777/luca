@@ -26,6 +26,14 @@ import type { ProductModel } from "@features/product/model/product.model";
 import { search as searchProduct } from "@features/product/api/product.api";
 import { search as searchDepartments } from "@features/department/api/department.api";
 import type { DeparmentModel } from "@features/department/model/department.model";
+import type { OrderModel } from "@features/order/model/order.model";
+import { search as searchOrders } from "@features/order/api/order.api";
+import type { ClinicModel } from "@features/clinic/model/clinic.model";
+import { search as searchClinics } from "@features/clinic/api/clinic.api";
+import type { DentistModel } from "@features/dentist/model/dentist.model";
+import { search as searchDentists } from "@features/dentist/api/dentist.api";
+import type { PatientModel } from "@features/patient/model/patient.model";
+import { search as searchPatients } from "@features/patient/api/patient.api";
 import { categoryPath } from "@features/category/utils/category.utils";
 import { toast } from "react-hot-toast";
 import * as React from "react";
@@ -54,9 +62,17 @@ function OrderAdvancedSearchWidget() {
   const [categoryKeyword, setCategoryKeyword] = React.useState("");
   const [productKeyword, setProductKeyword] = React.useState("");
   const [departmentKeyword, setDepartmentKeyword] = React.useState("");
+  const [orderOptions, setOrderOptions] = React.useState<OrderModel[]>([]);
+  const [clinicOptions, setClinicOptions] = React.useState<ClinicModel[]>([]);
+  const [dentistOptions, setDentistOptions] = React.useState<DentistModel[]>([]);
+  const [patientOptions, setPatientOptions] = React.useState<PatientModel[]>([]);
   const [categoryOptions, setCategoryOptions] = React.useState<CategoryModel[]>([]);
   const [productOptions, setProductOptions] = React.useState<ProductModel[]>([]);
   const [departmentOptions, setDepartmentOptions] = React.useState<DeparmentModel[]>([]);
+  const [loadingOrders, setLoadingOrders] = React.useState(false);
+  const [loadingClinics, setLoadingClinics] = React.useState(false);
+  const [loadingDentists, setLoadingDentists] = React.useState(false);
+  const [loadingPatients, setLoadingPatients] = React.useState(false);
   const [loadingCategories, setLoadingCategories] = React.useState(false);
   const [loadingProducts, setLoadingProducts] = React.useState(false);
   const [loadingDepartments, setLoadingDepartments] = React.useState(false);
@@ -71,6 +87,118 @@ function OrderAdvancedSearchWidget() {
       toggleExpanded();
     }
   }, [toggleExpanded]);
+
+  React.useEffect(() => {
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setLoadingOrders(true);
+      try {
+        const result = await searchOrders({
+          keyword: draftFilters.orderCode.trim(),
+          limit: 20,
+          page: 1,
+          orderBy: "code",
+          direction: "asc",
+        });
+        if (!active) return;
+        setOrderOptions(result.items ?? []);
+      } catch {
+        if (!active) return;
+        setOrderOptions([]);
+      } finally {
+        if (active) setLoadingOrders(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftFilters.orderCode]);
+
+  React.useEffect(() => {
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setLoadingClinics(true);
+      try {
+        const result = await searchClinics({
+          keyword: draftFilters.clinicName.trim(),
+          limit: 20,
+          page: 1,
+          orderBy: "name",
+          direction: "asc",
+        });
+        if (!active) return;
+        setClinicOptions(result.items ?? []);
+      } catch {
+        if (!active) return;
+        setClinicOptions([]);
+      } finally {
+        if (active) setLoadingClinics(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftFilters.clinicName]);
+
+  React.useEffect(() => {
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setLoadingDentists(true);
+      try {
+        const result = await searchDentists({
+          keyword: draftFilters.dentistName.trim(),
+          limit: 20,
+          page: 1,
+          orderBy: "name",
+          direction: "asc",
+        });
+        if (!active) return;
+        setDentistOptions(result.items ?? []);
+      } catch {
+        if (!active) return;
+        setDentistOptions([]);
+      } finally {
+        if (active) setLoadingDentists(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftFilters.dentistName]);
+
+  React.useEffect(() => {
+    let active = true;
+    const timeoutId = window.setTimeout(async () => {
+      setLoadingPatients(true);
+      try {
+        const result = await searchPatients({
+          keyword: draftFilters.patientName.trim(),
+          limit: 20,
+          page: 1,
+          orderBy: "name",
+          direction: "asc",
+        });
+        if (!active) return;
+        setPatientOptions(result.items ?? []);
+      } catch {
+        if (!active) return;
+        setPatientOptions([]);
+      } finally {
+        if (active) setLoadingPatients(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [draftFilters.patientName]);
 
   React.useEffect(() => {
     if (!canViewDepartment) {
@@ -191,6 +319,26 @@ function OrderAdvancedSearchWidget() {
     applyFilters();
   }, [applyFilters, draftFilters]);
 
+  const getOrderOptionLabel = React.useCallback((option: string | OrderModel) => {
+    if (typeof option === "string") return option;
+    return option.codeLatest?.trim() || option.code?.trim() || "";
+  }, []);
+
+  const getNamedOptionLabel = React.useCallback((option: string | { name?: string | null }) => {
+    if (typeof option === "string") return option;
+    return option.name?.trim() || "";
+  }, []);
+
+  const renderLoadingAdornment = React.useCallback(
+    (loading: boolean, endAdornment: React.ReactNode) => (
+      <>
+        {loading ? <CircularProgress size={18} /> : null}
+        {endAdornment}
+      </>
+    ),
+    []
+  );
+
   return (
     <SectionCard
       title={
@@ -253,6 +401,7 @@ function OrderAdvancedSearchWidget() {
             <Grid size={{ xs: 12, md: 3 }}>
               <Autocomplete
                 fullWidth
+                size="small"
                 options={departmentOptions ?? []}
                 filterOptions={(options) => options}
                 value={draftFilters.department ?? null}
@@ -266,16 +415,12 @@ function OrderAdvancedSearchWidget() {
                 renderInput={(params) => (
                   <TextField
                     {...params}
+                    size="small"
                     label="Chi nhánh"
                     placeholder="Chọn chi nhánh"
                     InputProps={{
                       ...params.InputProps,
-                      endAdornment: (
-                        <>
-                          {loadingDepartments ? <CircularProgress size={18} /> : null}
-                          {params.InputProps.endAdornment}
-                        </>
-                      ),
+                      endAdornment: renderLoadingAdornment(loadingDepartments, params.InputProps.endAdornment),
                     }}
                   />
                 )}
@@ -284,17 +429,43 @@ function OrderAdvancedSearchWidget() {
           ) : null}
 
           <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
-            <TextField
+            <Autocomplete
               fullWidth
-              label="Mã đơn hàng"
-              value={draftFilters.orderCode}
-              onChange={(event) => setDraftFilter("orderCode", event.target.value)}
+              size="small"
+              freeSolo
+              options={orderOptions}
+              filterOptions={(options) => options}
+              value={null}
+              inputValue={draftFilters.orderCode}
+              loading={loadingOrders}
+              getOptionLabel={getOrderOptionLabel}
+              onInputChange={(_, value, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  setDraftFilter("orderCode", value);
+                }
+              }}
+              onChange={(_, value) => {
+                const nextValue = value == null ? "" : getOrderOptionLabel(value);
+                setDraftFilter("orderCode", nextValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Mã đơn hàng"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: renderLoadingAdornment(loadingOrders, params.InputProps.endAdornment),
+                  }}
+                />
+              )}
             />
           </Grid>
 
           <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
             <Autocomplete
               fullWidth
+              size="small"
               multiple
               filterSelectedOptions
               options={categoryOptions}
@@ -309,16 +480,12 @@ function OrderAdvancedSearchWidget() {
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  size="small"
                   label="Loại phục hình"
                   placeholder="Tìm loại phục hình"
                   InputProps={{
                     ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loadingCategories ? <CircularProgress size={18} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
+                    endAdornment: renderLoadingAdornment(loadingCategories, params.InputProps.endAdornment),
                   }}
                 />
               )}
@@ -328,6 +495,7 @@ function OrderAdvancedSearchWidget() {
           <Grid size={{ xs: 12, md: canViewDepartment ? 3 : 4 }}>
             <Autocomplete
               fullWidth
+              size="small"
               multiple
               filterSelectedOptions
               options={productOptions}
@@ -342,16 +510,12 @@ function OrderAdvancedSearchWidget() {
               renderInput={(params) => (
                 <TextField
                   {...params}
+                  size="small"
                   label="Sản phẩm"
                   placeholder="Tìm sản phẩm"
                   InputProps={{
                     ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {loadingProducts ? <CircularProgress size={18} /> : null}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
+                    endAdornment: renderLoadingAdornment(loadingProducts, params.InputProps.endAdornment),
                   }}
                 />
               )}
@@ -359,29 +523,104 @@ function OrderAdvancedSearchWidget() {
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
+            <Autocomplete
               fullWidth
-              label="Tên nha khoa"
-              value={draftFilters.clinicName}
-              onChange={(event) => setDraftFilter("clinicName", event.target.value)}
+              size="small"
+              freeSolo
+              options={clinicOptions}
+              filterOptions={(options) => options}
+              value={null}
+              inputValue={draftFilters.clinicName}
+              loading={loadingClinics}
+              getOptionLabel={getNamedOptionLabel}
+              onInputChange={(_, value, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  setDraftFilter("clinicName", value);
+                }
+              }}
+              onChange={(_, value) => {
+                const nextValue = value == null ? "" : getNamedOptionLabel(value);
+                setDraftFilter("clinicName", nextValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Tên nha khoa"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: renderLoadingAdornment(loadingClinics, params.InputProps.endAdornment),
+                  }}
+                />
+              )}
             />
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
+            <Autocomplete
               fullWidth
-              label="Tên bác sĩ"
-              value={draftFilters.dentistName}
-              onChange={(event) => setDraftFilter("dentistName", event.target.value)}
+              size="small"
+              freeSolo
+              options={dentistOptions}
+              filterOptions={(options) => options}
+              value={null}
+              inputValue={draftFilters.dentistName}
+              loading={loadingDentists}
+              getOptionLabel={getNamedOptionLabel}
+              onInputChange={(_, value, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  setDraftFilter("dentistName", value);
+                }
+              }}
+              onChange={(_, value) => {
+                const nextValue = value == null ? "" : getNamedOptionLabel(value);
+                setDraftFilter("dentistName", nextValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Tên bác sĩ"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: renderLoadingAdornment(loadingDentists, params.InputProps.endAdornment),
+                  }}
+                />
+              )}
             />
           </Grid>
 
           <Grid size={{ xs: 12, md: 4 }}>
-            <TextField
+            <Autocomplete
               fullWidth
-              label="Tên bệnh nhân"
-              value={draftFilters.patientName}
-              onChange={(event) => setDraftFilter("patientName", event.target.value)}
+              size="small"
+              freeSolo
+              options={patientOptions}
+              filterOptions={(options) => options}
+              value={null}
+              inputValue={draftFilters.patientName}
+              loading={loadingPatients}
+              getOptionLabel={getNamedOptionLabel}
+              onInputChange={(_, value, reason) => {
+                if (reason === "input" || reason === "clear") {
+                  setDraftFilter("patientName", value);
+                }
+              }}
+              onChange={(_, value) => {
+                const nextValue = value == null ? "" : getNamedOptionLabel(value);
+                setDraftFilter("patientName", nextValue);
+              }}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  size="small"
+                  label="Tên bệnh nhân"
+                  InputProps={{
+                    ...params.InputProps,
+                    endAdornment: renderLoadingAdornment(loadingPatients, params.InputProps.endAdornment),
+                  }}
+                />
+              )}
             />
           </Grid>
 
@@ -390,6 +629,7 @@ function OrderAdvancedSearchWidget() {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="Tháng tạo"
                   value={draftFilters.createdMonth}
@@ -404,6 +644,7 @@ function OrderAdvancedSearchWidget() {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="Năm tạo"
                   value={draftFilters.createdYear}
@@ -423,6 +664,7 @@ function OrderAdvancedSearchWidget() {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="Tháng giao"
                   value={draftFilters.deliveryMonth}
@@ -437,6 +679,7 @@ function OrderAdvancedSearchWidget() {
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
+                  size="small"
                   select
                   label="Năm giao"
                   value={draftFilters.deliveryYear}
