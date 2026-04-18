@@ -65,18 +65,22 @@ install_packages() {
 }
 
 resolve_compose_cmd() {
-  if docker compose version >/dev/null 2>&1; then
+  if sudo_run docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
     return 0
   fi
 
-  if command -v docker-compose >/dev/null 2>&1; then
+  if sudo_run docker-compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker-compose)
     return 0
   fi
 
   echo "docker compose is not available after provisioning." >&2
   exit 1
+}
+
+compose_run() {
+  sudo_run "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f "$REPO_ROOT/api/docker-compose.prod.yml" "$@"
 }
 
 render_runtime_config() {
@@ -134,11 +138,11 @@ compose_up() {
 
   "$FORENSICS_SCRIPT" pre-up
 
-  "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f docker-compose.prod.yml logs -f --tail=100 api frontend &
+  compose_run logs -f --tail=100 api frontend &
   log_session_pid=$!
 
   set +e
-  "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f docker-compose.prod.yml up -d --build --wait
+  compose_run up -d --build --wait
   local exit_code=$?
   set -e
 

@@ -10,13 +10,22 @@ API_DIR="$REPO_ROOT/api"
 ENV_FILE="$API_DIR/.env.prod"
 COMPOSE_FILE="$API_DIR/docker-compose.prod.yml"
 
+sudo_run() {
+  if [[ -n "${VPS_SUDO_PASSWORD:-}" ]]; then
+    printf '%s\n' "$VPS_SUDO_PASSWORD" | sudo -S "$@"
+    return 0
+  fi
+
+  sudo "$@"
+}
+
 resolve_compose_cmd() {
-  if docker compose version >/dev/null 2>&1; then
+  if sudo_run docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
     return 0
   fi
 
-  if command -v docker-compose >/dev/null 2>&1; then
+  if sudo_run docker-compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker-compose)
     return 0
   fi
@@ -27,7 +36,7 @@ resolve_compose_cmd() {
 
 compose() {
   resolve_compose_cmd
-  "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
+  sudo_run "${COMPOSE_CMD[@]}" --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "$@"
 }
 
 print_section() {
@@ -59,7 +68,7 @@ main() {
   print_listeners
 
   print_section "Docker PS (${mode})"
-  docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+  sudo_run docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
 
   print_section "Compose PS (${mode})"
   compose ps || true
