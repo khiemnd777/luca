@@ -83,6 +83,10 @@ compose_run() {
   sudo_run "${COMPOSE_CMD[@]}" --env-file "$REPO_ROOT/api/.env.prod" -f "$REPO_ROOT/api/docker-compose.prod.yml" "$@"
 }
 
+cleanup_compose_stack() {
+  compose_run down --remove-orphans --timeout 30 || true
+}
+
 render_runtime_config() {
   "$REPO_ROOT/deploy/scripts/render-production-config.sh" "$PROJECT_ENV_FILE"
   "$REPO_ROOT/api/scripts/render_observability_config.sh" --env-file "$REPO_ROOT/api/.env.prod"
@@ -137,6 +141,7 @@ compose_up() {
   local log_session_pid=""
 
   "$FORENSICS_SCRIPT" pre-up
+  cleanup_compose_stack
 
   compose_run logs -f --tail=100 api frontend &
   log_session_pid=$!
@@ -156,6 +161,7 @@ compose_up() {
   if [[ $exit_code -ne 0 ]]; then
     FORENSICS_ON_ERROR_RAN=true
     "$FORENSICS_SCRIPT" failure
+    cleanup_compose_stack
     return "$exit_code"
   fi
 }
