@@ -19,6 +19,16 @@ const mod: ModuleDescriptor = {
       priority: 94,
       children: [
         {
+          hidden: true,
+          key: "clinic-detail",
+          permissions: ["clinic.view"],
+          label: "Chi tiết nha khoa",
+          title: "Chi tiết nha khoa",
+          path: "/clinic/:clinicId",
+          element: <OneColumnPage />,
+          priority: 99,
+        },
+        {
           key: "dentist",
           permissions: ["clinic.view"],
           label: "Nha sĩ",
@@ -29,11 +39,31 @@ const mod: ModuleDescriptor = {
           priority: 2,
         },
         {
+          hidden: true,
+          key: "dentist-detail",
+          permissions: ["clinic.view"],
+          label: "Chi tiết nha sĩ",
+          title: "Chi tiết nha sĩ",
+          path: "/dentist/:dentistId",
+          element: <OneColumnPage />,
+          priority: 3,
+        },
+        {
           key: "patient",
           permissions: ["clinic.view"],
           label: "Bệnh nhân",
           title: "Bệnh nhân",
           path: "/patient",
+          priority: 1,
+        },
+        {
+          hidden: true,
+          key: "patient-detail",
+          permissions: ["clinic.view"],
+          label: "Chi tiết bệnh nhân",
+          title: "Chi tiết bệnh nhân",
+          path: "/patient/:patientId",
+          element: <OneColumnPage />,
           priority: 1,
         },
       ]

@@ -48,6 +48,12 @@ func (h *OrderHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/product-overview/:product_id<int>", h.GetProductOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview", h.GetMaterialCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/material-overview/:material_id<int>", h.GetMaterialOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/dentist-overview", h.GetDentistCatalogOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/dentist-overview/:dentist_id<int>", h.GetDentistOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/patient-overview", h.GetPatientCatalogOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/patient-overview/:patient_id<int>", h.GetPatientOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/clinic-overview", h.GetClinicCatalogOverview)
+	app.RouterGet(router, "/:dept_id<int>/order/clinic-overview/:clinic_id<int>", h.GetClinicOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/section-overview", h.GetSectionCatalogOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/section-overview/:section_id<int>", h.GetSectionOverview)
 	app.RouterGet(router, "/:dept_id<int>/order/staff-overview", h.GetStaffCatalogOverview)
@@ -308,6 +314,99 @@ func (h *OrderHandler) GetMaterialCatalogOverview(c *fiber.Ctx) error {
 
 	deptID, _ := utils.GetDeptIDInt(c)
 	res, err := h.svc.GetMaterialCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetDentistOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	dentistID, _ := utils.GetParamAsInt(c, "dentist_id")
+	if dentistID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid dentist id")
+	}
+
+	res, err := h.svc.GetDentistOverview(c.UserContext(), deptID, dentistID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetDentistCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetDentistCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetPatientOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	patientID, _ := utils.GetParamAsInt(c, "patient_id")
+	if patientID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid patient id")
+	}
+
+	res, err := h.svc.GetPatientOverview(c.UserContext(), deptID, patientID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetPatientCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetPatientCatalogOverview(c.UserContext(), deptID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetClinicOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	clinicID, _ := utils.GetParamAsInt(c, "clinic_id")
+	if clinicID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid clinic id")
+	}
+
+	res, err := h.svc.GetClinicOverview(c.UserContext(), deptID, clinicID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderHandler) GetClinicCatalogOverview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.GetClinicCatalogOverview(c.UserContext(), deptID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/clinic"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/clinicpatient"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/patient"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/mapper"
@@ -23,6 +24,7 @@ type PatientRepository interface {
 	GetByID(ctx context.Context, id int) (*model.PatientDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.PatientDTO], error)
 	ListByClinicID(ctx context.Context, clinicID int, query table.TableQuery) (table.TableListResult[model.PatientDTO], error)
+	ListOrdersByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.PatientDTO], error)
 	Delete(ctx context.Context, id int) error
 }
@@ -218,6 +220,30 @@ func (r *patientRepo) Search(ctx context.Context, query dbutils.SearchQuery) (db
 			return mapped
 		},
 	)
+}
+
+func (r *patientRepo) ListOrdersByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	list, err := table.TableList(
+		ctx,
+		r.db.Order.Query().
+			Where(
+				order.DeletedAtIsNil(),
+				order.DepartmentIDEQ(deptID),
+				order.PatientIDEQ(patientID),
+			),
+		query,
+		order.Table,
+		order.FieldID,
+		order.FieldID,
+		func(src []*generated.Order) []*model.OrderDTO {
+			return mapper.MapListAs[*generated.Order, *model.OrderDTO](src)
+		},
+	)
+	if err != nil {
+		var zero table.TableListResult[model.OrderDTO]
+		return zero, err
+	}
+	return list, nil
 }
 
 func (r *patientRepo) Delete(ctx context.Context, id int) error {

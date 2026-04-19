@@ -16,7 +16,6 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/modules/main/features/order/repository"
-	"github.com/khiemnd777/noah_api/shared/cache"
 	"github.com/khiemnd777/noah_api/shared/logger"
 	"github.com/khiemnd777/noah_api/shared/module"
 	sharedstorage "github.com/khiemnd777/noah_api/shared/storage"
@@ -24,10 +23,10 @@ import (
 )
 
 const (
-	prescriptionStorageDir         = "files"
-	defaultPrescriptionMaxSizeMB  = 10
-	prescriptionMaxSizeEnv         = "PRESCRIPTION_FILES_MAX_SIZE_MB"
-	prescriptionAllowedMimesEnv    = "PRESCRIPTION_FILES_ALLOWED_MIME_TYPES"
+	prescriptionStorageDir          = "files"
+	defaultPrescriptionMaxSizeMB    = 10
+	prescriptionMaxSizeEnv          = "PRESCRIPTION_FILES_MAX_SIZE_MB"
+	prescriptionAllowedMimesEnv     = "PRESCRIPTION_FILES_ALLOWED_MIME_TYPES"
 	defaultPrescriptionAllowedMimes = "image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
 
@@ -112,7 +111,7 @@ func (s *orderFileService) Upload(
 	}
 
 	keys := append([]string{kOrderByID(orderID), kOrderByIDAll(orderID)}, kOrderAll(deptID)...)
-	cache.InvalidateKeys(keys...)
+	invalidateKeysHook(keys...)
 	return dto, nil
 }
 
@@ -136,7 +135,7 @@ func (s *orderFileService) Delete(ctx context.Context, deptID int, orderID int64
 	}
 
 	keys := append([]string{kOrderByID(orderID), kOrderByIDAll(orderID)}, kOrderAll(deptID)...)
-	cache.InvalidateKeys(keys...)
+	invalidateKeysHook(keys...)
 	return nil
 }
 

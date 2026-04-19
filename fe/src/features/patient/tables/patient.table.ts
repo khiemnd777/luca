@@ -1,9 +1,9 @@
 import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
-import { openFormDialog } from "@core/form/form-dialog.service";
 import type { PatientModel } from "@features/patient/model/patient.model";
 import { table, unlink } from "@features/patient/api/patient.api";
 import { reloadTable } from "@core/table/table-reload";
+import { navigate } from "@root/core/navigation/navigate";
 
 const columns: ColumnDef<PatientModel>[] = [
   { key: "name", header: "Tên bệnh nhân", sortable: true, labelField: true, },
@@ -19,8 +19,11 @@ registerTable("patients", () =>
     initialSort: { by: "id", dir: "asc" },
     allowUpdating: ["clinic.update"],
     allowDeleting: ["clinic.delete"],
+    onView(row) {
+      navigate(`/patient/${row.id}`);
+    },
     onEdit(row) {
-      openFormDialog("patient", { initial: { id: row.id } });
+      navigate(`/patient/${row.id}`);
     },
     async onDelete(row) {
       await unlink(row.id);

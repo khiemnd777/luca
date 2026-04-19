@@ -70,7 +70,7 @@ export async function downloadDeliveryNote(
     const filename = extractFileNameFromDisposition(blob.__contentDisposition);
 
     triggerBrowserDownload(blob, filename);
-    toast.success("Da tai phieu giao hang.");
+    toast.success("Đã tải phiếu giao hàng.");
   } catch (error) {
     const message =
       error instanceof Error && error.message
@@ -90,7 +90,7 @@ export async function downloadQRSlipA5(
     const filename = extractFileNameFromDisposition(blob.__contentDisposition);
 
     triggerBrowserDownload(blob, filename);
-    toast.success("Da tai phieu QR.");
+    toast.success("Đã tải phiếu QR.");
   } catch (error) {
     const message =
       error instanceof Error && error.message

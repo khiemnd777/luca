@@ -1,6 +1,9 @@
 import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import type { ClinicModel } from "@features/clinic/model/clinic.model";
+import type { ClinicCatalogOverviewModel } from "@features/clinic/model/clinic-catalog-overview.model";
+import type { ClinicOverviewModel } from "@features/clinic/model/clinic-overview.model";
+import type { OrderModel } from "@features/order/model/order.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -20,6 +23,13 @@ export async function tableByPatientId(patientId: number, tableOpts: FetchTableO
   const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/patient/${patientId}/clinics`, tableOpts);
   const result = mapper.map<any[], ListResult<ClinicModel>>("Clinic", data, "dto_to_model");
   return result;
+}
+
+export async function orderTableByClinicId(clinicId: number, tableOpts: FetchTableOpts): Promise<ListResult<OrderModel>> {
+  clinicId = clinicId === undefined ? -1 : clinicId;
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/clinic/${clinicId}/orders`, tableOpts);
+  return mapper.map<any[], ListResult<OrderModel>>("Order", data, "dto_to_model");
 }
 
 // common api
@@ -43,6 +53,18 @@ export async function id(id: number): Promise<ClinicModel> {
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/clinic/${id}`);
   const result = mapper.map<any, ClinicModel>("Clinic", data, "dto_to_model");
   return result;
+}
+
+export async function overview(clinicId: number): Promise<ClinicOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/clinic-overview/${clinicId}`);
+  return mapper.map<any, ClinicOverviewModel>("ClinicOverview", data, "dto_to_model");
+}
+
+export async function catalogOverview(): Promise<ClinicCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/clinic-overview`);
+  return mapper.map<any, ClinicCatalogOverviewModel>("ClinicCatalogOverview", data, "dto_to_model");
 }
 
 export async function create(model: ClinicModel): Promise<void> {

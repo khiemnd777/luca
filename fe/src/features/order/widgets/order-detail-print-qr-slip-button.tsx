@@ -16,7 +16,7 @@ export function OrderDetailPrintQRSlipButton({
 
   const handlePrint = React.useCallback(async () => {
     if (!orderId || Number.isNaN(orderId)) {
-      toast.error("Khong tim thay ma don hang.");
+      toast.error("Không tìm thấy mã đơn hàng.");
       return;
     }
 

@@ -29,6 +29,7 @@ func (h *PatientHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/patient/list", h.List)
 	app.RouterGet(router, "/:dept_id<int>/patient/search", h.Search)
 	app.RouterGet(router, "/:dept_id<int>/clinic/:clinic_id<int>/patients", h.ListByClinicID)
+	app.RouterGet(router, "/:dept_id<int>/patient/:patient_id<int>/orders", h.ListOrdersByPatientID)
 	app.RouterGet(router, "/:dept_id<int>/patient/:id<int>", h.GetByID)
 	app.RouterPost(router, "/:dept_id<int>/patient", h.Create)
 	app.RouterPut(router, "/:dept_id<int>/patient/:id<int>", h.Update)
@@ -66,6 +67,23 @@ func (h *PatientHandler) Search(c *fiber.Ctx) error {
 	}
 	q := dbutils.ParseSearchQuery(c, 20)
 	res, err := h.svc.Search(c.UserContext(), q)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *PatientHandler) ListOrdersByPatientID(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+	q := table.ParseTableQuery(c, 20)
+	patientID, _ := utils.GetParamAsInt(c, "patient_id")
+	if patientID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "invalid patient id")
+	}
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.ListOrdersByPatientID(c.UserContext(), deptID, patientID, q)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

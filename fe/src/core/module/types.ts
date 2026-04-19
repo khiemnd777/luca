@@ -24,7 +24,7 @@ export type RouteNode = {
   requireAll?: boolean;
   permissions?: Perm[];
   hidden?: boolean;
-  children?: RouteNode[];         // thay cho subItems/menu nesting
+  children?: RouteNode[];         // thay cho lồng subItems/menu
   extra?: Record<string, unknown>;
 };
 

@@ -22,6 +22,7 @@ type PatientService interface {
 	GetByID(ctx context.Context, id int) (*model.PatientDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.PatientDTO], error)
 	ListByClinicID(ctx context.Context, clinicID int, query table.TableQuery) (table.TableListResult[model.PatientDTO], error)
+	ListOrdersByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.PatientDTO], error)
 	Delete(ctx context.Context, id int) error
 }
@@ -59,8 +60,20 @@ func kPatientClinicAll() string {
 	return "patient:clinic:*"
 }
 
+func kPatientOrderAll() string {
+	return "patient:orders:*"
+}
+
 func kPatientClinicList(patientID int) string {
 	return fmt.Sprintf("clinic:patient:%d:*", patientID)
+}
+
+func kPatientOrderList(deptID int, patientID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("patient:orders:dpt%d:patient:%d:list:l%d:p%d:o%s:d%s", deptID, patientID, q.Limit, q.Page, orderBy, q.Direction)
 }
 
 func kPatientList(q table.TableQuery) string {
@@ -95,6 +108,7 @@ func (s *patientService) Create(ctx context.Context, deptID int, input model.Pat
 
 	if dto != nil && dto.ID > 0 {
 		cache.InvalidateKeys(kPatientByID(dto.ID), kPatientClinicList(dto.ID))
+		cache.InvalidateKeys("order:patient-overview:*", kPatientOrderAll())
 	}
 
 	cache.InvalidateKeys(kPatientAll()...)
@@ -112,6 +126,7 @@ func (s *patientService) Update(ctx context.Context, deptID int, input model.Pat
 
 	if dto != nil {
 		cache.InvalidateKeys(kPatientByID(dto.ID), kPatientClinicList(dto.ID))
+		cache.InvalidateKeys("order:patient-overview:*", kPatientOrderAll())
 	}
 	cache.InvalidateKeys(kPatientAll()...)
 
@@ -191,7 +206,26 @@ func (s *patientService) Delete(ctx context.Context, id int) error {
 	}
 	cache.InvalidateKeys(kPatientAll()...)
 	cache.InvalidateKeys(kPatientByID(id), kPatientClinicList(id))
+	cache.InvalidateKeys("order:patient-overview:*", kPatientOrderAll())
 	return nil
+}
+
+func (s *patientService) ListOrdersByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kPatientOrderList(deptID, patientID, query)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.ListOrdersByPatientID(ctx, deptID, patientID, query)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
 }
 
 func (s *patientService) Search(ctx context.Context, q dbutils.SearchQuery) (dbutils.SearchResult[model.PatientDTO], error) {

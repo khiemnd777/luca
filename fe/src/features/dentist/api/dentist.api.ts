@@ -1,6 +1,9 @@
 import type { FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import type { DentistModel } from "@features/dentist/model/dentist.model";
+import type { DentistCatalogOverviewModel } from "@features/dentist/model/dentist-catalog-overview.model";
+import type { DentistOverviewModel } from "@features/dentist/model/dentist-overview.model";
+import type { OrderModel } from "@features/order/model/order.model";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
@@ -34,6 +37,25 @@ export async function id(id: number): Promise<DentistModel> {
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/dentist/${id}`);
   const result = mapper.map<any, DentistModel>("Dentist", data, "dto_to_model");
   return result;
+}
+
+export async function overview(dentistId: number): Promise<DentistOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/dentist-overview/${dentistId}`);
+  return mapper.map<any, DentistOverviewModel>("DentistOverview", data, "dto_to_model");
+}
+
+export async function catalogOverview(): Promise<DentistCatalogOverviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/dentist-overview`);
+  return mapper.map<any, DentistCatalogOverviewModel>("DentistCatalogOverview", data, "dto_to_model");
+}
+
+export async function orderTableByDentistId(dentistId: number, tableOpts: FetchTableOpts): Promise<ListResult<OrderModel>> {
+  dentistId = dentistId === undefined ? -1 : dentistId;
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/dentist/${dentistId}/orders`, tableOpts);
+  return mapper.map<any[], ListResult<OrderModel>>("Order", data, "dto_to_model");
 }
 
 export async function create(model: DentistModel): Promise<void> {

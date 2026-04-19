@@ -25,6 +25,7 @@ type ClinicService interface {
 	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
 	ListByDentistID(ctx context.Context, deptID int, dentistID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
 	ListByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
+	ListOrdersByClinicID(ctx context.Context, deptID int, clinicID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.ClinicDTO], error)
 	Delete(ctx context.Context, deptID int, id int) error
 }
@@ -68,6 +69,10 @@ func kClinicPatientAll() string {
 	return "clinic:patient:*"
 }
 
+func kClinicOrderAll() string {
+	return "clinic:orders:*"
+}
+
 func kClinicDentistList(clinicID int) string {
 	return fmt.Sprintf("dentist:clinic:%d:*", clinicID)
 }
@@ -98,6 +103,14 @@ func kPatientClinicList(deptID int, dentistID int, q table.TableQuery) string {
 		orderBy = *q.OrderBy
 	}
 	return fmt.Sprintf("clinic:dpt%d:patient:%d:list:l%d:p%d:o%s:d%s", deptID, dentistID, q.Limit, q.Page, orderBy, q.Direction)
+}
+
+func kClinicOrderList(deptID int, clinicID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("clinic:orders:dpt%d:clinic:%d:list:l%d:p%d:o%s:d%s", deptID, clinicID, q.Limit, q.Page, orderBy, q.Direction)
 }
 
 func kClinicSearch(deptID int, q dbutils.SearchQuery) string {
@@ -222,6 +235,24 @@ func (s *clinicService) ListByPatientID(ctx context.Context, deptID int, dentist
 
 	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
 		res, e := s.repo.ListByPatientID(ctx, deptID, dentistID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
+}
+
+func (s *clinicService) ListOrdersByClinicID(ctx context.Context, deptID int, clinicID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kClinicOrderList(deptID, clinicID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.ListOrdersByClinicID(ctx, deptID, clinicID, q)
 		if e != nil {
 			return nil, e
 		}

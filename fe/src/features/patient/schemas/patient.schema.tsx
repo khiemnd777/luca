@@ -1,6 +1,7 @@
 import type { FieldDef } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { mapper } from "@core/mapper/auto-mapper";
+import { registerForm } from "@root/core/form/form-registry";
 import { registerFormDialog } from "@core/form/form-dialog.registry";
 import { reloadTable } from "@core/table/table-reload";
 import type { PatientModel } from "@features/patient/model/patient.model";
@@ -143,6 +144,8 @@ export function buildPatientSchema(): FormSchema {
     },
   };
 }
+
+registerForm("patient", buildPatientSchema);
 
 registerFormDialog("patient", buildPatientSchema, {
   title: { create: "Thêm bệnh nhân", update: "Cập nhật bệnh nhân" },

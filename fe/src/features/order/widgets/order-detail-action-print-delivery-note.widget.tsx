@@ -32,7 +32,7 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
 
   const handleOpen = React.useCallback(() => {
     if (!orderId) {
-      toast.error("Khong tim thay ma don hang.");
+      toast.error("Không tìm thấy mã đơn hàng.");
       return;
     }
 
@@ -49,7 +49,7 @@ export function OrderDetailActionPrintDeliveryNoteWidget() {
 
   const handlePrint = React.useCallback(async () => {
     if (!orderId) {
-      toast.error("Khong tim thay ma don hang.");
+      toast.error("Không tìm thấy mã đơn hàng.");
       return;
     }
 

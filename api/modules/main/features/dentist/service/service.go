@@ -22,6 +22,7 @@ type DentistService interface {
 	GetByID(ctx context.Context, id int) (*model.DentistDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.DentistDTO], error)
 	ListByClinicID(ctx context.Context, clinicID int, query table.TableQuery) (table.TableListResult[model.DentistDTO], error)
+	ListOrdersByDentistID(ctx context.Context, deptID int, dentistID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DentistDTO], error)
 	Delete(ctx context.Context, id int) error
 }
@@ -44,6 +45,7 @@ func kDentistAll() []string {
 		kDentistListAll(),
 		kDentistSearchAll(),
 		kDentistClinicAll(),
+		kDentistOrderAll(),
 	}
 }
 
@@ -59,8 +61,20 @@ func kDentistClinicAll() string {
 	return "dentist:clinic:*"
 }
 
+func kDentistOrderAll() string {
+	return "dentist:orders:*"
+}
+
 func kDentistClinicList(dentistID int) string {
 	return fmt.Sprintf("clinic:dentist:%d:*", dentistID)
+}
+
+func kDentistOrderList(deptID int, dentistID int, q table.TableQuery) string {
+	orderBy := ""
+	if q.OrderBy != nil {
+		orderBy = *q.OrderBy
+	}
+	return fmt.Sprintf("dentist:orders:dpt%d:dentist:%d:list:l%d:p%d:o%s:d%s", deptID, dentistID, q.Limit, q.Page, orderBy, q.Direction)
 }
 
 func kDentistList(q table.TableQuery) string {
@@ -192,6 +206,24 @@ func (s *dentistService) Delete(ctx context.Context, id int) error {
 	cache.InvalidateKeys(kDentistAll()...)
 	cache.InvalidateKeys(kDentistByID(id), kDentistClinicList(id))
 	return nil
+}
+
+func (s *dentistService) ListOrdersByDentistID(ctx context.Context, deptID int, dentistID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	type boxed = table.TableListResult[model.OrderDTO]
+	key := kDentistOrderList(deptID, dentistID, q)
+
+	ptr, err := cache.Get(key, cache.TTLMedium, func() (*boxed, error) {
+		res, e := s.repo.ListOrdersByDentistID(ctx, deptID, dentistID, q)
+		if e != nil {
+			return nil, e
+		}
+		return &res, nil
+	})
+	if err != nil {
+		var zero boxed
+		return zero, err
+	}
+	return *ptr, nil
 }
 
 func (s *dentistService) Search(ctx context.Context, q dbutils.SearchQuery) (dbutils.SearchResult[model.DentistDTO], error) {

@@ -11,6 +11,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/clinicdentist"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/clinicpatient"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/dentist"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/mapper"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
@@ -26,6 +27,7 @@ type ClinicRepository interface {
 	List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
 	ListByDentistID(ctx context.Context, deptID int, dentistID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
 	ListByPatientID(ctx context.Context, deptID int, patientID int, query table.TableQuery) (table.TableListResult[model.ClinicDTO], error)
+	ListOrdersByClinicID(ctx context.Context, deptID int, clinicID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error)
 	Search(ctx context.Context, deptID int, query dbutils.SearchQuery) (dbutils.SearchResult[model.ClinicDTO], error)
 	Delete(ctx context.Context, deptID int, id int) error
 }
@@ -307,6 +309,30 @@ func (r *clinicRepo) ListByPatientID(ctx context.Context, deptID int, patientID 
 	)
 	if err != nil {
 		var zero table.TableListResult[model.ClinicDTO]
+		return zero, err
+	}
+	return list, nil
+}
+
+func (r *clinicRepo) ListOrdersByClinicID(ctx context.Context, deptID int, clinicID int, query table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
+	list, err := table.TableList(
+		ctx,
+		r.db.Order.Query().
+			Where(
+				order.DeletedAtIsNil(),
+				order.DepartmentIDEQ(deptID),
+				order.ClinicIDEQ(clinicID),
+			),
+		query,
+		order.Table,
+		order.FieldID,
+		order.FieldID,
+		func(src []*generated.Order) []*model.OrderDTO {
+			return mapper.MapListAs[*generated.Order, *model.OrderDTO](src)
+		},
+	)
+	if err != nil {
+		var zero table.TableListResult[model.OrderDTO]
 		return zero, err
 	}
 	return list, nil

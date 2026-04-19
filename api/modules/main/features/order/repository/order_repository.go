@@ -72,6 +72,12 @@ type OrderRepository interface {
 	GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error)
 	GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
+	GetDentistCatalogOverview(ctx context.Context, deptID int) (*model.DentistCatalogOverviewDTO, error)
+	GetDentistOverview(ctx context.Context, deptID int, dentistID int) (*model.DentistOverviewDTO, error)
+	GetPatientCatalogOverview(ctx context.Context, deptID int) (*model.PatientCatalogOverviewDTO, error)
+	GetPatientOverview(ctx context.Context, deptID int, patientID int) (*model.PatientOverviewDTO, error)
+	GetClinicCatalogOverview(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewDTO, error)
+	GetClinicOverview(ctx context.Context, deptID int, clinicID int) (*model.ClinicOverviewDTO, error)
 	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
 	GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error)
 	GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error)
@@ -125,6 +131,31 @@ type sectionOverviewScope struct {
 	ScopeLabel  string
 }
 
+type clinicOverviewScope struct {
+	ClinicID     int
+	ClinicName   *string
+	PhoneNumber  *string
+	DentistCount int
+	PatientCount int
+	ScopeLabel   string
+}
+
+type dentistOverviewScope struct {
+	DentistID   int
+	DentistName *string
+	PhoneNumber *string
+	ClinicCount int
+	ScopeLabel  string
+}
+
+type patientOverviewScope struct {
+	PatientID   int
+	PatientName *string
+	PhoneNumber *string
+	ClinicCount int
+	ScopeLabel  string
+}
+
 func productOverviewScopeLabel(isTemplate bool, variantCount int) string {
 	if !isTemplate {
 		return "Biến thể hiện tại"
@@ -157,6 +188,30 @@ func processCatalogNameExpr(alias string) string {
 
 func sectionCatalogOverviewScopeLabel() string {
 	return "Toàn bộ phòng ban"
+}
+
+func clinicCatalogOverviewScopeLabel() string {
+	return "Toàn bộ nha khoa"
+}
+
+func dentistCatalogOverviewScopeLabel() string {
+	return "Toàn bộ nha sĩ"
+}
+
+func patientCatalogOverviewScopeLabel() string {
+	return "Toàn bộ bệnh nhân"
+}
+
+func clinicOverviewScopeLabel() string {
+	return "Nha khoa hiện tại"
+}
+
+func dentistOverviewScopeLabel() string {
+	return "Nha sĩ hiện tại"
+}
+
+func patientOverviewScopeLabel() string {
+	return "Bệnh nhân hiện tại"
 }
 
 func sectionOverviewScopeLabel() string {
@@ -1691,6 +1746,217 @@ func (r *orderRepository) GetMaterialCatalogOverview(ctx context.Context, deptID
 	}, nil
 }
 
+func (r *orderRepository) GetDentistOverview(ctx context.Context, deptID int, dentistID int) (*model.DentistOverviewDTO, error) {
+	scope, err := r.resolveDentistOverviewScope(ctx, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getDentistOverviewSummary(ctx, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getDentistOverviewOrderStatusBreakdown(ctx, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+
+	processLoad, err := r.getDentistOverviewProcessLoad(ctx, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+
+	recentOrders, err := r.getDentistOverviewRecentOrders(ctx, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DentistOverviewDTO{
+		Scope: &model.DentistOverviewScopeDTO{
+			DentistID:   scope.DentistID,
+			DentistName: scope.DentistName,
+			PhoneNumber: scope.PhoneNumber,
+			ClinicCount: scope.ClinicCount,
+			ScopeLabel:  scope.ScopeLabel,
+		},
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		ProcessLoad:          processLoad,
+		RecentOrders:         recentOrders,
+	}, nil
+}
+
+func (r *orderRepository) GetDentistCatalogOverview(ctx context.Context, deptID int) (*model.DentistCatalogOverviewDTO, error) {
+	coverage, err := r.getDentistCatalogOverviewCoverage(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getDentistCatalogOverviewSummary(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getDentistCatalogOverviewOrderStatusBreakdown(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	dentistLoads, err := r.getDentistCatalogOverviewDentistLoads(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.DentistCatalogOverviewDTO{
+		Coverage:             coverage,
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		DentistLoads:         dentistLoads,
+	}, nil
+}
+
+func (r *orderRepository) GetPatientOverview(ctx context.Context, deptID int, patientID int) (*model.PatientOverviewDTO, error) {
+	scope, err := r.resolvePatientOverviewScope(ctx, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getPatientOverviewSummary(ctx, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getPatientOverviewOrderStatusBreakdown(ctx, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	processLoad, err := r.getPatientOverviewProcessLoad(ctx, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	recentOrders, err := r.getPatientOverviewRecentOrders(ctx, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.PatientOverviewDTO{
+		Scope: &model.PatientOverviewScopeDTO{
+			PatientID:   scope.PatientID,
+			PatientName: scope.PatientName,
+			PhoneNumber: scope.PhoneNumber,
+			ClinicCount: scope.ClinicCount,
+			ScopeLabel:  scope.ScopeLabel,
+		},
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		ProcessLoad:          processLoad,
+		RecentOrders:         recentOrders,
+	}, nil
+}
+
+func (r *orderRepository) GetPatientCatalogOverview(ctx context.Context, deptID int) (*model.PatientCatalogOverviewDTO, error) {
+	coverage, err := r.getPatientCatalogOverviewCoverage(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getPatientCatalogOverviewSummary(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getPatientCatalogOverviewOrderStatusBreakdown(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	patientLoads, err := r.getPatientCatalogOverviewPatientLoads(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.PatientCatalogOverviewDTO{
+		Coverage:             coverage,
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		PatientLoads:         patientLoads,
+	}, nil
+}
+
+func (r *orderRepository) GetClinicOverview(ctx context.Context, deptID int, clinicID int) (*model.ClinicOverviewDTO, error) {
+	scope, err := r.resolveClinicOverviewScope(ctx, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getClinicOverviewSummary(ctx, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getClinicOverviewOrderStatusBreakdown(ctx, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+
+	processLoad, err := r.getClinicOverviewProcessLoad(ctx, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+
+	recentOrders, err := r.getClinicOverviewRecentOrders(ctx, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ClinicOverviewDTO{
+		Scope: &model.ClinicOverviewScopeDTO{
+			ClinicID:     scope.ClinicID,
+			ClinicName:   scope.ClinicName,
+			PhoneNumber:  scope.PhoneNumber,
+			DentistCount: scope.DentistCount,
+			PatientCount: scope.PatientCount,
+			ScopeLabel:   scope.ScopeLabel,
+		},
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		ProcessLoad:          processLoad,
+		RecentOrders:         recentOrders,
+	}, nil
+}
+
+func (r *orderRepository) GetClinicCatalogOverview(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewDTO, error) {
+	coverage, err := r.getClinicCatalogOverviewCoverage(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	summary, err := r.getClinicCatalogOverviewSummary(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	orderStatusBreakdown, err := r.getClinicCatalogOverviewOrderStatusBreakdown(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	clinicLoads, err := r.getClinicCatalogOverviewClinicLoads(ctx, deptID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &model.ClinicCatalogOverviewDTO{
+		Coverage:             coverage,
+		Summary:              summary,
+		OrderStatusBreakdown: orderStatusBreakdown,
+		ClinicLoads:          clinicLoads,
+	}, nil
+}
+
 func (r *orderRepository) GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error) {
 	scope, err := r.resolveSectionOverviewScope(ctx, deptID, sectionID)
 	if err != nil {
@@ -1729,6 +1995,1311 @@ func (r *orderRepository) GetSectionOverview(ctx context.Context, deptID int, se
 		ProcessLoad:          processLoad,
 		RecentOrders:         recentOrders,
 	}, nil
+}
+
+func (r *orderRepository) resolveDentistOverviewScope(ctx context.Context, deptID int, dentistID int) (*dentistOverviewScope, error) {
+	query := `
+SELECT
+	d.id,
+	NULLIF(d.name, '') AS dentist_name,
+	NULLIF(d.phone_number, '') AS phone_number,
+	COALESCE((
+		SELECT COUNT(*)
+		FROM clinic_dentists cd
+		JOIN clinics c ON c.id = cd.clinic_id
+		WHERE cd.dentist_id = d.id
+		  AND c.department_id = $1
+		  AND c.deleted_at IS NULL
+	), 0) AS clinic_count
+FROM dentists d
+WHERE d.id = $2
+  AND d.deleted_at IS NULL
+LIMIT 1
+`
+
+	scope := &dentistOverviewScope{ScopeLabel: dentistOverviewScopeLabel()}
+	var dentistName, phoneNumber stdsql.NullString
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID, dentistID).Scan(
+		&scope.DentistID,
+		&dentistName,
+		&phoneNumber,
+		&scope.ClinicCount,
+	); err != nil {
+		return nil, err
+	}
+	if dentistName.Valid {
+		scope.DentistName = &dentistName.String
+	}
+	if phoneNumber.Valid {
+		scope.PhoneNumber = &phoneNumber.String
+	}
+	return scope, nil
+}
+
+func (r *orderRepository) getDentistCatalogOverviewCoverage(ctx context.Context, deptID int) (*model.DentistCatalogOverviewCoverageDTO, error) {
+	query := `
+SELECT
+	COALESCE((
+		SELECT COUNT(DISTINCT d.id)
+		FROM dentists d
+		JOIN clinic_dentists cd ON cd.dentist_id = d.id
+		JOIN clinics c ON c.id = cd.clinic_id
+		WHERE d.deleted_at IS NULL
+		  AND c.department_id = $1
+		  AND c.deleted_at IS NULL
+	), 0) AS total_dentists,
+	COALESCE((
+		SELECT COUNT(DISTINCT o.dentist_id)
+		FROM orders o
+		WHERE o.department_id = $1
+		  AND o.deleted_at IS NULL
+		  AND o.dentist_id IS NOT NULL
+	), 0) AS dentists_with_orders
+`
+
+	dto := &model.DentistCatalogOverviewCoverageDTO{ScopeLabel: dentistCatalogOverviewScopeLabel()}
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID).Scan(&dto.TotalDentists, &dto.DentistsWithOrders); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getDentistOverviewSummary(ctx context.Context, deptID int, dentistID int) (*model.DentistOverviewSummaryDTO, error) {
+	return r.queryDentistSummary(ctx, "o.dentist_id = $2", []any{deptID, dentistID})
+}
+
+func (r *orderRepository) getDentistCatalogOverviewSummary(ctx context.Context, deptID int) (*model.DentistCatalogOverviewSummaryDTO, error) {
+	summary, err := r.queryDentistSummary(ctx, "o.dentist_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	return &model.DentistCatalogOverviewSummaryDTO{
+		OpenOrders:         summary.OpenOrders,
+		InProductionOrders: summary.InProductionOrders,
+		CompletedOrders:    summary.CompletedOrders,
+		RemakeOrders:       summary.RemakeOrders,
+		LifetimeOrders:     summary.LifetimeOrders,
+		CompletionPercent:  summary.CompletionPercent,
+	}, nil
+}
+
+func (r *orderRepository) queryDentistSummary(ctx context.Context, scopeWhere string, args []any) (*model.DentistOverviewSummaryDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id,
+		%s AS status
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+),
+process_totals AS (
+	SELECT
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM order_item_processes op
+	JOIN orders o ON o.id = op.order_id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+)
+SELECT
+	COUNT(*) FILTER (WHERE status IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+	COUNT(*) FILTER (WHERE status IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+	COUNT(*) FILTER (WHERE status = 'completed') AS completed_orders,
+	COUNT(*) FILTER (WHERE status = 'rework') AS remake_orders,
+	COUNT(*) AS lifetime_orders,
+	COALESCE(ROUND(100.0 * (SELECT completed_processes FROM process_totals) / NULLIF((SELECT total_processes FROM process_totals), 0)), 0) AS completion_percent
+FROM scoped_orders
+`, orderStatusExpr, scopeWhere, processStatusExpr, scopeWhere)
+
+	dto := &model.DentistOverviewSummaryDTO{}
+	if err := r.deps.DB.QueryRowContext(ctx, query, args...).Scan(
+		&dto.OpenOrders,
+		&dto.InProductionOrders,
+		&dto.CompletedOrders,
+		&dto.RemakeOrders,
+		&dto.LifetimeOrders,
+		&dto.CompletionPercent,
+	); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getDentistOverviewOrderStatusBreakdown(ctx context.Context, deptID int, dentistID int) ([]*model.DentistOverviewOrderStatusBreakdownDTO, error) {
+	return r.queryDentistOrderStatusBreakdown(ctx, deptID, "o.dentist_id = $2", []any{deptID, dentistID})
+}
+
+func (r *orderRepository) getDentistCatalogOverviewOrderStatusBreakdown(ctx context.Context, deptID int) ([]*model.DentistCatalogOverviewOrderStatusBreakdownDTO, error) {
+	rows, err := r.queryDentistOrderStatusBreakdown(ctx, deptID, "o.dentist_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*model.DentistCatalogOverviewOrderStatusBreakdownDTO, 0, len(rows))
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		result = append(result, &model.DentistCatalogOverviewOrderStatusBreakdownDTO{
+			Status: row.Status,
+			Count:  row.Count,
+		})
+	}
+	return result, nil
+}
+
+func (r *orderRepository) queryDentistOrderStatusBreakdown(ctx context.Context, deptID int, scopeWhere string, args []any) ([]*model.DentistOverviewOrderStatusBreakdownDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	query := fmt.Sprintf(`
+SELECT
+	%s AS status,
+	COUNT(*) AS count
+FROM orders o
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND %s
+GROUP BY %s
+ORDER BY count DESC, status ASC
+`, orderStatusExpr, scopeWhere, orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.DentistOverviewOrderStatusBreakdownDTO, 0)
+	for rows.Next() {
+		row := &model.DentistOverviewOrderStatusBreakdownDTO{}
+		if err := rows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getDentistCatalogOverviewDentistLoads(ctx context.Context, deptID int) ([]*model.DentistCatalogOverviewDentistLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH dentist_base AS (
+	SELECT
+		d.id AS dentist_id,
+		NULLIF(d.name, '') AS dentist_name,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s = 'completed') AS completed_orders,
+		COUNT(DISTINCT o.id) AS lifetime_orders
+	FROM dentists d
+	LEFT JOIN orders o
+		ON o.dentist_id = d.id
+	   AND o.department_id = $1
+	   AND o.deleted_at IS NULL
+	WHERE d.deleted_at IS NULL
+	  AND EXISTS (
+		SELECT 1
+		FROM clinic_dentists cd
+		JOIN clinics c ON c.id = cd.clinic_id
+		WHERE cd.dentist_id = d.id
+		  AND c.department_id = $1
+		  AND c.deleted_at IS NULL
+	  )
+	GROUP BY d.id, d.name
+),
+dentist_process AS (
+	SELECT
+		o.dentist_id,
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM orders o
+	JOIN order_item_processes op
+		ON op.order_id = o.id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.dentist_id IS NOT NULL
+	GROUP BY o.dentist_id
+)
+SELECT
+	db.dentist_id,
+	db.dentist_name,
+	db.open_orders,
+	db.in_production_orders,
+	db.completed_orders,
+	db.lifetime_orders,
+	COALESCE(ROUND(100.0 * dp.completed_processes / NULLIF(dp.total_processes, 0)), 0) AS completion_percent
+FROM dentist_base db
+LEFT JOIN dentist_process dp
+	ON dp.dentist_id = db.dentist_id
+WHERE db.lifetime_orders > 0
+ORDER BY db.open_orders DESC, db.in_production_orders DESC, db.lifetime_orders DESC, db.dentist_id ASC
+LIMIT 5
+`, normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.DentistCatalogOverviewDentistLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.DentistCatalogOverviewDentistLoadDTO{}
+		var dentistName stdsql.NullString
+		if err := rows.Scan(
+			&row.DentistID,
+			&dentistName,
+			&row.OpenOrders,
+			&row.InProductionOrders,
+			&row.CompletedOrders,
+			&row.LifetimeOrders,
+			&row.CompletionPercent,
+		); err != nil {
+			return nil, err
+		}
+		if dentistName.Valid {
+			row.DentistName = &dentistName.String
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getDentistOverviewProcessLoad(ctx context.Context, deptID int, dentistID int) ([]*model.DentistOverviewProcessLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+SELECT
+	COALESCE(NULLIF(op.process_name, ''), 'Công đoạn') AS process_name,
+	COALESCE(op.step_number, 0) AS step_number,
+	COUNT(*) FILTER (WHERE %s = 'waiting') AS waiting,
+	COUNT(*) FILTER (WHERE %s = 'in_progress') AS in_progress,
+	COUNT(*) FILTER (WHERE %s = 'qc') AS qc,
+	COUNT(*) FILTER (WHERE %s = 'rework') AS rework,
+	COUNT(*) FILTER (WHERE %s = 'completed') AS completed,
+	COUNT(*) AS total,
+	COUNT(DISTINCT op.order_id) FILTER (WHERE %s IN ('waiting', 'in_progress', 'qc', 'rework')) AS active_orders
+FROM order_item_processes op
+JOIN orders o
+	ON o.id = op.order_id
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND o.dentist_id = $2
+GROUP BY COALESCE(NULLIF(op.process_name, ''), 'Công đoạn'), COALESCE(op.step_number, 0)
+ORDER BY active_orders DESC, total DESC, step_number ASC, process_name ASC
+LIMIT 5
+`, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.DentistOverviewProcessLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.DentistOverviewProcessLoadDTO{}
+		if err := rows.Scan(
+			&row.ProcessName,
+			&row.StepNumber,
+			&row.Waiting,
+			&row.InProgress,
+			&row.QC,
+			&row.Rework,
+			&row.Completed,
+			&row.Total,
+			&row.ActiveOrders,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getDentistOverviewRecentOrders(ctx context.Context, deptID int, dentistID int) ([]*model.DentistOverviewRecentOrderDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		MIN(COALESCE(NULLIF(o.code_latest, ''), NULLIF(o.code, ''))) AS order_code,
+		%s AS order_status,
+		MIN(NULLIF(o.clinic_name, '')) AS clinic_name,
+		MIN(NULLIF(o.patient_name, '')) AS patient_name,
+		COALESCE(MAX(o.updated_at), MAX(o.created_at)) AS updated_at
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.dentist_id = $2
+	GROUP BY o.id, %s
+),
+latest_process AS (
+	SELECT DISTINCT ON (op.order_id)
+		op.order_id,
+		COALESCE(NULLIF(op.process_name, ''), NULLIF(o.process_name_latest, ''), 'Công đoạn') AS current_process_name,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) AS latest_checkpoint_at
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	   AND o.dentist_id = $2
+	LEFT JOIN LATERAL (
+		SELECT
+			ip.completed_at,
+			ip.started_at,
+			ip.created_at
+		FROM order_item_process_in_progresses ip
+		WHERE ip.process_id = op.id
+		ORDER BY COALESCE(ip.completed_at, ip.started_at, ip.created_at) DESC, ip.id DESC
+		LIMIT 1
+	) ip ON TRUE
+	ORDER BY
+		op.order_id,
+		CASE %s
+			WHEN 'in_progress' THEN 1
+			WHEN 'qc' THEN 2
+			WHEN 'rework' THEN 3
+			WHEN 'waiting' THEN 4
+			WHEN 'completed' THEN 5
+			ELSE 6
+		END,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) DESC,
+		op.step_number ASC,
+		op.id DESC
+)
+SELECT
+	so.order_id,
+	so.order_code,
+	so.order_status,
+	so.clinic_name,
+	so.patient_name,
+	lp.current_process_name,
+	COALESCE(lp.latest_checkpoint_at, so.updated_at) AS latest_checkpoint_at
+FROM scoped_orders so
+LEFT JOIN latest_process lp
+	ON lp.order_id = so.order_id
+ORDER BY COALESCE(lp.latest_checkpoint_at, so.updated_at) DESC, so.order_id DESC
+LIMIT 5
+`, orderStatusExpr, orderStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, dentistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.DentistOverviewRecentOrderDTO, 0, 5)
+	for rows.Next() {
+		row := &model.DentistOverviewRecentOrderDTO{}
+		var (
+			orderCode          stdsql.NullString
+			status             stdsql.NullString
+			clinicName         stdsql.NullString
+			patientName        stdsql.NullString
+			currentProcessName stdsql.NullString
+			latestCheckpointAt stdsql.NullTime
+		)
+		if err := rows.Scan(
+			&row.OrderID,
+			&orderCode,
+			&status,
+			&clinicName,
+			&patientName,
+			&currentProcessName,
+			&latestCheckpointAt,
+		); err != nil {
+			return nil, err
+		}
+		if orderCode.Valid {
+			row.OrderCode = &orderCode.String
+		}
+		if status.Valid {
+			row.Status = &status.String
+		}
+		if clinicName.Valid {
+			row.ClinicName = &clinicName.String
+		}
+		if patientName.Valid {
+			row.PatientName = &patientName.String
+		}
+		if currentProcessName.Valid {
+			row.CurrentProcessName = &currentProcessName.String
+		}
+		if latestCheckpointAt.Valid {
+			row.LatestCheckpointAt = &latestCheckpointAt.Time
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) resolvePatientOverviewScope(ctx context.Context, deptID int, patientID int) (*patientOverviewScope, error) {
+	query := `
+SELECT
+	p.id,
+	NULLIF(p.name, '') AS patient_name,
+	NULLIF(p.phone_number, '') AS phone_number,
+	COALESCE((
+		SELECT COUNT(*)
+		FROM clinic_patients cp
+		JOIN clinics c ON c.id = cp.clinic_id
+		WHERE cp.patient_id = p.id
+		  AND c.deleted_at IS NULL
+		  AND c.department_id = $1
+	), 0) AS clinic_count
+FROM patients p
+WHERE p.id = $2
+  AND p.deleted_at IS NULL
+LIMIT 1
+`
+
+	scope := &patientOverviewScope{ScopeLabel: patientOverviewScopeLabel()}
+	var patientName, phoneNumber stdsql.NullString
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID, patientID).Scan(
+		&scope.PatientID,
+		&patientName,
+		&phoneNumber,
+		&scope.ClinicCount,
+	); err != nil {
+		return nil, err
+	}
+	if patientName.Valid {
+		scope.PatientName = &patientName.String
+	}
+	if phoneNumber.Valid {
+		scope.PhoneNumber = &phoneNumber.String
+	}
+	return scope, nil
+}
+
+func (r *orderRepository) getPatientCatalogOverviewCoverage(ctx context.Context, deptID int) (*model.PatientCatalogOverviewCoverageDTO, error) {
+	query := `
+SELECT
+	COALESCE((
+		SELECT COUNT(*)
+		FROM patients p
+		WHERE p.deleted_at IS NULL
+	), 0) AS total_patients,
+	COALESCE((
+		SELECT COUNT(DISTINCT o.patient_id)
+		FROM orders o
+		WHERE o.department_id = $1
+		  AND o.deleted_at IS NULL
+		  AND o.patient_id IS NOT NULL
+	), 0) AS patients_with_orders
+`
+
+	dto := &model.PatientCatalogOverviewCoverageDTO{ScopeLabel: patientCatalogOverviewScopeLabel()}
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID).Scan(&dto.TotalPatients, &dto.PatientsWithOrders); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getPatientOverviewSummary(ctx context.Context, deptID int, patientID int) (*model.PatientOverviewSummaryDTO, error) {
+	return r.queryPatientSummary(ctx, "o.patient_id = $2", []any{deptID, patientID})
+}
+
+func (r *orderRepository) getPatientCatalogOverviewSummary(ctx context.Context, deptID int) (*model.PatientCatalogOverviewSummaryDTO, error) {
+	summary, err := r.queryPatientSummary(ctx, "o.patient_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	return &model.PatientCatalogOverviewSummaryDTO{
+		OpenOrders:         summary.OpenOrders,
+		InProductionOrders: summary.InProductionOrders,
+		CompletedOrders:    summary.CompletedOrders,
+		RemakeOrders:       summary.RemakeOrders,
+		LifetimeOrders:     summary.LifetimeOrders,
+		CompletionPercent:  summary.CompletionPercent,
+	}, nil
+}
+
+func (r *orderRepository) queryPatientSummary(ctx context.Context, scopeWhere string, args []any) (*model.PatientOverviewSummaryDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id,
+		%s AS status
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+),
+process_totals AS (
+	SELECT
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM order_item_processes op
+	JOIN orders o ON o.id = op.order_id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+)
+SELECT
+	COUNT(*) FILTER (WHERE status IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+	COUNT(*) FILTER (WHERE status IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+	COUNT(*) FILTER (WHERE status = 'completed') AS completed_orders,
+	COUNT(*) FILTER (WHERE status = 'rework') AS remake_orders,
+	COUNT(*) AS lifetime_orders,
+	COALESCE(ROUND(100.0 * (SELECT completed_processes FROM process_totals) / NULLIF((SELECT total_processes FROM process_totals), 0)), 0) AS completion_percent
+FROM scoped_orders
+`, orderStatusExpr, scopeWhere, processStatusExpr, scopeWhere)
+
+	dto := &model.PatientOverviewSummaryDTO{}
+	if err := r.deps.DB.QueryRowContext(ctx, query, args...).Scan(
+		&dto.OpenOrders,
+		&dto.InProductionOrders,
+		&dto.CompletedOrders,
+		&dto.RemakeOrders,
+		&dto.LifetimeOrders,
+		&dto.CompletionPercent,
+	); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getPatientOverviewOrderStatusBreakdown(ctx context.Context, deptID int, patientID int) ([]*model.PatientOverviewOrderStatusBreakdownDTO, error) {
+	return r.queryPatientOrderStatusBreakdown(ctx, deptID, "o.patient_id = $2", []any{deptID, patientID})
+}
+
+func (r *orderRepository) getPatientCatalogOverviewOrderStatusBreakdown(ctx context.Context, deptID int) ([]*model.PatientCatalogOverviewOrderStatusBreakdownDTO, error) {
+	rows, err := r.queryPatientOrderStatusBreakdown(ctx, deptID, "o.patient_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*model.PatientCatalogOverviewOrderStatusBreakdownDTO, 0, len(rows))
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		result = append(result, &model.PatientCatalogOverviewOrderStatusBreakdownDTO{
+			Status: row.Status,
+			Count:  row.Count,
+		})
+	}
+	return result, nil
+}
+
+func (r *orderRepository) queryPatientOrderStatusBreakdown(ctx context.Context, deptID int, scopeWhere string, args []any) ([]*model.PatientOverviewOrderStatusBreakdownDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	query := fmt.Sprintf(`
+SELECT
+	%s AS status,
+	COUNT(*) AS count
+FROM orders o
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND %s
+GROUP BY %s
+ORDER BY count DESC, status ASC
+`, orderStatusExpr, scopeWhere, orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.PatientOverviewOrderStatusBreakdownDTO, 0)
+	for rows.Next() {
+		row := &model.PatientOverviewOrderStatusBreakdownDTO{}
+		if err := rows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getPatientCatalogOverviewPatientLoads(ctx context.Context, deptID int) ([]*model.PatientCatalogOverviewPatientLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH patient_base AS (
+	SELECT
+		p.id AS patient_id,
+		NULLIF(p.name, '') AS patient_name,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s = 'completed') AS completed_orders,
+		COUNT(DISTINCT o.id) AS lifetime_orders
+	FROM patients p
+	LEFT JOIN orders o
+		ON o.patient_id = p.id
+	   AND o.department_id = $1
+	   AND o.deleted_at IS NULL
+	WHERE p.deleted_at IS NULL
+	GROUP BY p.id, p.name
+),
+patient_process AS (
+	SELECT
+		o.patient_id,
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM orders o
+	JOIN order_item_processes op
+		ON op.order_id = o.id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.patient_id IS NOT NULL
+	GROUP BY o.patient_id
+)
+SELECT
+	pb.patient_id,
+	pb.patient_name,
+	pb.open_orders,
+	pb.in_production_orders,
+	pb.completed_orders,
+	pb.lifetime_orders,
+	COALESCE(ROUND(100.0 * pp.completed_processes / NULLIF(pp.total_processes, 0)), 0) AS completion_percent
+FROM patient_base pb
+LEFT JOIN patient_process pp
+	ON pp.patient_id = pb.patient_id
+WHERE pb.lifetime_orders > 0
+ORDER BY pb.open_orders DESC, pb.in_production_orders DESC, pb.lifetime_orders DESC, pb.patient_id ASC
+LIMIT 5
+`, normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.PatientCatalogOverviewPatientLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.PatientCatalogOverviewPatientLoadDTO{}
+		var patientName stdsql.NullString
+		if err := rows.Scan(
+			&row.PatientID,
+			&patientName,
+			&row.OpenOrders,
+			&row.InProductionOrders,
+			&row.CompletedOrders,
+			&row.LifetimeOrders,
+			&row.CompletionPercent,
+		); err != nil {
+			return nil, err
+		}
+		if patientName.Valid {
+			row.PatientName = &patientName.String
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getPatientOverviewProcessLoad(ctx context.Context, deptID int, patientID int) ([]*model.PatientOverviewProcessLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+SELECT
+	COALESCE(NULLIF(op.process_name, ''), 'Công đoạn') AS process_name,
+	MIN(op.step_number) AS step_number,
+	COUNT(*) FILTER (WHERE %s = 'waiting') AS waiting,
+	COUNT(*) FILTER (WHERE %s = 'in_progress') AS in_progress,
+	COUNT(*) FILTER (WHERE %s = 'qc') AS qc,
+	COUNT(*) FILTER (WHERE %s = 'rework') AS rework,
+	COUNT(*) FILTER (WHERE %s = 'completed') AS completed,
+	COUNT(*) AS total,
+	COUNT(DISTINCT op.order_id) FILTER (WHERE %s IN ('waiting', 'in_progress', 'qc', 'rework')) AS active_orders
+FROM order_item_processes op
+JOIN orders o
+	ON o.id = op.order_id
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND o.patient_id = $2
+GROUP BY LOWER(BTRIM(COALESCE(NULLIF(op.process_name, ''), 'Công đoạn'))), COALESCE(NULLIF(op.process_name, ''), 'Công đoạn')
+ORDER BY active_orders DESC, total DESC, step_number ASC, process_name ASC
+LIMIT 5
+`, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.PatientOverviewProcessLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.PatientOverviewProcessLoadDTO{}
+		if err := rows.Scan(
+			&row.ProcessName,
+			&row.StepNumber,
+			&row.Waiting,
+			&row.InProgress,
+			&row.QC,
+			&row.Rework,
+			&row.Completed,
+			&row.Total,
+			&row.ActiveOrders,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getPatientOverviewRecentOrders(ctx context.Context, deptID int, patientID int) ([]*model.PatientOverviewRecentOrderDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		MIN(COALESCE(NULLIF(o.code_latest, ''), NULLIF(o.code, ''))) AS order_code,
+		%s AS order_status,
+		MIN(NULLIF(o.clinic_name, '')) AS clinic_name,
+		MIN(NULLIF(o.dentist_name, '')) AS dentist_name,
+		COALESCE(MAX(o.updated_at), MAX(o.created_at)) AS updated_at
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.patient_id = $2
+	GROUP BY o.id, %s
+),
+latest_process AS (
+	SELECT DISTINCT ON (op.order_id)
+		op.order_id,
+		COALESCE(NULLIF(op.process_name, ''), NULLIF(o.process_name_latest, ''), 'Công đoạn') AS current_process_name,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) AS latest_checkpoint_at
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	   AND o.patient_id = $2
+	LEFT JOIN LATERAL (
+		SELECT
+			ip.completed_at,
+			ip.started_at,
+			ip.created_at
+		FROM order_item_process_in_progresses ip
+		WHERE ip.process_id = op.id
+		ORDER BY COALESCE(ip.completed_at, ip.started_at, ip.created_at) DESC, ip.id DESC
+		LIMIT 1
+	) ip ON TRUE
+	ORDER BY
+		op.order_id,
+		CASE %s
+			WHEN 'in_progress' THEN 1
+			WHEN 'qc' THEN 2
+			WHEN 'rework' THEN 3
+			WHEN 'waiting' THEN 4
+			WHEN 'completed' THEN 5
+			ELSE 6
+		END,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) DESC,
+		op.step_number ASC,
+		op.id DESC
+)
+SELECT
+	so.order_id,
+	so.order_code,
+	so.order_status,
+	so.clinic_name,
+	so.dentist_name,
+	lp.current_process_name,
+	COALESCE(lp.latest_checkpoint_at, so.updated_at) AS latest_checkpoint_at
+FROM scoped_orders so
+LEFT JOIN latest_process lp
+	ON lp.order_id = so.order_id
+ORDER BY COALESCE(lp.latest_checkpoint_at, so.updated_at) DESC, so.order_id DESC
+LIMIT 5
+`, orderStatusExpr, orderStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, patientID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.PatientOverviewRecentOrderDTO, 0, 5)
+	for rows.Next() {
+		row := &model.PatientOverviewRecentOrderDTO{}
+		var (
+			orderCode          stdsql.NullString
+			status             stdsql.NullString
+			clinicName         stdsql.NullString
+			dentistName        stdsql.NullString
+			currentProcessName stdsql.NullString
+			latestCheckpointAt stdsql.NullTime
+		)
+		if err := rows.Scan(
+			&row.OrderID,
+			&orderCode,
+			&status,
+			&clinicName,
+			&dentistName,
+			&currentProcessName,
+			&latestCheckpointAt,
+		); err != nil {
+			return nil, err
+		}
+		if orderCode.Valid {
+			row.OrderCode = &orderCode.String
+		}
+		if status.Valid {
+			row.Status = &status.String
+		}
+		if clinicName.Valid {
+			row.ClinicName = &clinicName.String
+		}
+		if dentistName.Valid {
+			row.DentistName = &dentistName.String
+		}
+		if currentProcessName.Valid {
+			row.CurrentProcessName = &currentProcessName.String
+		}
+		if latestCheckpointAt.Valid {
+			row.LatestCheckpointAt = &latestCheckpointAt.Time
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) resolveClinicOverviewScope(ctx context.Context, deptID int, clinicID int) (*clinicOverviewScope, error) {
+	query := `
+SELECT
+	c.id,
+	NULLIF(c.name, '') AS clinic_name,
+	NULLIF(c.phone_number, '') AS phone_number,
+	COALESCE((
+		SELECT COUNT(*)
+		FROM clinic_dentists cd
+		JOIN dentists d ON d.id = cd.dentist_id
+		WHERE cd.clinic_id = c.id
+		  AND d.deleted_at IS NULL
+	), 0) AS dentist_count,
+	COALESCE((
+		SELECT COUNT(*)
+		FROM clinic_patients cp
+		JOIN patients p ON p.id = cp.patient_id
+		WHERE cp.clinic_id = c.id
+		  AND p.deleted_at IS NULL
+	), 0) AS patient_count
+FROM clinics c
+WHERE c.department_id = $1
+  AND c.id = $2
+  AND c.deleted_at IS NULL
+LIMIT 1
+`
+
+	scope := &clinicOverviewScope{ScopeLabel: clinicOverviewScopeLabel()}
+	var clinicName, phoneNumber stdsql.NullString
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID, clinicID).Scan(
+		&scope.ClinicID,
+		&clinicName,
+		&phoneNumber,
+		&scope.DentistCount,
+		&scope.PatientCount,
+	); err != nil {
+		return nil, err
+	}
+	if clinicName.Valid {
+		scope.ClinicName = &clinicName.String
+	}
+	if phoneNumber.Valid {
+		scope.PhoneNumber = &phoneNumber.String
+	}
+	return scope, nil
+}
+
+func (r *orderRepository) getClinicCatalogOverviewCoverage(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewCoverageDTO, error) {
+	query := `
+SELECT
+	COALESCE((
+		SELECT COUNT(*)
+		FROM clinics c
+		WHERE c.department_id = $1
+		  AND c.deleted_at IS NULL
+	), 0) AS total_clinics,
+	COALESCE((
+		SELECT COUNT(DISTINCT o.clinic_id)
+		FROM orders o
+		WHERE o.department_id = $1
+		  AND o.deleted_at IS NULL
+		  AND o.clinic_id IS NOT NULL
+	), 0) AS clinics_with_orders
+`
+
+	dto := &model.ClinicCatalogOverviewCoverageDTO{ScopeLabel: clinicCatalogOverviewScopeLabel()}
+	if err := r.deps.DB.QueryRowContext(ctx, query, deptID).Scan(&dto.TotalClinics, &dto.ClinicsWithOrders); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getClinicOverviewSummary(ctx context.Context, deptID int, clinicID int) (*model.ClinicOverviewSummaryDTO, error) {
+	return r.queryClinicSummary(ctx, "o.clinic_id = $2", []any{deptID, clinicID})
+}
+
+func (r *orderRepository) getClinicCatalogOverviewSummary(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewSummaryDTO, error) {
+	summary, err := r.queryClinicSummary(ctx, "o.clinic_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	return &model.ClinicCatalogOverviewSummaryDTO{
+		OpenOrders:         summary.OpenOrders,
+		InProductionOrders: summary.InProductionOrders,
+		CompletedOrders:    summary.CompletedOrders,
+		RemakeOrders:       summary.RemakeOrders,
+		LifetimeOrders:     summary.LifetimeOrders,
+		CompletionPercent:  summary.CompletionPercent,
+	}, nil
+}
+
+func (r *orderRepository) queryClinicSummary(ctx context.Context, scopeWhere string, args []any) (*model.ClinicOverviewSummaryDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id,
+		%s AS status
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+),
+process_totals AS (
+	SELECT
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM order_item_processes op
+	JOIN orders o ON o.id = op.order_id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND %s
+)
+SELECT
+	COUNT(*) FILTER (WHERE status IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+	COUNT(*) FILTER (WHERE status IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+	COUNT(*) FILTER (WHERE status = 'completed') AS completed_orders,
+	COUNT(*) FILTER (WHERE status = 'rework') AS remake_orders,
+	COUNT(*) AS lifetime_orders,
+	COALESCE(ROUND(100.0 * (SELECT completed_processes FROM process_totals) / NULLIF((SELECT total_processes FROM process_totals), 0)), 0) AS completion_percent
+FROM scoped_orders
+`, orderStatusExpr, scopeWhere, processStatusExpr, scopeWhere)
+
+	dto := &model.ClinicOverviewSummaryDTO{}
+	if err := r.deps.DB.QueryRowContext(ctx, query, args...).Scan(
+		&dto.OpenOrders,
+		&dto.InProductionOrders,
+		&dto.CompletedOrders,
+		&dto.RemakeOrders,
+		&dto.LifetimeOrders,
+		&dto.CompletionPercent,
+	); err != nil {
+		return nil, err
+	}
+	return dto, nil
+}
+
+func (r *orderRepository) getClinicOverviewOrderStatusBreakdown(ctx context.Context, deptID int, clinicID int) ([]*model.ClinicOverviewOrderStatusBreakdownDTO, error) {
+	return r.queryClinicOrderStatusBreakdown(ctx, deptID, "o.clinic_id = $2", []any{deptID, clinicID})
+}
+
+func (r *orderRepository) getClinicCatalogOverviewOrderStatusBreakdown(ctx context.Context, deptID int) ([]*model.ClinicCatalogOverviewOrderStatusBreakdownDTO, error) {
+	rows, err := r.queryClinicOrderStatusBreakdown(ctx, deptID, "o.clinic_id IS NOT NULL", []any{deptID})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]*model.ClinicCatalogOverviewOrderStatusBreakdownDTO, 0, len(rows))
+	for _, row := range rows {
+		if row == nil {
+			continue
+		}
+		result = append(result, &model.ClinicCatalogOverviewOrderStatusBreakdownDTO{
+			Status: row.Status,
+			Count:  row.Count,
+		})
+	}
+	return result, nil
+}
+
+func (r *orderRepository) queryClinicOrderStatusBreakdown(ctx context.Context, deptID int, scopeWhere string, args []any) ([]*model.ClinicOverviewOrderStatusBreakdownDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	query := fmt.Sprintf(`
+SELECT
+	%s AS status,
+	COUNT(*) AS count
+FROM orders o
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND %s
+GROUP BY %s
+ORDER BY count DESC, status ASC
+`, orderStatusExpr, scopeWhere, orderStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ClinicOverviewOrderStatusBreakdownDTO, 0)
+	for rows.Next() {
+		row := &model.ClinicOverviewOrderStatusBreakdownDTO{}
+		if err := rows.Scan(&row.Status, &row.Count); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getClinicCatalogOverviewClinicLoads(ctx context.Context, deptID int) ([]*model.ClinicCatalogOverviewClinicLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH clinic_base AS (
+	SELECT
+		c.id AS clinic_id,
+		NULLIF(c.name, '') AS clinic_name,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('received', 'in_progress', 'qc', 'rework')) AS open_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s IN ('in_progress', 'qc', 'rework')) AS in_production_orders,
+		COUNT(DISTINCT o.id) FILTER (WHERE %s = 'completed') AS completed_orders,
+		COUNT(DISTINCT o.id) AS lifetime_orders
+	FROM clinics c
+	LEFT JOIN orders o
+		ON o.clinic_id = c.id
+	   AND o.department_id = $1
+	   AND o.deleted_at IS NULL
+	WHERE c.department_id = $1
+	  AND c.deleted_at IS NULL
+	GROUP BY c.id, c.name
+),
+clinic_process AS (
+	SELECT
+		o.clinic_id,
+		COUNT(*) FILTER (WHERE %s = 'completed') AS completed_processes,
+		COUNT(*) AS total_processes
+	FROM orders o
+	JOIN order_item_processes op
+		ON op.order_id = o.id
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.clinic_id IS NOT NULL
+	GROUP BY o.clinic_id
+)
+SELECT
+	cb.clinic_id,
+	cb.clinic_name,
+	cb.open_orders,
+	cb.in_production_orders,
+	cb.completed_orders,
+	cb.lifetime_orders,
+	COALESCE(ROUND(100.0 * cp.completed_processes / NULLIF(cp.total_processes, 0)), 0) AS completion_percent
+FROM clinic_base cb
+LEFT JOIN clinic_process cp
+	ON cp.clinic_id = cb.clinic_id
+WHERE cb.lifetime_orders > 0
+ORDER BY cb.open_orders DESC, cb.in_production_orders DESC, cb.lifetime_orders DESC, cb.clinic_id ASC
+LIMIT 5
+`, normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), normalizedOrderStatusExpr("o"), processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ClinicCatalogOverviewClinicLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.ClinicCatalogOverviewClinicLoadDTO{}
+		var clinicName stdsql.NullString
+		if err := rows.Scan(
+			&row.ClinicID,
+			&clinicName,
+			&row.OpenOrders,
+			&row.InProductionOrders,
+			&row.CompletedOrders,
+			&row.LifetimeOrders,
+			&row.CompletionPercent,
+		); err != nil {
+			return nil, err
+		}
+		if clinicName.Valid {
+			row.ClinicName = &clinicName.String
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getClinicOverviewProcessLoad(ctx context.Context, deptID int, clinicID int) ([]*model.ClinicOverviewProcessLoadDTO, error) {
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+SELECT
+	COALESCE(NULLIF(op.process_name, ''), 'Công đoạn') AS process_name,
+	COALESCE(op.step_number, 0) AS step_number,
+	COUNT(*) FILTER (WHERE %s = 'waiting') AS waiting,
+	COUNT(*) FILTER (WHERE %s = 'in_progress') AS in_progress,
+	COUNT(*) FILTER (WHERE %s = 'qc') AS qc,
+	COUNT(*) FILTER (WHERE %s = 'rework') AS rework,
+	COUNT(*) FILTER (WHERE %s = 'completed') AS completed,
+	COUNT(*) AS total,
+	COUNT(DISTINCT op.order_id) FILTER (WHERE %s IN ('waiting', 'in_progress', 'qc', 'rework')) AS active_orders
+FROM order_item_processes op
+JOIN orders o
+	ON o.id = op.order_id
+WHERE o.department_id = $1
+  AND o.deleted_at IS NULL
+  AND o.clinic_id = $2
+GROUP BY COALESCE(NULLIF(op.process_name, ''), 'Công đoạn'), COALESCE(op.step_number, 0)
+ORDER BY active_orders DESC, total DESC, step_number ASC, process_name ASC
+LIMIT 5
+`, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ClinicOverviewProcessLoadDTO, 0, 5)
+	for rows.Next() {
+		row := &model.ClinicOverviewProcessLoadDTO{}
+		if err := rows.Scan(
+			&row.ProcessName,
+			&row.StepNumber,
+			&row.Waiting,
+			&row.InProgress,
+			&row.QC,
+			&row.Rework,
+			&row.Completed,
+			&row.Total,
+			&row.ActiveOrders,
+		); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *orderRepository) getClinicOverviewRecentOrders(ctx context.Context, deptID int, clinicID int) ([]*model.ClinicOverviewRecentOrderDTO, error) {
+	orderStatusExpr := normalizedOrderStatusExpr("o")
+	processStatusExpr := normalizedProcessStatusExpr("op")
+	query := fmt.Sprintf(`
+WITH scoped_orders AS (
+	SELECT
+		o.id AS order_id,
+		MIN(COALESCE(NULLIF(o.code_latest, ''), NULLIF(o.code, ''))) AS order_code,
+		%s AS order_status,
+		MIN(NULLIF(o.patient_name, '')) AS patient_name,
+		COALESCE(MAX(o.updated_at), MAX(o.created_at)) AS updated_at
+	FROM orders o
+	WHERE o.department_id = $1
+	  AND o.deleted_at IS NULL
+	  AND o.clinic_id = $2
+	GROUP BY o.id, %s
+),
+latest_process AS (
+	SELECT DISTINCT ON (op.order_id)
+		op.order_id,
+		COALESCE(NULLIF(op.process_name, ''), NULLIF(o.process_name_latest, ''), 'Công đoạn') AS current_process_name,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) AS latest_checkpoint_at
+	FROM order_item_processes op
+	JOIN orders o
+		ON o.id = op.order_id
+	   AND o.deleted_at IS NULL
+	   AND o.department_id = $1
+	   AND o.clinic_id = $2
+	LEFT JOIN LATERAL (
+		SELECT
+			ip.completed_at,
+			ip.started_at,
+			ip.created_at
+		FROM order_item_process_in_progresses ip
+		WHERE ip.process_id = op.id
+		ORDER BY COALESCE(ip.completed_at, ip.started_at, ip.created_at) DESC, ip.id DESC
+		LIMIT 1
+	) ip ON TRUE
+	ORDER BY
+		op.order_id,
+		CASE %s
+			WHEN 'in_progress' THEN 1
+			WHEN 'qc' THEN 2
+			WHEN 'rework' THEN 3
+			WHEN 'waiting' THEN 4
+			WHEN 'completed' THEN 5
+			ELSE 6
+		END,
+		COALESCE(ip.completed_at, ip.started_at, op.completed_at, op.started_at, o.updated_at, o.created_at) DESC,
+		op.step_number ASC,
+		op.id DESC
+)
+SELECT
+	so.order_id,
+	so.order_code,
+	so.order_status,
+	so.patient_name,
+	lp.current_process_name,
+	COALESCE(lp.latest_checkpoint_at, so.updated_at) AS latest_checkpoint_at
+FROM scoped_orders so
+LEFT JOIN latest_process lp
+	ON lp.order_id = so.order_id
+ORDER BY COALESCE(lp.latest_checkpoint_at, so.updated_at) DESC, so.order_id DESC
+LIMIT 5
+`, orderStatusExpr, orderStatusExpr, processStatusExpr)
+
+	rows, err := r.deps.DB.QueryContext(ctx, query, deptID, clinicID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := make([]*model.ClinicOverviewRecentOrderDTO, 0, 5)
+	for rows.Next() {
+		row := &model.ClinicOverviewRecentOrderDTO{}
+		var (
+			orderCode          stdsql.NullString
+			status             stdsql.NullString
+			patientName        stdsql.NullString
+			currentProcessName stdsql.NullString
+			latestCheckpointAt stdsql.NullTime
+		)
+		if err := rows.Scan(
+			&row.OrderID,
+			&orderCode,
+			&status,
+			&patientName,
+			&currentProcessName,
+			&latestCheckpointAt,
+		); err != nil {
+			return nil, err
+		}
+		if orderCode.Valid {
+			row.OrderCode = &orderCode.String
+		}
+		if status.Valid {
+			row.Status = &status.String
+		}
+		if patientName.Valid {
+			row.PatientName = &patientName.String
+		}
+		if currentProcessName.Valid {
+			row.CurrentProcessName = &currentProcessName.String
+		}
+		if latestCheckpointAt.Valid {
+			row.LatestCheckpointAt = &latestCheckpointAt.Time
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
 }
 
 func (r *orderRepository) GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error) {

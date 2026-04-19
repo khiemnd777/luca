@@ -15,10 +15,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
 	auditlogmodel "github.com/khiemnd777/noah_api/shared/modules/auditlog/model"
-	"github.com/khiemnd777/noah_api/shared/modules/notification"
-	"github.com/khiemnd777/noah_api/shared/modules/realtime"
 	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
 	searchutils "github.com/khiemnd777/noah_api/shared/search"
 	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
@@ -53,6 +50,12 @@ type OrderService interface {
 	GetProcessCatalogOverview(ctx context.Context, deptID int) (*model.ProcessCatalogOverviewDTO, error)
 	GetMaterialCatalogOverview(ctx context.Context, deptID int) (*model.MaterialCatalogOverviewDTO, error)
 	GetMaterialOverview(ctx context.Context, deptID int, materialID int) (*model.MaterialOverviewDTO, error)
+	GetDentistCatalogOverview(ctx context.Context, deptID int) (*model.DentistCatalogOverviewDTO, error)
+	GetDentistOverview(ctx context.Context, deptID int, dentistID int) (*model.DentistOverviewDTO, error)
+	GetPatientCatalogOverview(ctx context.Context, deptID int) (*model.PatientCatalogOverviewDTO, error)
+	GetPatientOverview(ctx context.Context, deptID int, patientID int) (*model.PatientOverviewDTO, error)
+	GetClinicCatalogOverview(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewDTO, error)
+	GetClinicOverview(ctx context.Context, deptID int, clinicID int) (*model.ClinicOverviewDTO, error)
 	GetSectionCatalogOverview(ctx context.Context, deptID int) (*model.SectionCatalogOverviewDTO, error)
 	GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error)
 	GetStaffCatalogOverview(ctx context.Context, deptID int) (*model.StaffCatalogOverviewDTO, error)
@@ -92,8 +95,14 @@ func kOrderAll(deptID int) []string {
 		"order:product-overview:*",
 		"order:process-overview:*",
 		"order:material-overview:*",
+		"order:dentist-overview:*",
+		"order:patient-overview:*",
+		"order:clinic-overview:*",
 		"order:section-overview:*",
 		"order:staff-overview:*",
+		"dentist:orders:*",
+		"patient:orders:*",
+		"clinic:orders:*",
 		kOrderSectionAll(),
 		kOrderPromotionAll(),
 		fmt.Sprintf("order:assigned:dpt%d:*", deptID),
@@ -192,6 +201,30 @@ func kOrderMaterialCatalogOverview(deptID int) string {
 	return fmt.Sprintf("order:material-overview:dpt%d:catalog", deptID)
 }
 
+func kOrderDentistOverview(deptID int, dentistID int) string {
+	return fmt.Sprintf("order:dentist-overview:dpt%d:dentist:%d", deptID, dentistID)
+}
+
+func kOrderDentistCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:dentist-overview:dpt%d:catalog", deptID)
+}
+
+func kOrderPatientOverview(deptID int, patientID int) string {
+	return fmt.Sprintf("order:patient-overview:dpt%d:patient:%d", deptID, patientID)
+}
+
+func kOrderPatientCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:patient-overview:dpt%d:catalog", deptID)
+}
+
+func kOrderClinicOverview(deptID int, clinicID int) string {
+	return fmt.Sprintf("order:clinic-overview:dpt%d:clinic:%d", deptID, clinicID)
+}
+
+func kOrderClinicCatalogOverview(deptID int) string {
+	return fmt.Sprintf("order:clinic-overview:dpt%d:catalog", deptID)
+}
+
 func kOrderSectionOverview(deptID int, sectionID int) string {
 	return fmt.Sprintf("order:section-overview:dpt%d:section:%d", deptID, sectionID)
 }
@@ -215,14 +248,14 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 	}
 
 	if dto != nil && dto.ID > 0 {
-		cache.InvalidateKeys(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
+		invalidateKeysHook(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
 	}
-	cache.InvalidateKeys(kOrderAll(deptID)...)
+	invalidateKeysHook(kOrderAll(deptID)...)
 
 	s.upsertSearch(ctx, deptID, dto)
 
 	if dto.LeaderIDLatest != nil {
-		notification.Notify(*dto.LeaderIDLatest, userID, "order:checkin", map[string]any{
+		notifyHook(*dto.LeaderIDLatest, userID, "order:checkin", map[string]any{
 			"leader_id":       dto.LeaderIDLatest,
 			"leader_name":     dto.LeaderNameLatest,
 			"order_item_id":   dto.LatestOrderItem.ID,
@@ -231,29 +264,29 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 			"process_name":    dto.ProcessNameLatest,
 		})
 	}
-	realtime.BroadcastAll("order:newest", nil)
+	broadcastAllHook("order:newest", nil)
 
-	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+	publishAsyncHook("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	pubsub.PublishAsync("dashboard:daily:sales", &model.SalesDailyUpsert{
+	publishAsyncHook("dashboard:daily:sales", &model.SalesDailyUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:sales_summary", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:sales_daily", nil)
+	broadcastToDeptHook(deptID, "dashboard:daily:active:stats", nil)
+	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
+	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:sales_summary", nil)
+	broadcastToDeptHook(deptID, "dashboard:sales_daily", nil)
 
 	logger.Debug("[order_created]", "order_id", dto.ID, "created_by", userID)
 
 	// Audit log
-	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
 		Module:   "order",
 		Action:   "created",
@@ -300,6 +333,42 @@ func (s *orderService) GetMaterialCatalogOverview(ctx context.Context, deptID in
 	})
 }
 
+func (s *orderService) GetDentistOverview(ctx context.Context, deptID int, dentistID int) (*model.DentistOverviewDTO, error) {
+	return cache.Get(kOrderDentistOverview(deptID, dentistID), cache.TTLShort, func() (*model.DentistOverviewDTO, error) {
+		return s.repo.GetDentistOverview(ctx, deptID, dentistID)
+	})
+}
+
+func (s *orderService) GetDentistCatalogOverview(ctx context.Context, deptID int) (*model.DentistCatalogOverviewDTO, error) {
+	return cache.Get(kOrderDentistCatalogOverview(deptID), cache.TTLShort, func() (*model.DentistCatalogOverviewDTO, error) {
+		return s.repo.GetDentistCatalogOverview(ctx, deptID)
+	})
+}
+
+func (s *orderService) GetPatientOverview(ctx context.Context, deptID int, patientID int) (*model.PatientOverviewDTO, error) {
+	return cache.Get(kOrderPatientOverview(deptID, patientID), cache.TTLShort, func() (*model.PatientOverviewDTO, error) {
+		return s.repo.GetPatientOverview(ctx, deptID, patientID)
+	})
+}
+
+func (s *orderService) GetPatientCatalogOverview(ctx context.Context, deptID int) (*model.PatientCatalogOverviewDTO, error) {
+	return cache.Get(kOrderPatientCatalogOverview(deptID), cache.TTLShort, func() (*model.PatientCatalogOverviewDTO, error) {
+		return s.repo.GetPatientCatalogOverview(ctx, deptID)
+	})
+}
+
+func (s *orderService) GetClinicOverview(ctx context.Context, deptID int, clinicID int) (*model.ClinicOverviewDTO, error) {
+	return cache.Get(kOrderClinicOverview(deptID, clinicID), cache.TTLShort, func() (*model.ClinicOverviewDTO, error) {
+		return s.repo.GetClinicOverview(ctx, deptID, clinicID)
+	})
+}
+
+func (s *orderService) GetClinicCatalogOverview(ctx context.Context, deptID int) (*model.ClinicCatalogOverviewDTO, error) {
+	return cache.Get(kOrderClinicCatalogOverview(deptID), cache.TTLShort, func() (*model.ClinicCatalogOverviewDTO, error) {
+		return s.repo.GetClinicCatalogOverview(ctx, deptID)
+	})
+}
+
 func (s *orderService) GetSectionOverview(ctx context.Context, deptID int, sectionID int) (*model.SectionOverviewDTO, error) {
 	return cache.Get(kOrderSectionOverview(deptID, sectionID), cache.TTLShort, func() (*model.SectionOverviewDTO, error) {
 		return s.repo.GetSectionOverview(ctx, deptID, sectionID)
@@ -331,23 +400,23 @@ func (s *orderService) Update(ctx context.Context, deptID, userID int, input *mo
 	}
 
 	if dto != nil {
-		cache.InvalidateKeys(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
+		invalidateKeysHook(kOrderByID(dto.ID), kOrderByIDAll(dto.ID))
 	}
-	cache.InvalidateKeys(kOrderAll(deptID)...)
+	invalidateKeysHook(kOrderAll(deptID)...)
 
 	s.upsertSearch(ctx, deptID, dto)
 
-	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+	publishAsyncHook("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:daily:active:stats", nil)
+	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
+	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
 
-	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
 		Module:   "order",
 		Action:   "updated",
@@ -370,24 +439,24 @@ func (s *orderService) UpdateStatus(ctx context.Context, deptID, userID int, ord
 	}
 
 	if out != nil {
-		cache.InvalidateKeys(
+		invalidateKeysHook(
 			kOrderByID(out.OrderID),
 			kOrderByIDAll(out.OrderID),
 		)
 	}
-	cache.InvalidateKeys(kOrderAll(deptID)...)
+	invalidateKeysHook(kOrderAll(deptID)...)
 
-	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+	publishAsyncHook("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:daily:active:stats", nil)
+	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
+	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
 
-	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
 		Module:   "order",
 		Action:   "updated:status:change",
@@ -412,17 +481,17 @@ func (s *orderService) UpdateDeliveryStatus(ctx context.Context, deptID, userID 
 	}
 
 	if out != nil {
-		cache.InvalidateKeys(
+		invalidateKeysHook(
 			kOrderByID(out.OrderID),
 			kOrderByIDAll(out.OrderID),
 		)
 	}
-	cache.InvalidateKeys(kOrderAll(deptID)...)
+	invalidateKeysHook(kOrderAll(deptID)...)
 
 	// Later: broadcast to delivery dashboard only
 	// realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
 
-	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
 		Module:   "order",
 		Action:   "updated:delivery-status:change",
@@ -457,7 +526,7 @@ func (s *orderService) upsertSearch(ctx context.Context, deptID int, dto *model.
 		dto.CustomFields,
 	)
 
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
+	publishAsyncHook("search:upsert", &searchmodel.Doc{
 		EntityType: "order",
 		EntityID:   int64(dto.ID),
 		Title:      utils.DerefString(dto.Code),
@@ -471,7 +540,7 @@ func (s *orderService) upsertSearch(ctx context.Context, deptID int, dto *model.
 }
 
 func (s *orderService) unlinkSearch(id int64) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
+	publishAsyncHook("search:unlink", &searchmodel.UnlinkDoc{
 		EntityType: "order",
 		EntityID:   id,
 	})
@@ -644,27 +713,27 @@ func (s *orderService) Delete(ctx context.Context, deptID int, id int64) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	cache.InvalidateKeys(kOrderAll(deptID)...)
-	cache.InvalidateKeys(kOrderByID(id))
+	invalidateKeysHook(kOrderAll(deptID)...)
+	invalidateKeysHook(kOrderByID(id))
 
-	realtime.BroadcastAll("order:newest", nil)
+	broadcastAllHook("order:newest", nil)
 
-	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+	publishAsyncHook("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	pubsub.PublishAsync("dashboard:daily:sales", &model.SalesDailyUpsert{
+	publishAsyncHook("dashboard:daily:sales", &model.SalesDailyUpsert{
 		DepartmentID: deptID,
 		StatAt:       time.Now(),
 	})
 
-	realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:sales_summary", nil)
-	realtime.BroadcastToDept(deptID, "dashboard:sales_daily", nil)
+	broadcastToDeptHook(deptID, "dashboard:daily:active:stats", nil)
+	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
+	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
+	broadcastToDeptHook(deptID, "dashboard:sales_summary", nil)
+	broadcastToDeptHook(deptID, "dashboard:sales_daily", nil)
 
 	s.unlinkSearch(id)
 	return nil

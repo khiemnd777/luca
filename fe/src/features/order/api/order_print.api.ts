@@ -170,7 +170,7 @@ export async function printDeliveryNote(
 
     const contentType = getHeader(response.headers as Record<string, unknown>, "content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("application/pdf")) {
-      throw new Error("Phan hoi khong phai file PDF hop le.");
+      throw new Error("Phản hồi không phải file PDF hợp lệ.");
     }
 
     const blob = response.data as PrintPdfBlob;
@@ -211,7 +211,7 @@ export async function printQRSlipA5(
 
     const contentType = getHeader(response.headers as Record<string, unknown>, "content-type")?.toLowerCase() ?? "";
     if (!contentType.includes("application/pdf")) {
-      throw new Error("Phan hoi khong phai file PDF hop le.");
+      throw new Error("Phản hồi không phải file PDF hợp lệ.");
     }
 
     const blob = response.data as PrintPdfBlob;

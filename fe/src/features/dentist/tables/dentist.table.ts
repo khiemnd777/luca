@@ -1,9 +1,9 @@
 import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
-import { openFormDialog } from "@core/form/form-dialog.service";
 import type { DentistModel } from "@features/dentist/model/dentist.model";
 import { table, unlink } from "@features/dentist/api/dentist.api";
 import { reloadTable } from "@core/table/table-reload";
+import { navigate } from "@root/core/navigation/navigate";
 
 const columns: ColumnDef<DentistModel>[] = [
   { key: "name", header: "Tên Nha Sĩ", sortable: true, labelField: true, },
@@ -19,8 +19,11 @@ registerTable("dentists", () =>
     initialSort: { by: "id", dir: "asc" },
     allowUpdating: ["clinic.update"],
     allowDeleting: ["clinic.delete"],
+    onView(row) {
+      navigate(`/dentist/${row.id}`);
+    },
     onEdit(row) {
-      openFormDialog("dentist", { initial: { id: row.id } });
+      navigate(`/dentist/${row.id}`);
     },
     async onDelete(row) {
       await unlink(row.id);
