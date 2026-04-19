@@ -1,4 +1,5 @@
 import type { FieldDef } from "@core/form/types";
+import type { AutoFormSubmitContainer } from "./submit-contract";
 
 export type HttpMethod = "POST" | "PUT" | "PATCH" | "DELETE";
 
@@ -23,6 +24,8 @@ export type Notifier = {
 export type SubmitFn = {
   type: "fn";
   run: (
+    // Intentionally generic: this is exactly hooks.mapToDto(packaged) when mapToDto exists,
+    // otherwise it is the packaged { dto, collections } object from packageData(...).
     values: Record<string, any>,
     meta?: { meta: FieldDef; fields: FieldDef[]; deps: string[] }[]
   ) => Promise<any>;
@@ -31,7 +34,8 @@ export type SubmitFn = {
 export type SubmitDef = SubmitHttp | SubmitFn;
 
 export type FormHooks = {
-  mapToDto?: (values: Record<string, any>) => any;
+  // Input is always the packaged output from packageData(...): { dto, collections }.
+  mapToDto?: (values: AutoFormSubmitContainer) => any;
   mapFromDto?: (dto: any) => Record<string, any>;
   asyncValidate?: (values: Record<string, any>) => Promise<Partial<Record<string, string | null>>>;
   onChange?: (values: Record<string, any>) => void;

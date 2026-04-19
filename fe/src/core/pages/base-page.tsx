@@ -231,7 +231,8 @@ export function BasePage({ children }: { children: React.ReactNode }) {
               name={department?.name}
               width={collapsed ? 40 : "100%"}
               height={40}
-              radius={"10px"}
+              radius={0}
+              border={false}
             />
           </Box>
 

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Noah CI/CD Workflow"
+  short_description: "Operate Noah CI, deploy, and production delivery safely"
+  default_prompt: "Use $noah-cicd-workflow to handle this Noah CI/CD task through the existing GitHub Actions, VPS deploy, env rendering, and production healthcheck flow."
+
+policy:
+  allow_implicit_invocation: true

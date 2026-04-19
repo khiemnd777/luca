@@ -1,4 +1,3 @@
-import { mapper } from "@core/mapper/auto-mapper";
 import type { FieldDef, FormContext } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { registerFormDialog } from "@core/form/form-dialog.registry";
@@ -9,6 +8,10 @@ import { rel1, search } from "@root/core/relation/relation.api";
 import { reloadTable } from "@core/table/table-reload";
 import { create, getById, update } from "@features/department/api/department.api";
 import type { DeparmentModel } from "@features/department/model/department.model";
+import {
+  normalizeDepartmentSubmitDto,
+  validateDepartmentPhoneNumber,
+} from "@features/department/utils/department-phone.utils";
 import { useAuthStore } from "@store/auth-store";
 
 function parsePositiveNumber(v: unknown): number {
@@ -49,10 +52,29 @@ export function buildDeparmentSchema(): FormSchema {
     },
     {
       name: "phoneNumber",
-      label: "Số điện thoại",
+      label: "Số điện thoại 1",
       kind: "text",
       rules: {
         maxLength: 20,
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
+      },
+    },
+    {
+      name: "phoneNumber2",
+      label: "Số điện thoại 2",
+      kind: "text",
+      rules: {
+        maxLength: 20,
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
+      },
+    },
+    {
+      name: "phoneNumber3",
+      label: "Số điện thoại 3",
+      kind: "text",
+      rules: {
+        maxLength: 20,
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
       },
     },
     {
@@ -61,6 +83,22 @@ export function buildDeparmentSchema(): FormSchema {
       kind: "text",
       rules: {
         maxLength: 300,
+      },
+    },
+    {
+      name: "email",
+      label: "Email",
+      kind: "text",
+      rules: {
+        maxLength: 120,
+      },
+    },
+    {
+      name: "tax",
+      label: "Mã số thuế",
+      kind: "text",
+      rules: {
+        maxLength: 50,
       },
     },
     {
@@ -140,15 +178,17 @@ export function buildDeparmentSchema(): FormSchema {
       create: {
         type: "fn",
         run: async (values) => {
-          const deptId = Number(values.dto.parentId ?? values.dto.id ?? 0);
-          return await create(deptId, values.dto as DeparmentModel);
+          const dto = values as DeparmentModel;
+          const deptId = Number(dto.parentId ?? dto.id ?? 0);
+          return await create(deptId, dto);
         },
       },
       update: {
         type: "fn",
         run: async (values) => {
-          const deptId = Number(values.dto.id ?? 0);
-          return await update(deptId, values.dto as DeparmentModel);
+          const dto = values as DeparmentModel;
+          const deptId = Number(dto.id ?? 0);
+          return await update(deptId, dto);
         },
       },
     },
@@ -169,7 +209,7 @@ export function buildDeparmentSchema(): FormSchema {
           : `Cập nhật chi nhánh "${values?.name ?? ""}" thất bại, xin thử lại!`,
     },
     hooks: {
-      mapToDto: (v) => mapper.map("Department", v, "model_to_dto"),
+      mapToDto: (v) => normalizeDepartmentSubmitDto(v),
     },
     async afterSaved() {
       reloadTable("department-children");

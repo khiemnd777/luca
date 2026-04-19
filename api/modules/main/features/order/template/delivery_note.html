@@ -284,7 +284,9 @@
         <div class="header-right-content">
           <div class="header-contact">
             <div>{{ .Company.Address }}</div>
-            <div>{{ .Company.Phone }}</div>
+            {{ if .Company.PhoneNumbersLabel }}
+              <div>{{ .Company.PhoneNumbersLabel }}</div>
+            {{ end }}
           </div>
           <div class="header-qr">
             {{ if .QRCodeImageURL }}

@@ -44,6 +44,26 @@ func (Department) Fields() []ent.Field {
 			Nillable().
 			Comment("Số điện thoại"),
 
+		field.String("phone_number_2").
+			Optional().
+			Nillable().
+			Comment("Số điện thoại 2"),
+
+		field.String("phone_number_3").
+			Optional().
+			Nillable().
+			Comment("Số điện thoại 3"),
+
+		field.String("email").
+			Optional().
+			Nillable().
+			Comment("Email chi nhánh"),
+
+		field.String("tax").
+			Optional().
+			Nillable().
+			Comment("Mã số thuế"),
+
 		field.Int("parent_id").
 			Optional().
 			Nillable(),

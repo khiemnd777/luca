@@ -52,7 +52,7 @@ func (s *PhotoService) UploadAndSave(ctx context.Context, fileHeader *multipart.
 	photoPath := s.deps.Config.Storage.PhotoPath
 	photoPath = utils.ExpandHomeDir(photoPath)
 
-	filename := uuid.New().String() + filepath.Ext(fileHeader.Filename)
+	filename := uuid.New().String() + resolveOutputImageExt(ext)
 
 	// Save to disk
 	if err := SaveAndResizeFile(fileHeader, filename, photoPath); err != nil {
@@ -91,6 +91,15 @@ func (s *PhotoService) UploadAndSave(ctx context.Context, fileHeader *multipart.
 		return err
 	})
 	return photoResult, err
+}
+
+func resolveOutputImageExt(ext string) string {
+	switch ext {
+	case ".jpg", ".jpeg":
+		return ".jpg"
+	default:
+		return ".png"
+	}
 }
 
 func (s *PhotoService) GetByID(ctx context.Context, id, userID int, folderID *int) (*generated.Photo, error) {

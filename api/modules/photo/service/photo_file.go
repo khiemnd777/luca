@@ -54,22 +54,24 @@ func SaveAndResizeFile(fileHeader *multipart.FileHeader, filename string, basePa
 	// Xoay ảnh nếu cần thiết
 	img = rotateAccordingToExif(img, orientation)
 
-	// ✅ Convert và lưu lại toàn bộ ở định dạng JPG
+	// Keep output format aligned with target file extension.
+	outputExt := strings.ToLower(filepath.Ext(filename))
+
 	// 1. Original
 	originalPath := filepath.Join(basePath, "original", filename)
-	if err := saveAsJPG(img, originalPath); err != nil {
+	if err := saveAsImage(img, originalPath, outputExt); err != nil {
 		return err
 	}
 
 	// 2. Medium (width 1024)
 	medium := imaging.Resize(img, 1024, 0, imaging.Lanczos)
-	if err := saveAsJPG(medium, filepath.Join(basePath, "medium", filename)); err != nil {
+	if err := saveAsImage(medium, filepath.Join(basePath, "medium", filename), outputExt); err != nil {
 		return err
 	}
 
 	// 3. Thumbnail (width 256)
 	thumb := imaging.Resize(img, 256, 0, imaging.Lanczos)
-	if err := saveAsJPG(thumb, filepath.Join(basePath, "thumbnail", filename)); err != nil {
+	if err := saveAsImage(thumb, filepath.Join(basePath, "thumbnail", filename), outputExt); err != nil {
 		return err
 	}
 
@@ -145,12 +147,18 @@ func DetectMime(fileHeader *multipart.FileHeader) string {
 	return http.DetectContentType(buf)
 }
 
-func saveAsJPG(img image.Image, path string) error {
+func saveAsImage(img image.Image, path string, ext string) error {
 	out, err := os.Create(path)
 	if err != nil {
 		return err
 	}
 	defer out.Close()
 
-	return imaging.Encode(out, img, imaging.JPEG)
+	switch strings.ToLower(ext) {
+	case ".jpg", ".jpeg":
+		return imaging.Encode(out, img, imaging.JPEG)
+	default:
+		// PNG keeps alpha channel so transparent logos remain transparent.
+		return imaging.Encode(out, img, imaging.PNG)
+	}
 }

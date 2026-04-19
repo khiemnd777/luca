@@ -44,6 +44,12 @@ Do not stop at the file that changed if downstream assumptions are obvious.
 - new background jobs or cron registrations
 - cache, websocket, pubsub, metadata, or search integrations
 
+For schema or migration reviews, explicitly check:
+
+- raw SQL `ALTER` statements are idempotent
+- `IF EXISTS` / `IF NOT EXISTS` is used where supported
+- fallback existence guards are present where built-in syntax is unavailable
+
 ## Output rules
 
 When findings exist, report concrete issues first, ordered by severity, with file and line references.

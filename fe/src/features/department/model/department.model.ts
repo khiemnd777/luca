@@ -8,6 +8,10 @@ export interface DeparmentModel {
   logoRect?: string | null;
   address?: string | null;
   phoneNumber?: string | null;
+  phoneNumber2?: string | null;
+  phoneNumber3?: string | null;
+  email?: string | null;
+  tax?: string | null;
   parentId?: number | null;
   createdAt?: string | null;
   updatedAt?: string | null;

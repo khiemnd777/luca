@@ -65,6 +65,7 @@ For schema/persistence changes:
 - handler payloads
 - frontend model/mapper consumers
 - cache, realtime, search, and job side effects
+- whether each migration step is idempotent and guarded with `IF EXISTS` / `IF NOT EXISTS` or equivalent existence checks
 
 ## Decision rules
 

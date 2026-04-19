@@ -3,6 +3,7 @@ import { apiClient } from "@core/network/api-client";
 import { mapper } from "@core/mapper/auto-mapper";
 import type { MyDepartmentDto } from "@root/core/network/my-department.dto";
 import { useAuthStore } from "@store/auth-store";
+import { buildDepartmentWirePayload } from "@features/department/utils/department-phone.utils";
 
 export async function updateDepartment(payload: Partial<MyDepartmentDto>): Promise<DepartmentDto> {
   const { departmentApiPath, department } = useAuthStore.getState();
@@ -12,7 +13,7 @@ export async function updateDepartment(payload: Partial<MyDepartmentDto>): Promi
   }
 
   const endpoint = `${departmentApiPath()}/child/${deptId}`;
-  const { data } = await apiClient.put<unknown>(endpoint, payload);
+  const { data } = await apiClient.put<unknown>(endpoint, buildDepartmentWirePayload(payload as Record<string, unknown>));
   const result = mapper.map<unknown, DepartmentDto>("Department", data, "dto_to_model");
   return result;
 }

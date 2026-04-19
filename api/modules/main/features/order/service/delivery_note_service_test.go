@@ -153,7 +153,10 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 	}
 
 	viewData := buildDeliveryNoteViewData(DeliveryNote{
-		Company: DeliveryNoteCompany{Name: "Test Company"},
+		Company: DeliveryNoteCompany{
+			Name:              "Test Company",
+			PhoneNumbersLabel: "0900000001 - 0900000002",
+		},
 		Order: DeliveryNoteOrder{
 			Number: "ORD-001",
 			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
@@ -218,6 +221,9 @@ func TestDeliveryNoteTemplate_DoesNotRenderPaymentSection(t *testing.T) {
 	if strings.Count(rendered, "<div class=\"check-cell\"></div>") != 4 {
 		t.Fatalf("expected checklist rendering to pad incomplete four-column rows, got %d fillers", strings.Count(rendered, "<div class=\"check-cell\"></div>"))
 	}
+	if !strings.Contains(rendered, "0900000001 - 0900000002") {
+		t.Fatal("expected joined company phone numbers to be rendered")
+	}
 }
 
 func TestDeliveryNoteTemplate_HidesAmountColumnsAndTotals(t *testing.T) {
@@ -256,6 +262,34 @@ func TestDeliveryNoteTemplate_HidesAmountColumnsAndTotals(t *testing.T) {
 	}
 	if !strings.Contains(rendered, "TỔNG CỘNG") {
 		t.Fatal("expected total quantity row to remain when show amounts is disabled")
+	}
+}
+
+func TestDeliveryNoteTemplate_HidesEmptyPhoneNumbers(t *testing.T) {
+	tpl, err := getDeliveryNoteTemplate()
+	if err != nil {
+		t.Fatalf("getDeliveryNoteTemplate: %v", err)
+	}
+
+	viewData := buildDeliveryNoteViewData(DeliveryNote{
+		Company: DeliveryNoteCompany{
+			Name:    "Test Company",
+			Address: "123 Nguyen Trai",
+		},
+		Order: DeliveryNoteOrder{
+			Number: "ORD-003",
+			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
+		},
+	}, deliveryNotePaperSizeA5)
+
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, viewData); err != nil {
+		t.Fatalf("execute delivery note template: %v", err)
+	}
+
+	rendered := html.String()
+	if strings.Contains(rendered, "<div></div>") {
+		t.Fatal("expected empty phone row to be omitted")
 	}
 }
 

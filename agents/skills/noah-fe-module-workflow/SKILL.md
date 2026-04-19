@@ -59,6 +59,35 @@ When adding or changing routes:
 - Keep normalization in mapper profiles, not scattered across widgets.
 - Follow the cache invalidation pattern already used by the target feature.
 
+## AutoForm contract
+
+When work touches `fe/src/core/form` or any schema `submit.run(...)` path, trace the submit pipeline before editing payload shape:
+
+`useAutoForm` state -> `packageData(...)` -> `hooks.mapToDto(packaged)` -> `submit.run(values)` / `submitButtons[].submit({ values })`
+
+Rules:
+
+- `packageData(...)` produces the framework packaging shape `{ dto, collections }`.
+- `hooks.mapToDto` receives that packaged object as input.
+- `submit.run(values)` receives the exact return value of `mapToDto`, not the pre-mapped packaged shape unless `mapToDto` returns it unchanged.
+- If a schema reads `values.dto`, preserve that container shape in `mapToDto`.
+- If the submit handler wants a flat DTO, flatten in `mapToDto` and consume the flat object directly in `submit.run`.
+- Before changing form submit shape, inspect `auto-form.tsx`, `auto-form-package.tsx`, and every current `submit.run` consumer for that schema.
+
+When to keep `mapToDto`:
+
+- keep it for form-state to submit-shape transformation
+- keep it when the schema needs to flatten packaged values into a domain submit DTO
+- keep it when a schema intentionally preserves `{ dto, collections }`
+
+When to move normalization into feature `api/*.ts` or nearby feature utilities:
+
+- backend wire keys are backend-specific or numerically suffixed
+- transport quirks should not leak into widgets or generic form code
+- the schema should stay stable while the feature API normalizes the outgoing payload
+
+Do not assume generic `camel_to_snake` conversion is sufficient for backend wire contracts with digits. Verify the actual serialized keys in tests or by tracing the packaged output.
+
 ## UI rules
 
 - Prefer MUI and shared primitives from `src/core` and `src/shared`.

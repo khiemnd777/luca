@@ -1,5 +1,141 @@
 # Usage
 
+## Agent Note
+
+Before changing form submit shape, inspect these files together:
+
+- `fe/src/core/form/auto-form.tsx`
+- `fe/src/core/form/auto-form-package.tsx`
+- current schema `submit.run(...)` consumers
+
+## Submit Pipeline Contract
+
+Authoritative runtime flow:
+
+`useAutoForm` field state -> `packageData(metadataBlocks, values)` -> `hooks.mapToDto(packaged)` -> `btn.submit({ values: dto, ... })` -> `schema.afterSaved(result, ctx)`
+
+Rules:
+
+- `packageData(...)` always returns a packaged object with root `{ dto, collections }`.
+- `hooks.mapToDto(packaged)` receives that packaged object as input.
+- `submit.run(values)` and custom `submitButtons[].submit({ values })` receive the exact return value of `mapToDto`.
+- If `mapToDto` is absent, submit handlers receive the packaged object from `packageData(...)`.
+- `schema.afterSaved(result, ctx)` sees the same `ctx.values` that was passed to submit.
+- `packageData(...)` is a framework detail. Once `mapToDto` runs, the final submit shape is whatever `mapToDto` returned.
+
+Canonical cases:
+
+1. Flat form, no metadata
+
+```ts
+useAutoForm values
+// { name: "Alpha", active: true }
+
+packageData(...)
+// { dto: { name: "Alpha", active: true }, collections: [] }
+
+// no mapToDto
+submit.run(values)
+// values === { dto: { name: "Alpha", active: true }, collections: [] }
+```
+
+2. Metadata/custom-fields packaging
+
+```ts
+useAutoForm values
+// { name: "North Branch", "customFields.favoriteColor": "Blue" }
+
+packageData(...)
+// {
+//   dto: {
+//     name: "North Branch",
+//     custom_fields: { favorite_color: "Blue" },
+//   },
+//   collections: ["department"],
+// }
+
+// no mapToDto
+submit.run(values)
+// values === packaged output above
+```
+
+3. `mapToDto` overrides submit shape
+
+```ts
+hooks: {
+  mapToDto: mapPackagedDto((dto) => ({
+    ...dto,
+    slug: slugify(String(dto.name ?? "")),
+  })),
+}
+
+submit.run(values)
+// values === { name: "Alpha", slug: "alpha" }
+```
+
+Non-obvious boundaries:
+
+- `submit.run(values)` does not automatically receive `{ dto, collections }` once `mapToDto` is present.
+- If a schema reads `values.dto`, `mapToDto` must preserve that container shape.
+- If a schema wants a flat DTO payload, `submit.run` must consume the flat shape directly and not access `values.dto`.
+- Do not assume `camel_to_snake` handles numeric suffixes the way backend wire contracts expect. Example: `phoneNumber2` packages as `phone_number2`, not necessarily `phone_number_2`.
+- Nested metadata blocks package under `dto.<prop>_upsert = { dto, collections }`; trace the real packaged object before flattening or remapping it.
+
+Recommended patterns:
+
+1. Packaged/container submit
+
+```ts
+import { expectSubmitDtoContainer } from "@core/form/submit-contract";
+
+submit: {
+  type: "fn",
+  run: async (values) => {
+    const { dto, collections } = expectSubmitDtoContainer(values);
+    return api.save({ dto, collections });
+  },
+}
+```
+
+2. Flat DTO submit
+
+```ts
+import { mapPackagedDto } from "@core/form/submit-contract";
+
+hooks: {
+  mapToDto: mapPackagedDto((dto) => mapper.map("Common", dto, "model_to_dto")),
+},
+submit: {
+  type: "fn",
+  run: async (values) => api.save(values),
+}
+```
+
+3. Flat DTO plus API-layer wire normalization
+
+```ts
+hooks: {
+  mapToDto: mapPackagedDto((dto) => dto),
+},
+submit: {
+  type: "fn",
+  run: async (values) => api.update(buildDepartmentWirePayload(values)),
+}
+```
+
+Safe defaults:
+
+- Keep `mapToDto` focused on form-to-submit-shape transformation.
+- Move backend-specific wire normalization into feature `api/*.ts` or a nearby feature utility when field naming is tricky.
+- Add a contract test when changing `mapToDto` shape or when `submit.run` depends on `values.dto`.
+
+Unsafe patterns:
+
+- Changing `mapToDto` output shape without updating `submit.run`.
+- Assuming `values.dto` always exists.
+- Relying on generic naming mappers for numeric-suffixed fields without checking the serialized keys.
+- Hiding transport-shape fixes inside widgets instead of the schema or API boundary.
+
 - How to use `<AutoFormFields />`
 
 ```ts

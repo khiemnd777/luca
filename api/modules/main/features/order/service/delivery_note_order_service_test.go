@@ -72,3 +72,17 @@ func TestBuildQRSlipA5FromOrder_FallsBackToGeneratedProcessQRCode(t *testing.T) 
 		t.Fatalf("expected qr slip to avoid delivery qr url, got %q", slip.QRCode)
 	}
 }
+
+func TestFormatDeliveryNotePhoneNumbers_JoinsNonEmptyValues(t *testing.T) {
+	got := formatDeliveryNotePhoneNumbers("0900000001", "", " 0900000003 ")
+	if got != "0900000001 - 0900000003" {
+		t.Fatalf("expected joined phone numbers, got %q", got)
+	}
+}
+
+func TestNormalizeDeliveryNotePhoneNumbers_SkipsEmptyValues(t *testing.T) {
+	got := normalizeDeliveryNotePhoneNumbers("", "0900000002", " ")
+	if len(got) != 1 || got[0] != "0900000002" {
+		t.Fatalf("expected only non-empty phone numbers, got %#v", got)
+	}
+}

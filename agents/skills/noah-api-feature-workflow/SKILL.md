@@ -59,6 +59,13 @@ Also inspect:
 - handler request/response payloads
 - dependent frontend contracts if the API response changes
 
+Migration rule:
+
+- treat schema migrations as idempotent by default
+- for raw SQL `ALTER` statements, always use `IF EXISTS` or `IF NOT EXISTS` where the database supports it
+- when a direct `ALTER` cannot be made idempotent with built-in syntax, add an explicit existence guard instead of assuming clean state
+- do not ship migrations that fail only because a column, index, constraint, or table already exists or is already absent
+
 ## Avoid
 
 - business logic in handlers

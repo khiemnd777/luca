@@ -213,7 +213,19 @@ func buildDeliveryNoteFromOrder(
 		if strings.TrimSpace(note.Company.Phone) == "" {
 			note.Company.Phone = req.Company.Phone
 		}
+		if strings.TrimSpace(note.Company.PhoneNumber2) == "" {
+			note.Company.PhoneNumber2 = req.Company.PhoneNumber2
+		}
+		if strings.TrimSpace(note.Company.PhoneNumber3) == "" {
+			note.Company.PhoneNumber3 = req.Company.PhoneNumber3
+		}
 	}
+	note.Company.PhoneNumbers = normalizeDeliveryNotePhoneNumbers(
+		note.Company.Phone,
+		note.Company.PhoneNumber2,
+		note.Company.PhoneNumber3,
+	)
+	note.Company.PhoneNumbersLabel = strings.Join(note.Company.PhoneNumbers, " - ")
 
 	note.PaymentMethod = DeliveryNotePaymentMethod{
 		TienMat: false,
@@ -352,6 +364,22 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func normalizeDeliveryNotePhoneNumbers(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+func formatDeliveryNotePhoneNumbers(values ...string) string {
+	return strings.Join(normalizeDeliveryNotePhoneNumbers(values...), " - ")
 }
 
 func composeDescriptionWithNote(base, note string) string {
@@ -500,8 +528,20 @@ func (s *orderService) resolveDeliveryNoteCompany(ctx context.Context, orderDTO 
 			utils.DerefString(deptEntity.LogoRect),
 			utils.DerefString(deptEntity.Logo),
 		)),
-		Address: utils.DerefString(deptEntity.Address),
-		Phone:   utils.DerefString(deptEntity.PhoneNumber),
+		Address:      utils.DerefString(deptEntity.Address),
+		Phone:        utils.DerefString(deptEntity.PhoneNumber),
+		PhoneNumber2: utils.DerefString(deptEntity.PhoneNumber2),
+		PhoneNumber3: utils.DerefString(deptEntity.PhoneNumber3),
+		PhoneNumbers: normalizeDeliveryNotePhoneNumbers(
+			utils.DerefString(deptEntity.PhoneNumber),
+			utils.DerefString(deptEntity.PhoneNumber2),
+			utils.DerefString(deptEntity.PhoneNumber3),
+		),
+		PhoneNumbersLabel: formatDeliveryNotePhoneNumbers(
+			utils.DerefString(deptEntity.PhoneNumber),
+			utils.DerefString(deptEntity.PhoneNumber2),
+			utils.DerefString(deptEntity.PhoneNumber3),
+		),
 	}
 }
 

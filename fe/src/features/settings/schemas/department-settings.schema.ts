@@ -1,10 +1,14 @@
 import type { FieldDef } from "@core/form/types";
 import type { FormSchema, SubmitDef } from "@core/form/form.types";
 import { uploadImages } from "@root/core/form/image-upload-utils";
-import { mapper } from "@root/core/mapper/auto-mapper";
 import { updateDepartment } from "@features/settings/api/department.api";
 import { registerForm } from "@root/core/form/form-registry";
 import { useAuthStore } from "@root/store/auth-store";
+import type { MyDepartmentDto } from "@root/core/network/my-department.dto";
+import {
+  normalizeDepartmentSubmitDto,
+  validateDepartmentPhoneNumber,
+} from "@features/department/utils/department-phone.utils";
 
 export function buildDepartmentSettingsSchema(): FormSchema {
   const fields: FieldDef[] = [
@@ -26,17 +30,47 @@ export function buildDepartmentSettingsSchema(): FormSchema {
     },
     {
       name: "phoneNumber",
-      label: "Số điện thoại",
+      label: "Số điện thoại 1",
       kind: "text",
       placeholder: "+84xxxxxxxxx",
       rules: {
-        async: async (val: string | null) => {
-          if (!val) return null;
-          const ok = /^\+?\d{8,15}$/.test(val);
-          return ok ? null : "Invalid phone number";
-        },
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
       },
       helperText: "Có thể nhập +84 hoặc không.",
+    },
+    {
+      name: "phoneNumber2",
+      label: "Số điện thoại 2",
+      kind: "text",
+      placeholder: "+84xxxxxxxxx",
+      rules: {
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
+      },
+      helperText: "Chỉ hiển thị khi có giá trị.",
+    },
+    {
+      name: "phoneNumber3",
+      label: "Số điện thoại 3",
+      kind: "text",
+      placeholder: "+84xxxxxxxxx",
+      rules: {
+        async: async (val: string | null) => validateDepartmentPhoneNumber(val),
+      },
+      helperText: "Chỉ hiển thị khi có giá trị.",
+    },
+    {
+      name: "email",
+      label: "Email",
+      kind: "text",
+      rules: {
+        maxLength: 120,
+      },
+    },
+    {
+      name: "tax",
+      label: "Mã số thuế",
+      kind: "text",
+      rules: { maxLength: 50 },
     },
     {
       name: "logo",
@@ -70,9 +104,9 @@ export function buildDepartmentSettingsSchema(): FormSchema {
   const submit: SubmitDef = {
     type: "fn",
     run: async (values) => {
-      return updateDepartment(values.dto);
+      return updateDepartment(values as Partial<MyDepartmentDto>);
     },
-  }
+  };
 
   return {
     fields,
@@ -88,8 +122,8 @@ export function buildDepartmentSettingsSchema(): FormSchema {
     },
     submit,
     hooks: {
-      mapToDto: (v) => mapper.map("MyDepartment", v, "model_to_dto"),
-    }
+      mapToDto: (v) => normalizeDepartmentSubmitDto(v),
+    },
   };
 }
 

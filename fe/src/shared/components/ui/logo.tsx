@@ -8,6 +8,7 @@ type Props = {
   width?: number | string;
   height?: number | string;
   radius?: number | string;
+  border?: boolean;
 };
 
 export function Logo({
@@ -17,6 +18,7 @@ export function Logo({
   width,
   height,
   radius = 10,
+  border = true,
 }: Props) {
   const displayLogoUrl = useDisplayUrl(src);
   const resolvedWidth = width ?? size;
@@ -37,7 +39,7 @@ export function Logo({
           objectFit: "contain",
           objectPosition: "left center",
           bgcolor: "background.paper",
-          border: (t) => `1px solid ${t.palette.divider}`,
+          border: border ? (t) => `1px solid ${t.palette.divider}` : "none",
           display: "block",
         }}
       />

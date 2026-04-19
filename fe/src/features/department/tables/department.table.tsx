@@ -9,6 +9,7 @@ import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/ta
 import { childrenList, unlink } from "@features/department/api/department.api";
 import { useDepartmentDashboardDialogStore } from "@features/department/model/department-dashboard-dialog.store";
 import type { DeparmentModel } from "@features/department/model/department.model";
+import { formatDepartmentPhoneNumbers } from "@features/department/utils/department-phone.utils";
 
 function DepartmentReportAction({ row }: { row: DeparmentModel }) {
   const openDialog = useDepartmentDashboardDialogStore((state) => state.openDialog);
@@ -32,7 +33,15 @@ function DepartmentReportAction({ row }: { row: DeparmentModel }) {
 
 const columns: ColumnDef<DeparmentModel>[] = [
   { key: "name", header: "Tên chi nhánh", sortable: true, labelField: true },
-  { key: "phoneNumber", header: "Số điện thoại", sortable: true },
+  {
+    key: "phoneNumber",
+    header: "Số điện thoại",
+    sortable: false,
+    accessor: (row) => formatDepartmentPhoneNumbers(row),
+    render: (row) => formatDepartmentPhoneNumbers(row),
+  },
+  { key: "email", header: "Email", sortable: true },
+  { key: "tax", header: "Mã số thuế", sortable: true },
   { key: "address", header: "Địa chỉ", sortable: true },
   { key: "active", header: "Kích hoạt", type: "boolean", sortable: true },
   { key: "updatedAt", header: "Cập nhật lúc", type: "datetime", sortable: true },

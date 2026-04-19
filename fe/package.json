@@ -8,6 +8,7 @@
     "staging": "vite --mode staging",
     "prod": "vite",
     "build": "tsc -b && vite build",
+    "test": "bun test",
     "lint": "eslint .",
     "preview": "vite preview",
     "create:module": "bun scripts/create-module/index.ts"

@@ -36,8 +36,8 @@ import { relM2m, search } from "../relation/relation.api";
 import { openFormDialog } from "./form-dialog.service";
 import { extractVars } from "@root/shared/utils/equation.utils";
 import { parseIntSafe } from "@root/shared/utils/number.utils";
-import { packageData } from "./auto-form-package";
 import { resolveSubmitButtons } from "./auto-form.helper";
+import { resolveSubmitValues } from "./submit-contract";
 import { emit, off, on } from "../module/event-bus";
 import { getUserFriendlyErrorMessage } from "@core/network/api-error";
 
@@ -1315,8 +1315,7 @@ export const AutoForm = React.forwardRef<AutoFormRef, Props>(
       setSaving(true);
 
       const latestValues = ctxRef.current!.values;
-      const packaged = packageData(metadataBlocks, latestValues);
-      const dto = schema!.hooks?.mapToDto ? schema!.hooks.mapToDto(packaged) : packaged;
+      const dto = resolveSubmitValues(metadataBlocks, latestValues, schema!.hooks?.mapToDto);
 
       const ctx = {
         values: dto,

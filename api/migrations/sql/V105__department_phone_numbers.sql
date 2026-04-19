@@ -1,0 +1,3 @@
+ALTER TABLE departments
+  ADD COLUMN IF NOT EXISTS phone_number_2 TEXT NULL,
+  ADD COLUMN IF NOT EXISTS phone_number_3 TEXT NULL;

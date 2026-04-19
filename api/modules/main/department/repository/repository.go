@@ -57,6 +57,10 @@ func (r *departmentRepo) Create(ctx context.Context, input model.DepartmentDTO) 
 		SetNillableLogoRect(input.LogoRect).
 		SetNillableAddress(input.Address).
 		SetNillablePhoneNumber(input.PhoneNumber).
+		SetNillablePhoneNumber2(input.PhoneNumber2).
+		SetNillablePhoneNumber3(input.PhoneNumber3).
+		SetNillableEmail(input.Email).
+		SetNillableTax(input.Tax).
 		SetNillableParentID(input.ParentID).
 		SetNillableAdministratorID(input.AdministratorID).
 		Save(ctx)
@@ -93,6 +97,10 @@ func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) 
 		SetNillableLogoRect(input.LogoRect).
 		SetNillableAddress(input.Address).
 		SetNillablePhoneNumber(input.PhoneNumber).
+		SetNillablePhoneNumber2(input.PhoneNumber2).
+		SetNillablePhoneNumber3(input.PhoneNumber3).
+		SetNillableEmail(input.Email).
+		SetNillableTax(input.Tax).
 		SetNillableParentID(input.ParentID).
 		SetNillableAdministratorID(input.AdministratorID).
 		Save(ctx)

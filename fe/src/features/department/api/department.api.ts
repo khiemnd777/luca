@@ -5,6 +5,7 @@ import { mapper } from "@core/mapper/auto-mapper";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import type { DeparmentModel } from "@root/features/department/model/department.model";
+import { buildDepartmentWirePayload } from "@features/department/utils/department-phone.utils";
 
 function deptPath(deptId?: number): string {
   const { departmentApiPath } = useAuthStore.getState();
@@ -42,14 +43,20 @@ export async function search(opts: SearchOpts): Promise<SearchResult<DeparmentMo
 
 export async function create(deptId: number, model: DeparmentModel): Promise<DeparmentModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.post<any>(`${departmentApiPath()}/child/${deptId}`, model);
+  const { data } = await apiClient.post<any>(
+    `${departmentApiPath()}/child/${deptId}`,
+    buildDepartmentWirePayload(model as unknown as Record<string, unknown>),
+  );
   const result = mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
   return result;
 }
 
 export async function update(deptId: number, model: DeparmentModel): Promise<DeparmentModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.put<any>(`${departmentApiPath()}/child/${deptId}`, model);
+  const { data } = await apiClient.put<any>(
+    `${departmentApiPath()}/child/${deptId}`,
+    buildDepartmentWirePayload(model as unknown as Record<string, unknown>),
+  );
   const result = mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
   return result;
 }

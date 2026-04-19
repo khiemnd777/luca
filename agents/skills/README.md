@@ -109,6 +109,7 @@ Noah seeds these role-based subagents:
 - `noah-boundary-explorer`
 - `noah-api-worker`
 - `noah-fe-worker`
+- `noah-cicd-worker`
 - `noah-contract-reviewer`
 - `noah-regression-reviewer`
 
@@ -127,6 +128,7 @@ These are generic job-type profiles, not business-feature-specific agents.
 - main agent classifies the task
 - main agent may spawn `noah-api-worker` for `api/**`
 - main agent may spawn `noah-fe-worker` for `fe/**`
+- main agent may spawn `noah-cicd-worker` for `.github/**`, `deploy/**`, and production packaging files
 - main agent merges the results and uses contract and regression validation before sign-off
 
 ### 3. High-risk review

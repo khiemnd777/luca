@@ -65,11 +65,15 @@ type DeliveryNote struct {
 }
 
 type DeliveryNoteCompany struct {
-	Name     string       `json:"name"`
-	LogoPath string       `json:"logo_path"`
-	LogoData template.URL `json:"logo_data"`
-	Address  string       `json:"address"`
-	Phone    string       `json:"phone"`
+	Name              string       `json:"name"`
+	LogoPath          string       `json:"logo_path"`
+	LogoData          template.URL `json:"logo_data"`
+	Address           string       `json:"address"`
+	Phone             string       `json:"phone"`
+	PhoneNumber2      string       `json:"phone_number_2"`
+	PhoneNumber3      string       `json:"phone_number_3"`
+	PhoneNumbers      []string     `json:"phone_numbers"`
+	PhoneNumbersLabel string       `json:"phone_numbers_label"`
 }
 
 type DeliveryNoteOrder struct {
