@@ -193,20 +193,18 @@ func (r *productRepo) hydrateProductRelationFields(ctx context.Context, dto *mod
 }
 
 func (r *productRepo) Create(ctx context.Context, deptID int, input *model.ProductUpsertDTO) (*model.ProductDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.createWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.ProductDTO, error) {
+		return r.createWithTx(ctx, tx, deptID, input)
+	})
+}
+
+func (r *productRepo) createWithTx(ctx context.Context, tx *generated.Tx, deptID int, input *model.ProductUpsertDTO) (*model.ProductDTO, error) {
+	var err error
 
 	in := &input.DTO
-
 	q := tx.Product.Create().
 		SetNillableDepartmentID(&deptID).
 		SetNillableCode(in.Code).
@@ -296,20 +294,18 @@ func (r *productRepo) Create(ctx context.Context, deptID int, input *model.Produ
 }
 
 func (r *productRepo) Update(ctx context.Context, deptID int, input *model.ProductUpsertDTO) (*model.ProductDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.updateWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.ProductDTO, error) {
+		return r.updateWithTx(ctx, tx, deptID, input)
+	})
+}
+
+func (r *productRepo) updateWithTx(ctx context.Context, tx *generated.Tx, deptID int, input *model.ProductUpsertDTO) (*model.ProductDTO, error) {
+	var err error
 
 	in := &input.DTO
-
 	_, err = tx.Product.Query().
 		Where(
 			product.ID(in.ID),

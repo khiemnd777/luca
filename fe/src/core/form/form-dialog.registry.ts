@@ -8,6 +8,8 @@ export type FormDialogDefaults = {
   confirmText?: ModeText;
   cancelText?: string;
   maxWidth?: "xs" | "sm" | "md" | "lg";
+  submittingTitle?: React.ReactNode;
+  submittingContent?: React.ReactNode;
 };
 
 type Builder = () => FormSchema;

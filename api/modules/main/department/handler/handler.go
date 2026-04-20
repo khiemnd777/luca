@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -33,6 +35,8 @@ func (h *DepartmentHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterPost(router, "/:dept_id<int>/child/:child_dept_id<int>", h.Create)
 	app.RouterPut(router, "/:dept_id<int>/child/:child_dept_id<int>", h.Update)
 	app.RouterDelete(router, "/:dept_id<int>/child/:child_dept_id<int>", h.Delete)
+	app.RouterPost(router, "/:dept_id<int>/child/:child_dept_id<int>/sync-from-parent/preview", h.PreviewSyncFromParent)
+	app.RouterPost(router, "/:dept_id<int>/child/:child_dept_id<int>/sync-from-parent/apply", h.ApplySyncFromParent)
 	app.RouterGet(router, "/me", h.MyFirstDepartment)
 }
 
@@ -171,9 +175,49 @@ func (h *DepartmentHandler) Delete(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
 	if err := h.svc.Delete(c.UserContext(), id); err != nil {
+		if errors.Is(err, service.ErrProtectedDepartmentDelete) {
+			return client_error.ResponseError(c, fiber.StatusBadRequest, err, "department này không được phép xóa")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success": true,
 	})
+}
+
+func (h *DepartmentHandler) PreviewSyncFromParent(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+	id, err := strconv.Atoi(c.Params("child_dept_id"))
+	if err != nil || id <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
+	}
+	res, err := h.svc.PreviewSyncFromParent(c.UserContext(), id)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *DepartmentHandler) ApplySyncFromParent(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+	id, err := strconv.Atoi(c.Params("child_dept_id"))
+	if err != nil || id <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
+	}
+	var in model.DepartmentSyncApplyRequest
+	if err := c.BodyParser(&in); err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+	}
+	if strings.TrimSpace(in.PreviewToken) == "" {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "preview token is required")
+	}
+	res, err := h.svc.ApplySyncFromParent(c.UserContext(), id, in.PreviewToken)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
 }

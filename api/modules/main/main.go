@@ -50,7 +50,8 @@ func main() {
 			deliveryQRHandler.RegisterRoutes(router)
 
 			// Department
-			svc := service.NewDepartmentService(repo, deps)
+			syncer := service.NewDepartmentSyncer(repo, deps)
+			svc := service.NewDepartmentService(repo, deps, syncer)
 			h := handler.NewDepartmentHandler(svc, deps)
 			h.RegisterRoutes(router)
 

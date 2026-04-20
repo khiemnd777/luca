@@ -2,17 +2,23 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	"github.com/khiemnd777/noah_api/modules/main/department/model"
 	"github.com/khiemnd777/noah_api/modules/main/department/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/mapper"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
+
+const protectedRootDepartmentID = 1
+
+var ErrProtectedDepartmentDelete = errors.New("cannot delete protected root department")
 
 type DepartmentService interface {
 	Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error)
@@ -24,15 +30,18 @@ type DepartmentService interface {
 	ChildrenList(ctx context.Context, parentID int, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Delete(ctx context.Context, id int) error
 	GetFirstDepartmentOfUser(ctx context.Context, userID int) (*model.DepartmentDTO, error)
+	PreviewSyncFromParent(ctx context.Context, targetDeptID int) (*model.DepartmentSyncPreviewDTO, error)
+	ApplySyncFromParent(ctx context.Context, targetDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error)
 }
 
 type departmentService struct {
-	repo repository.DepartmentRepository
-	deps *module.ModuleDeps[config.ModuleConfig]
+	repo   repository.DepartmentRepository
+	deps   *module.ModuleDeps[config.ModuleConfig]
+	syncer DepartmentSyncer
 }
 
-func NewDepartmentService(repo repository.DepartmentRepository, deps *module.ModuleDeps[config.ModuleConfig]) DepartmentService {
-	return &departmentService{repo: repo, deps: deps}
+func NewDepartmentService(repo repository.DepartmentRepository, deps *module.ModuleDeps[config.ModuleConfig], syncer DepartmentSyncer) DepartmentService {
+	return &departmentService{repo: repo, deps: deps, syncer: syncer}
 }
 
 func keyDept(id int) string {
@@ -94,6 +103,10 @@ func keyMyFirstDept(userID int) string {
 	return fmt.Sprintf("department:first_of_user:%d", userID)
 }
 
+func isProtectedDepartmentID(id int) bool {
+	return id == protectedRootDepartmentID
+}
+
 func invalidateDept(id int) {
 	cache.InvalidateKeys(
 		keyDept(id),
@@ -118,7 +131,25 @@ func invalidateAdminSync(adminID *int) {
 }
 
 func (s *departmentService) Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
-	res, err := s.repo.Create(ctx, input)
+	client := s.deps.Ent.(*generated.Client)
+	res, err := dbutils.WithTx(ctx, client, func(tx *generated.Tx) (*model.DepartmentDTO, error) {
+		txCtx := dbutils.WithExistingTx(ctx, tx)
+		created, err := s.repo.Create(txCtx, input)
+		if err != nil {
+			return nil, err
+		}
+
+		sourceDeptID := protectedRootDepartmentID
+		if created.ParentID != nil && *created.ParentID > 0 {
+			sourceDeptID = *created.ParentID
+		}
+		if sourceDeptID != created.ID {
+			if err := s.syncer.BootstrapFromSource(txCtx, sourceDeptID, created.ID); err != nil {
+				return nil, err
+			}
+		}
+		return created, nil
+	})
 	if err == nil {
 		invalidateDept(res.ID)
 		invalidateAdminSync(res.AdministratorID)
@@ -203,6 +234,9 @@ func (s *departmentService) Search(ctx context.Context, query dbutils.SearchQuer
 }
 
 func (s *departmentService) Delete(ctx context.Context, id int) error {
+	if isProtectedDepartmentID(id) {
+		return ErrProtectedDepartmentDelete
+	}
 	_, err := s.GetByID(ctx, id)
 	if err != nil {
 		return err
@@ -228,4 +262,12 @@ func (s *departmentService) GetFirstDepartmentOfUser(ctx context.Context, userID
 		return nil, err
 	}
 	return res, nil
+}
+
+func (s *departmentService) PreviewSyncFromParent(ctx context.Context, targetDeptID int) (*model.DepartmentSyncPreviewDTO, error) {
+	return s.syncer.PreviewFromParent(ctx, targetDeptID)
+}
+
+func (s *departmentService) ApplySyncFromParent(ctx context.Context, targetDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error) {
+	return s.syncer.ApplyFromParent(ctx, targetDeptID, previewToken)
 }

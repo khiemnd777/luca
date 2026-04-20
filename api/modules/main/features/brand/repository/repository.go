@@ -34,17 +34,21 @@ func NewBrandNameRepository(db *generated.Client, deps *module.ModuleDeps[config
 }
 
 func (r *brandNameRepo) Create(ctx context.Context, deptID int, input model.BrandNameDTO) (*model.BrandNameDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	tx := dbutils.TxFromContext(ctx)
+	var err error
+	if tx == nil {
+		tx, err = r.db.Tx(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
+			return nil, err
 		}
-	}()
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			} else {
+				_ = tx.Commit()
+			}
+		}()
+	}
 
 	categoryName := input.CategoryName
 	if categoryName == nil && input.CategoryID != nil {
@@ -75,17 +79,21 @@ func (r *brandNameRepo) Create(ctx context.Context, deptID int, input model.Bran
 }
 
 func (r *brandNameRepo) Update(ctx context.Context, deptID int, input model.BrandNameDTO) (*model.BrandNameDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	tx := dbutils.TxFromContext(ctx)
+	var err error
+	if tx == nil {
+		tx, err = r.db.Tx(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
+			return nil, err
 		}
-	}()
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			} else {
+				_ = tx.Commit()
+			}
+		}()
+	}
 
 	categoryName := input.CategoryName
 	if categoryName == nil && input.CategoryID != nil {

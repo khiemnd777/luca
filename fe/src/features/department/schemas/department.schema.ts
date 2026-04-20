@@ -1,3 +1,4 @@
+import React from "react";
 import type { FieldDef, FormContext } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { registerFormDialog } from "@core/form/form-dialog.registry";
@@ -8,6 +9,7 @@ import { rel1, search } from "@root/core/relation/relation.api";
 import { reloadTable } from "@core/table/table-reload";
 import { create, getById, update } from "@features/department/api/department.api";
 import type { DeparmentModel } from "@features/department/model/department.model";
+import { Loading } from "@shared/components/ui/loading";
 import {
   normalizeDepartmentSubmitDto,
   validateDepartmentPhoneNumber,
@@ -223,4 +225,8 @@ registerFormDialog("department", buildDeparmentSchema, {
   title: { create: "Thêm chi nhánh", update: "Cập nhật chi nhánh" },
   confirmText: { create: "Thêm", update: "Lưu" },
   cancelText: "Thoát",
+  submittingTitle: "Đang khởi tạo dữ liệu chi nhánh",
+  submittingContent: React.createElement(Loading, {
+    text: "Hệ thống đang tạo chi nhánh và đồng bộ dữ liệu mặc định. Vui lòng chờ đến khi hoàn tất.",
+  }),
 });

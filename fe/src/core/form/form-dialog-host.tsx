@@ -89,6 +89,9 @@ function DialogInstance({ payload }: { payload: Payload }) {
       (payload.options?.title !== undefined ? payload.options.title : defaults.title) as any,
       modeCtx
     ) ?? "Form";
+  const submittingTitle = payload.options?.submittingTitle ?? defaults.submittingTitle;
+  const submittingContent = payload.options?.submittingContent ?? defaults.submittingContent;
+  const dialogTitle = submitting && submittingTitle ? submittingTitle : titleNode;
 
   const confirmText =
     pickModeText(
@@ -144,7 +147,7 @@ function DialogInstance({ payload }: { payload: Payload }) {
   return (
     <FormDialog
       open={open}
-      title={titleNode as any}
+      title={dialogTitle as any}
       confirmText={confirmText}
       cancelText={cancelText}
       submitting={submitting || resolvingInitial}
@@ -187,6 +190,8 @@ function DialogInstance({ payload }: { payload: Payload }) {
     >
       {resolvingInitial ? (
         <div>Loading…</div>
+      ) : submitting && submittingContent ? (
+        <>{submittingContent}</>
       ) : (
         <AutoForm
           key={payload.id}

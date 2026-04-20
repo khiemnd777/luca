@@ -33,17 +33,21 @@ func NewRestorationTypeRepository(db *generated.Client, deps *module.ModuleDeps[
 }
 
 func (r *restorationTypeRepo) Create(ctx context.Context, deptID int, input model.RestorationTypeDTO) (*model.RestorationTypeDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	tx := dbutils.TxFromContext(ctx)
+	var err error
+	if tx == nil {
+		tx, err = r.db.Tx(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
+			return nil, err
 		}
-	}()
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			} else {
+				_ = tx.Commit()
+			}
+		}()
+	}
 
 	entity, err := tx.RestorationType.Create().
 		SetNillableCategoryID(input.CategoryID).
@@ -59,17 +63,21 @@ func (r *restorationTypeRepo) Create(ctx context.Context, deptID int, input mode
 }
 
 func (r *restorationTypeRepo) Update(ctx context.Context, deptID int, input model.RestorationTypeDTO) (*model.RestorationTypeDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	tx := dbutils.TxFromContext(ctx)
+	var err error
+	if tx == nil {
+		tx, err = r.db.Tx(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
+			return nil, err
 		}
-	}()
+		defer func() {
+			if err != nil {
+				_ = tx.Rollback()
+			} else {
+				_ = tx.Commit()
+			}
+		}()
+	}
 
 	entity, err := tx.RestorationType.UpdateOneID(input.ID).
 		SetNillableCategoryID(input.CategoryID).

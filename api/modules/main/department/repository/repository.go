@@ -38,83 +38,63 @@ func NewDepartmentRepository(db *generated.Client, deps *module.ModuleDeps[confi
 }
 
 func (r *departmentRepo) Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.DepartmentDTO, error) {
+		entity, err := tx.Department.Create().
+			SetActive(input.Active).
+			SetName(input.Name).
+			SetNillableLogo(input.Logo).
+			SetNillableLogoRect(input.LogoRect).
+			SetNillableAddress(input.Address).
+			SetNillablePhoneNumber(input.PhoneNumber).
+			SetNillablePhoneNumber2(input.PhoneNumber2).
+			SetNillablePhoneNumber3(input.PhoneNumber3).
+			SetNillableEmail(input.Email).
+			SetNillableTax(input.Tax).
+			SetNillableParentID(input.ParentID).
+			SetNillableAdministratorID(input.AdministratorID).
+			Save(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
-
-	entity, err := tx.Department.Create().
-		SetActive(input.Active).
-		SetName(input.Name).
-		SetNillableLogo(input.Logo).
-		SetNillableLogoRect(input.LogoRect).
-		SetNillableAddress(input.Address).
-		SetNillablePhoneNumber(input.PhoneNumber).
-		SetNillablePhoneNumber2(input.PhoneNumber2).
-		SetNillablePhoneNumber3(input.PhoneNumber3).
-		SetNillableEmail(input.Email).
-		SetNillableTax(input.Tax).
-		SetNillableParentID(input.ParentID).
-		SetNillableAdministratorID(input.AdministratorID).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
-		if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
 			return nil, err
 		}
-	}
 
-	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+		if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
+			if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+				return nil, err
+			}
+		}
+
+		return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+	})
 }
 
 func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.DepartmentDTO, error) {
+		entity, err := tx.Department.UpdateOneID(input.ID).
+			SetActive(input.Active).
+			SetName(input.Name).
+			SetNillableLogo(input.Logo).
+			SetNillableLogoRect(input.LogoRect).
+			SetNillableAddress(input.Address).
+			SetNillablePhoneNumber(input.PhoneNumber).
+			SetNillablePhoneNumber2(input.PhoneNumber2).
+			SetNillablePhoneNumber3(input.PhoneNumber3).
+			SetNillableEmail(input.Email).
+			SetNillableTax(input.Tax).
+			SetNillableParentID(input.ParentID).
+			SetNillableAdministratorID(input.AdministratorID).
+			Save(ctx)
 		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
-
-	entity, err := tx.Department.UpdateOneID(input.ID).
-		SetActive(input.Active).
-		SetName(input.Name).
-		SetNillableLogo(input.Logo).
-		SetNillableLogoRect(input.LogoRect).
-		SetNillableAddress(input.Address).
-		SetNillablePhoneNumber(input.PhoneNumber).
-		SetNillablePhoneNumber2(input.PhoneNumber2).
-		SetNillablePhoneNumber3(input.PhoneNumber3).
-		SetNillableEmail(input.Email).
-		SetNillableTax(input.Tax).
-		SetNillableParentID(input.ParentID).
-		SetNillableAdministratorID(input.AdministratorID).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
-		if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
 			return nil, err
 		}
-	}
 
-	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+		if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
+			if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+				return nil, err
+			}
+		}
+
+		return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+	})
 }
 
 func (r *departmentRepo) GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error) {

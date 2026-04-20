@@ -35,6 +35,9 @@ func NewProcessRepository(db *generated.Client, deps *module.ModuleDeps[config.M
 }
 
 func (r *processRepo) Create(ctx context.Context, deptID int, input model.ProcessDTO) (dto *model.ProcessDTO, err error) {
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.createWithTx(ctx, tx, deptID, input)
+	}
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -52,6 +55,9 @@ func (r *processRepo) Create(ctx context.Context, deptID int, input model.Proces
 }
 
 func (r *processRepo) Update(ctx context.Context, deptID int, input model.ProcessDTO) (dto *model.ProcessDTO, err error) {
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.updateWithTx(ctx, tx, deptID, input)
+	}
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err

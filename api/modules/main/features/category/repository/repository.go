@@ -107,19 +107,17 @@ func (r *categoryRepo) hydrateCategoryRelationFields(ctx context.Context, dto *m
 }
 
 func (r *categoryRepo) Create(ctx context.Context, deptID int, input *model.CategoryUpsertDTO) (*model.CategoryDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.createWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.CategoryDTO, error) {
+		return r.createWithTx(ctx, tx, deptID, input)
+	})
+}
 
+func (r *categoryRepo) createWithTx(ctx context.Context, tx *generated.Tx, deptID int, input *model.CategoryUpsertDTO) (*model.CategoryDTO, error) {
 	dto := &input.DTO
+	var err error
 
 	q := tx.Category.Create().
 		SetNillableDepartmentID(&deptID).
@@ -186,18 +184,15 @@ func (r *categoryRepo) Create(ctx context.Context, deptID int, input *model.Cate
 }
 
 func (r *categoryRepo) Update(ctx context.Context, deptID int, input *model.CategoryUpsertDTO) (*model.CategoryDTO, error) {
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.updateWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.CategoryDTO, error) {
+		return r.updateWithTx(ctx, tx, deptID, input)
+	})
+}
 
+func (r *categoryRepo) updateWithTx(ctx context.Context, tx *generated.Tx, deptID int, input *model.CategoryUpsertDTO) (*model.CategoryDTO, error) {
 	dto := &input.DTO
 
 	prevCategory, err := tx.Category.Query().

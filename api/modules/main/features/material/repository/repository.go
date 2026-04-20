@@ -47,19 +47,16 @@ func normalizeMaterialInput(input model.MaterialDTO) model.MaterialDTO {
 
 func (r *materialRepo) Create(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
 	input = normalizeMaterialInput(input)
-
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.createWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.MaterialDTO, error) {
+		return r.createWithTx(ctx, tx, deptID, input)
+	})
+}
 
+func (r *materialRepo) createWithTx(ctx context.Context, tx *generated.Tx, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
+	var err error
 	q := tx.Material.Create().
 		SetNillableDepartmentID(&deptID).
 		SetNillableCode(input.Code).
@@ -95,20 +92,16 @@ func (r *materialRepo) Create(ctx context.Context, deptID int, input model.Mater
 
 func (r *materialRepo) Update(ctx context.Context, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
 	input = normalizeMaterialInput(input)
-
-	tx, err := r.db.Tx(ctx)
-	if err != nil {
-		return nil, err
+	if tx := dbutils.TxFromContext(ctx); tx != nil {
+		return r.updateWithTx(ctx, tx, deptID, input)
 	}
-	defer func() {
-		if err != nil {
-			_ = tx.Rollback()
-		} else {
-			_ = tx.Commit()
-		}
-	}()
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.MaterialDTO, error) {
+		return r.updateWithTx(ctx, tx, deptID, input)
+	})
+}
 
-	_, err = tx.Material.Query().
+func (r *materialRepo) updateWithTx(ctx context.Context, tx *generated.Tx, deptID int, input model.MaterialDTO) (*model.MaterialDTO, error) {
+	_, err := tx.Material.Query().
 		Where(
 			material.ID(input.ID),
 			material.DepartmentIDEQ(deptID),

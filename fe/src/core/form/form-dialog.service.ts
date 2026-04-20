@@ -11,6 +11,10 @@ export type OpenOptions = {
   cancelText?: string;
   /** MUI Dialog maxWidth, mặc định "sm" */
   maxWidth?: "xs" | "sm" | "md" | "lg" | "xl" | false;
+  /** nội dung hiển thị khi dialog đang submit */
+  submittingContent?: React.ReactNode;
+  /** title hiển thị khi dialog đang submit */
+  submittingTitle?: React.ReactNode;
   /** callback sau khi submit thành công; nhận values đã submit */
   onSaved?: (values: Record<string, any>) => Promise<void> | void;
 };

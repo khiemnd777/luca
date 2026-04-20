@@ -11,6 +11,8 @@ import { useDepartmentDashboardDialogStore } from "@features/department/model/de
 import type { DeparmentModel } from "@features/department/model/department.model";
 import { formatDepartmentPhoneNumbers } from "@features/department/utils/department-phone.utils";
 
+const PROTECTED_DEPARTMENT_ID = 1;
+
 function DepartmentReportAction({ row }: { row: DeparmentModel }) {
   const openDialog = useDepartmentDashboardDialogStore((state) => state.openDialog);
 
@@ -71,8 +73,10 @@ registerTable("department-children", () =>
     //   navigate(`/department/${row.id}`);
     // },
     async onDelete(row) {
+      if (Number(row.id) === PROTECTED_DEPARTMENT_ID) return;
       await unlink(Number(row.id));
       reloadTable("department-children");
     },
+    rowActions: [],
   })
 );

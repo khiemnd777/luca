@@ -18,7 +18,6 @@ func init() {
 			DTOPropRefIDs:       "ProcessIDs",
 			DTOPropDisplayNames: "ProcessNames",
 			ExtraFields: []policy.ExtraM2MField{
-				{Column: "color", EntityProp: "Color"},
 				{Column: "section_name", EntityProp: "Name"},
 			},
 			RefNameColumn: "process_name",
@@ -26,13 +25,12 @@ func init() {
 				Columns: []policy.RefValueCacheColumn{
 					{RefColumn: "section_id", M2MColumn: "section_id"},
 					{RefColumn: "section_name", M2MColumn: "section_name"},
-					{RefColumn: "color", M2MColumn: "color"},
 				},
 			},
 
 			RefList: &policy.RefListConfig{
 				Permissions: []string{"process.view"},
-				RefFields:   []string{"id", "code", "name", "section_name", "color"},
+				RefFields:   []string{"id", "code", "name", "section_name"},
 				CachePrefix: "process:list",
 			},
 		},
@@ -41,7 +39,7 @@ func init() {
 	policy.RegisterRefSearch("sections_processes", policy.ConfigSearch{
 		RefTable:    "processes",
 		NormFields:  []string{"code", "name"},
-		RefFields:   []string{"id", "code", "name", "section_name", "color"},
+		RefFields:   []string{"id", "code", "name", "section_name"},
 		Permissions: []string{"process.search"},
 		CachePrefix: "process:list",
 		ExtraWhere: func(params policy.ExtraWhereParams, args *[]any) string {

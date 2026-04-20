@@ -87,6 +87,9 @@ func Incr(name, key string) (int64, error) {
 
 func Del(name, key string) error {
 	rdb := GetInstance(name)
+	if rdb == nil {
+		return nil
+	}
 	err := rdb.Del(ctx, key).Err()
 	if err != nil {
 		logger.Warn("❌ Redis DEL error: "+key, err)
@@ -96,6 +99,9 @@ func Del(name, key string) error {
 
 func DelByPattern(name string, pattern string) error {
 	rdb := GetInstance(name)
+	if rdb == nil {
+		return nil
+	}
 
 	var cursor uint64
 	ctx := context.Background()

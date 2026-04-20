@@ -12,7 +12,8 @@ import (
 
 func NewDepartmentModule(app *fiber.App, router fiber.Router, deps *module.ModuleDeps[config.ModuleConfig]) {
 	repo := repository.NewDepartmentRepository(deps.Ent.(*generated.Client), deps)
-	svc := service.NewDepartmentService(repo, deps)
+	syncer := service.NewDepartmentSyncer(repo, deps)
+	svc := service.NewDepartmentService(repo, deps, syncer)
 	h := handler.NewDepartmentHandler(svc, deps)
 	h.RegisterRoutes(router)
 }

@@ -5,6 +5,10 @@ import { mapper } from "@core/mapper/auto-mapper";
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import type { DeparmentModel } from "@root/features/department/model/department.model";
+import type {
+  DepartmentSyncApplyResultModel,
+  DepartmentSyncPreviewModel,
+} from "@features/department/model/department-sync.model";
 import { buildDepartmentWirePayload } from "@features/department/utils/department-phone.utils";
 
 function deptPath(deptId?: number): string {
@@ -27,9 +31,8 @@ export async function getById(deptId?: number): Promise<DeparmentModel> {
   return mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
 }
 
-export async function childrenList(tableOpts: FetchTableOpts): Promise<ListResult<DeparmentModel>> {
-  const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/children`, tableOpts);
+export async function childrenList(tableOpts: FetchTableOpts & { deptId?: number }): Promise<ListResult<DeparmentModel>> {
+  const { data } = await apiClient.getTable<any[]>(`${deptPath(tableOpts.deptId)}/children`, tableOpts);
   const result = mapper.map<any[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
   return result;
 }
@@ -70,4 +73,25 @@ export async function unlink(deptId: number): Promise<{ success: boolean }> {
 export async function myFirstDepartment(): Promise<DeparmentModel> {
   const { data } = await apiClient.get<any>(`${deptPath().replace(/\/\d+$/, "")}/me`);
   return mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
+}
+
+export async function previewSyncFromParent(deptId: number): Promise<DepartmentSyncPreviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.post<DepartmentSyncPreviewModel>(
+    `${departmentApiPath()}/child/${deptId}/sync-from-parent/preview`,
+    {},
+  );
+  return data;
+}
+
+export async function applySyncFromParent(
+  deptId: number,
+  previewToken: string,
+): Promise<DepartmentSyncApplyResultModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.post<DepartmentSyncApplyResultModel>(
+    `${departmentApiPath()}/child/${deptId}/sync-from-parent/apply`,
+    { previewToken },
+  );
+  return data;
 }

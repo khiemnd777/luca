@@ -12,6 +12,8 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 )
 
+type txContextKey struct{}
+
 type PqStringArray []string
 
 func (a PqStringArray) Value() (driver.Value, error) { return "{" + strings.Join(a, ",") + "}", nil }
@@ -36,6 +38,10 @@ func SortByIDs(ctx context.Context, db *sql.DB, table, orderField string, ids []
 }
 
 func WithTx[D any](ctx context.Context, db *generated.Client, fn func(tx *generated.Tx) (D, error)) (D, error) {
+	if existing := TxFromContext(ctx); existing != nil {
+		return fn(existing)
+	}
+
 	var (
 		tx   *generated.Tx
 		err  error
@@ -60,4 +66,18 @@ func WithTx[D any](ctx context.Context, db *generated.Client, fn func(tx *genera
 	var out D
 	out, err = fn(tx)
 	return out, err
+}
+
+func WithExistingTx(ctx context.Context, tx *generated.Tx) context.Context {
+	return context.WithValue(ctx, txContextKey{}, tx)
+}
+
+func TxFromContext(ctx context.Context) *generated.Tx {
+	if ctx == nil {
+		return nil
+	}
+	if tx, ok := ctx.Value(txContextKey{}).(*generated.Tx); ok {
+		return tx
+	}
+	return nil
 }
