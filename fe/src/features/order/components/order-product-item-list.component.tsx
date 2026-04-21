@@ -6,6 +6,7 @@ import type { OrderItemProductModel } from "@features/order/model/order-item-pro
 import { lowerToothCodes, upperToothCodes } from "@features/order/components/teeth/teeth-chart";
 import { TOOTH_SPRITES } from "@features/order/components/teeth/tooth-sprite-map";
 import { prefixCurrency } from "@root/shared/utils/currency.utils";
+import { formatCodeNameLabel } from "@shared/utils/code-name-label.utils";
 import { Stack, Typography } from "@mui/material";
 import { OrderItemTableEditor } from "./order-item-table-editor.component";
 
@@ -52,10 +53,11 @@ function formatCurrency(value?: number | null) {
 }
 
 function getProductLabel(item: OrderItemProductModel) {
-  const name = item.productName?.trim();
-  if (name) return name;
-  const code = item.productCode?.trim();
-  if (code) return code;
+  const label = formatCodeNameLabel({
+    code: item.productCode,
+    name: item.productName,
+  });
+  if (label) return label;
   return `Sản phẩm #${item.productId ?? item.id}`;
 }
 

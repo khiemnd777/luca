@@ -3,21 +3,15 @@ import type { FormSchema } from "@core/form/form.types";
 import { registerForm } from "@core/form/form-registry";
 import { id as fetchProductById, search as searchProduct } from "@features/product/api/product.api";
 import type { ProductModel } from "@features/product/model/product.model";
+import { formatCodeNameLabel } from "@shared/utils/code-name-label.utils";
 import OrderTeeth from "../components/order-teeth.component";
 
 const productLabel = (p?: ProductModel | null) => {
-  if (!p) return "";
-  const code = p.code ?? "";
-  const name = p.name ?? "";
-  return name || code;
+  return formatCodeNameLabel(p);
 };
 
 const productOptionLabel = (p?: ProductModel | null) => {
-  if (!p) return "";
-  const code = p.code ?? "";
-  const name = p.name ?? "";
-  if (code && name) return `${code} → ${name}`;
-  return name || code;
+  return productLabel(p);
 };
 
 export function buildOrderProductItemSchema(): FormSchema {

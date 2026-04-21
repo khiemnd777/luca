@@ -17,6 +17,7 @@ import { useAuthStore } from "@store/auth-store";
 import { id as getById } from "@features/material/api/material.api";
 import type { MaterialModel } from "@features/material/model/material.model";
 import { MaterialDetailOverview } from "@features/material/components/material-detail-overview.component";
+import { materialDisplayLabel } from "@features/material/utils/material.utils";
 
 function MaterialDetailWidget() {
   const formRef = React.useRef<AutoFormRef>(null);
@@ -35,7 +36,7 @@ function MaterialDetailWidget() {
     }
   );
 
-  const title = detail?.name?.trim() || detail?.code || "Vật tư";
+  const title = detail ? materialDisplayLabel(detail) || "Vật tư" : "Vật tư";
   const tabs: TabItem[] = [
     ...(canViewOrders ? [{
       label: "Tổng quan",

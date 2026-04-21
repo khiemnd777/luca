@@ -3,10 +3,11 @@ import { id as fetchCategoryById, search as searchCategory } from "../api/catego
 import type { CategoryModel } from "../model/category.model";
 import { validateParentCategorySelection } from "./category.validate";
 import { categoryPath } from "./category.utils";
+import { formatCodeNameLabel } from "@shared/utils/code-name-label.utils";
 
 type CategoryValueHolder = Record<string, any>;
 
-const getInputLabel = (d?: CategoryModel | null) => d?.name ?? "";
+const getInputLabel = (d?: CategoryModel | null) => formatCodeNameLabel(d);
 
 const getOptionLabel = (d?: CategoryModel | null) => (d ? categoryPath(d) : "");
 

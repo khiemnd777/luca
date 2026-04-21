@@ -1,3 +1,5 @@
+import { formatCodeNameLabel } from "@shared/utils/code-name-label.utils";
+
 // types
 export const MATERIAL_TYPES = [
   { label: "Tiêu hao", value: "consumable" },
@@ -17,10 +19,8 @@ export function materialTypeLabel(value?: string | null): string {
   return MATERIAL_TYPE_MAP[value] ?? value;
 }
 
-export function materialDisplayLabel(input?: { name?: string | null; isImplant?: boolean } | null): string {
-  if (!input) return "";
-  const name = input.name?.trim() ?? "";
-  return name;
+export function materialDisplayLabel(input?: { code?: string | null; name?: string | null; isImplant?: boolean } | null): string {
+  return formatCodeNameLabel(input);
 }
 
 // status
