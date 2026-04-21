@@ -1,10 +1,10 @@
 import { Box, Chip } from "@mui/material";
-import { registerSearchRenderer } from "@core/search";
+import { registerSearchRenderer, type SearchRenderer } from "@core/search";
 import SearchItem from "@root/core/search/search-item";
 import { Badge } from "@shared/components/ui/badge";
 import BrandingWatermarkIcon from '@mui/icons-material/BrandingWatermark';
 
-const brandNameRenderer = (o, { highlight }) => (
+const brandNameRenderer: SearchRenderer = (o, { highlight }) => (
     <SearchItem
       title={highlight(o.title)}
       subtitle={
@@ -13,7 +13,7 @@ const brandNameRenderer = (o, { highlight }) => (
           {o.keywords ? o.keywords.split("|")
             .map((kw) => kw.trim())
             .filter((kw) => kw.length > 0)
-            .map((kw) => <Chip size="small" label={highlight(kw)} />) : null
+            .map((kw) => <Chip key={kw} size="small" label={highlight(kw)} />) : null
           }
         </Box>
       }
