@@ -32,6 +32,7 @@ export type RouteConfig = {
   path: string;
   permissions?: Perm[];
   element: ReactNode | LazyExoticComponent<() => JSX.Element>;
+  meta: import("@core/module/route-meta").RouteMeta;
 };
 
 export type MenuItem = {

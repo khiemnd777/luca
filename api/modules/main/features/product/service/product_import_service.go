@@ -13,7 +13,11 @@ import (
 	"github.com/xuri/excelize/v2"
 
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	brandservice "github.com/khiemnd777/noah_api/modules/main/features/brand/service"
 	"github.com/khiemnd777/noah_api/modules/main/features/product/repository"
+	rawmaterialservice "github.com/khiemnd777/noah_api/modules/main/features/raw_material/service"
+	restorationservice "github.com/khiemnd777/noah_api/modules/main/features/restoration_type/service"
+	techniqueservice "github.com/khiemnd777/noah_api/modules/main/features/technique/service"
 	"github.com/khiemnd777/noah_api/shared/logger"
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
@@ -77,7 +81,23 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var brandIDs []int
 		if row.HasBrandField {
-			brandIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.BrandNames, s.repo.GetOrCreateBrandName)
+			brandIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.BrandNames, s.repo.GetOrCreateBrandName, func(id int, name string) {
+				categoryName := lv1Name
+				brandservice.BuildBrandNameSearchDoc(deptID, &model.BrandNameDTO{
+					ID:           id,
+					DepartmentID: utils.Ptr(deptID),
+					CategoryID:   utils.Ptr(lv1ID),
+					CategoryName: &categoryName,
+					Name:         &name,
+				})
+				brandservice.PublishSearch(deptID, &model.BrandNameDTO{
+					ID:           id,
+					DepartmentID: utils.Ptr(deptID),
+					CategoryID:   utils.Ptr(lv1ID),
+					CategoryName: &categoryName,
+					Name:         &name,
+				})
+			})
 			if err != nil {
 				return result, fmt.Errorf("row %d: cannot resolve brand names: %w", rowIndex, err)
 			}
@@ -85,7 +105,16 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var rawMaterialIDs []int
 		if row.HasRawMaterialField {
-			rawMaterialIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RawMaterialNames, s.repo.GetOrCreateRawMaterial)
+			rawMaterialIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RawMaterialNames, s.repo.GetOrCreateRawMaterial, func(id int, name string) {
+				categoryName := lv1Name
+				rawmaterialservice.PublishSearch(deptID, &model.RawMaterialDTO{
+					ID:           id,
+					DepartmentID: utils.Ptr(deptID),
+					CategoryID:   utils.Ptr(lv1ID),
+					CategoryName: &categoryName,
+					Name:         &name,
+				})
+			})
 			if err != nil {
 				return result, fmt.Errorf("row %d: cannot resolve raw materials: %w", rowIndex, err)
 			}
@@ -93,7 +122,16 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var techniqueIDs []int
 		if row.HasTechniqueField {
-			techniqueIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.TechniqueNames, s.repo.GetOrCreateTechnique)
+			techniqueIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.TechniqueNames, s.repo.GetOrCreateTechnique, func(id int, name string) {
+				categoryName := lv1Name
+				techniqueservice.PublishSearch(deptID, &model.TechniqueDTO{
+					ID:           id,
+					DepartmentID: utils.Ptr(deptID),
+					CategoryID:   utils.Ptr(lv1ID),
+					CategoryName: &categoryName,
+					Name:         &name,
+				})
+			})
 			if err != nil {
 				return result, fmt.Errorf("row %d: cannot resolve techniques: %w", rowIndex, err)
 			}
@@ -101,7 +139,15 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var restorationTypeIDs []int
 		if row.HasRestorationTypeField {
-			restorationTypeIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RestorationTypeNames, s.repo.GetOrCreateRestorationType)
+			restorationTypeIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RestorationTypeNames, s.repo.GetOrCreateRestorationType, func(id int, name string) {
+				categoryName := lv1Name
+				restorationservice.PublishSearch(deptID, &model.RestorationTypeDTO{
+					ID:           id,
+					CategoryID:   utils.Ptr(lv1ID),
+					CategoryName: &categoryName,
+					Name:         &name,
+				})
+			})
 			if err != nil {
 				return result, fmt.Errorf("row %d: cannot resolve restoration types: %w", rowIndex, err)
 			}
@@ -174,6 +220,7 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 }
 
 type categoryRefUpserter func(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
+type createdRefHook func(id int, name string)
 
 func (s *productImportService) resolveCategoryRefIDs(
 	ctx context.Context,
@@ -182,6 +229,7 @@ func (s *productImportService) resolveCategoryRefIDs(
 	categoryName string,
 	raw string,
 	upsert categoryRefUpserter,
+	onCreated createdRefHook,
 ) ([]int, error) {
 	names := splitMultiNames(raw)
 	if len(names) == 0 {
@@ -190,9 +238,12 @@ func (s *productImportService) resolveCategoryRefIDs(
 
 	out := make([]int, 0, len(names))
 	for _, name := range names {
-		id, _, err := upsert(ctx, deptID, categoryID, categoryName, name)
+		id, created, err := upsert(ctx, deptID, categoryID, categoryName, name)
 		if err != nil {
 			return nil, err
+		}
+		if created && onCreated != nil {
+			onCreated(id, name)
 		}
 		out = append(out, id)
 	}

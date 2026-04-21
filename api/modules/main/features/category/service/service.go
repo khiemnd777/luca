@@ -11,10 +11,6 @@ import (
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
-	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
-	searchutils "github.com/khiemnd777/noah_api/shared/search"
-	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -124,26 +120,11 @@ func (s *categoryService) Update(ctx context.Context, deptID int, input *model.C
 // ----------------------------------------------------------------------------
 
 func (s *categoryService) upsertSearch(ctx context.Context, deptID int, dto *model.CategoryDTO) {
-	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "category", []any{dto.Name}, dto.CustomFields)
-
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
-		EntityType: "category",
-		EntityID:   int64(dto.ID),
-		Title:      *dto.Name,
-		Subtitle:   nil,
-		Keywords:   &kwPtr,
-		Content:    nil,
-		Attributes: map[string]any{},
-		OrgID:      utils.Ptr(int64(deptID)),
-		OwnerID:    nil,
-	})
+	publishCategorySearch(ctx, s.cfMgr, deptID, dto)
 }
 
-func (s *categoryService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
-		EntityType: "category",
-		EntityID:   int64(id),
-	})
+func (s *categoryService) unlinkSearch(ctx context.Context, id int) {
+	publishCategoryUnlink(ctx, id)
 }
 
 // ----------------------------------------------------------------------------
@@ -189,7 +170,7 @@ func (s *categoryService) Delete(ctx context.Context, deptID int, id int) error 
 	cache.InvalidateKeys(kCategoryAll(deptID)...)
 	cache.InvalidateKeys(kCategoryByID(deptID, id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

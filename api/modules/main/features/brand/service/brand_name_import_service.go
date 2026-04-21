@@ -34,6 +34,7 @@ func (s *brandNameImportService) ImportFromExcel(ctx context.Context, deptID int
 	if len(rows) == 0 {
 		return result, nil
 	}
+	touched := make([]*model.BrandNameDTO, 0, len(rows))
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -69,12 +70,19 @@ func (s *brandNameImportService) ImportFromExcel(ctx context.Context, deptID int
 			return result, fmt.Errorf("row %d: lookup category failed: %w", rowIndex, err)
 		}
 
-		_, created, err := s.repo.GetOrCreateBrandName(ctx, deptID, categoryID, categoryName, row.Name)
+		id, created, err := s.repo.GetOrCreateBrandName(ctx, deptID, categoryID, categoryName, row.Name)
 		if err != nil {
 			return result, fmt.Errorf("row %d: cannot create brand name: %w", rowIndex, err)
 		}
 		if created {
 			result.Added++
+			touched = append(touched, &model.BrandNameDTO{
+				ID:           id,
+				DepartmentID: &deptID,
+				CategoryID:   &categoryID,
+				CategoryName: &categoryName,
+				Name:         &row.Name,
+			})
 		} else {
 			result.Skipped++
 		}
@@ -85,6 +93,9 @@ func (s *brandNameImportService) ImportFromExcel(ctx context.Context, deptID int
 	}
 	committed = true
 	cache.InvalidateKeys(kBrandNameAll(deptID)...)
+	for _, dto := range touched {
+		publishBrandNameSearch(context.Background(), deptID, dto)
+	}
 	return result, nil
 }
 

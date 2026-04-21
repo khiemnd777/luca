@@ -84,7 +84,7 @@ func NewDepartmentSyncer(
 		techniqueSvc:     techniqueservice.NewTechniqueService(techniquerepo.NewTechniqueRepository(deps.Ent.(*generated.Client), deps), deps),
 		restorationSvc:   restorationservice.NewRestorationTypeService(restorationrepo.NewRestorationTypeRepository(deps.Ent.(*generated.Client), deps), deps),
 		processSvc:       processservice.NewProcessService(processrepo.NewProcessRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
-		sectionSvc:       sectionservice.NewSectionService(sectionrepo.NewSectionRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps),
+		sectionSvc:       sectionservice.NewSectionService(sectionrepo.NewSectionRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
 		materialSvc:      materialservice.NewMaterialService(materialrepo.NewMaterialRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
 		productSvc:       productservice.NewProductService(productrepo.NewProductRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
 	}

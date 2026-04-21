@@ -9,6 +9,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/features/section/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
+	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
@@ -24,12 +25,13 @@ type SectionService interface {
 }
 
 type sectionService struct {
-	repo repository.SectionRepository
-	deps *module.ModuleDeps[config.ModuleConfig]
+	repo  repository.SectionRepository
+	deps  *module.ModuleDeps[config.ModuleConfig]
+	cfMgr *customfields.Manager
 }
 
-func NewSectionService(repo repository.SectionRepository, deps *module.ModuleDeps[config.ModuleConfig]) SectionService {
-	return &sectionService{repo: repo, deps: deps}
+func NewSectionService(repo repository.SectionRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) SectionService {
+	return &sectionService{repo: repo, deps: deps, cfMgr: cfMgr}
 }
 
 func kSectionByID(id int) string {
@@ -110,6 +112,8 @@ func (s *sectionService) Create(ctx context.Context, input model.SectionDTO) (*m
 	if dto != nil && dto.ID > 0 {
 		cache.InvalidateKeys(kSectionByID(dto.ID), fmt.Sprintf("section:id:%d:*", dto.ID))
 	}
+
+	s.upsertSearch(ctx, dto)
 	return dto, nil
 }
 
@@ -123,7 +127,17 @@ func (s *sectionService) Update(ctx context.Context, input model.SectionDTO) (*m
 		cache.InvalidateKeys(kSectionByID(dto.ID), fmt.Sprintf("section:id:%d:*", dto.ID))
 	}
 	cache.InvalidateKeys(kSectionAll(dto.DepartmentID)...)
+
+	s.upsertSearch(ctx, dto)
 	return dto, nil
+}
+
+func (s *sectionService) upsertSearch(ctx context.Context, dto *model.SectionDTO) {
+	publishSectionSearch(ctx, s.cfMgr, dto)
+}
+
+func (s *sectionService) unlinkSearch(ctx context.Context, id int) {
+	publishSectionUnlink(ctx, id)
 }
 
 func (s *sectionService) GetByID(ctx context.Context, id int) (*model.SectionDTO, error) {
@@ -178,6 +192,7 @@ func (s *sectionService) Delete(ctx context.Context, id int) error {
 	}
 	cache.InvalidateKeys(kSectionAll(st.DepartmentID)...)
 	cache.InvalidateKeys(kSectionByID(id), fmt.Sprintf("section:id:%d:*", id))
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

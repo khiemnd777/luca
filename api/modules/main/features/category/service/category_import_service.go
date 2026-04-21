@@ -36,6 +36,7 @@ func (s *categoryImportService) ImportFromExcel(ctx context.Context, deptID int,
 	if len(rows) == 0 {
 		return result, nil
 	}
+	touched := make([]*model.CategoryDTO, 0, len(rows)*3)
 
 	tx, err := s.db.Tx(ctx)
 	if err != nil {
@@ -60,6 +61,13 @@ func (s *categoryImportService) ImportFromExcel(ctx context.Context, deptID int,
 		if created {
 			result.AddedLV1++
 			addedThisRow = true
+			lv1Name := row.LV1
+			touched = append(touched, &model.CategoryDTO{
+				ID:           lv1ID,
+				DepartmentID: &deptID,
+				Level:        1,
+				Name:         &lv1Name,
+			})
 			if err := s.ensureCollections(ctx, tx, deptID, lv1ID); err != nil {
 				return result, fmt.Errorf("row %d: cannot update lv1 collections: %w", rowIndex, err)
 			}
@@ -74,6 +82,16 @@ func (s *categoryImportService) ImportFromExcel(ctx context.Context, deptID int,
 			if created {
 				result.AddedLV2++
 				addedThisRow = true
+				lv1Name := row.LV1
+				lv2Name := row.LV2
+				touched = append(touched, &model.CategoryDTO{
+					ID:              lv2ID,
+					DepartmentID:    &deptID,
+					Level:           2,
+					Name:            &lv2Name,
+					CategoryIDLv1:   &lv1ID,
+					CategoryNameLv1: &lv1Name,
+				})
 				if err := collectionutils.UpsertAncestorCollections(ctx, tx, categoryTreeCfg, lv2ID); err != nil {
 					return result, fmt.Errorf("row %d: cannot update ancestor collections for lv2: %w", rowIndex, err)
 				}
@@ -89,6 +107,19 @@ func (s *categoryImportService) ImportFromExcel(ctx context.Context, deptID int,
 			if created {
 				result.AddedLV3++
 				addedThisRow = true
+				lv1Name := row.LV1
+				lv2Name := row.LV2
+				lv3Name := row.LV3
+				touched = append(touched, &model.CategoryDTO{
+					ID:              lv3ID,
+					DepartmentID:    &deptID,
+					Level:           3,
+					Name:            &lv3Name,
+					CategoryIDLv1:   &lv1ID,
+					CategoryNameLv1: &lv1Name,
+					CategoryIDLv2:   &lv2ID,
+					CategoryNameLv2: &lv2Name,
+				})
 				if err := collectionutils.UpsertAncestorCollections(ctx, tx, categoryTreeCfg, lv3ID); err != nil {
 					return result, fmt.Errorf("row %d: cannot update ancestor collections for lv3: %w", rowIndex, err)
 				}
@@ -110,6 +141,9 @@ func (s *categoryImportService) ImportFromExcel(ctx context.Context, deptID int,
 	committed = true
 
 	cache.InvalidateKeys(kCategoryAll(deptID)...)
+	for _, dto := range touched {
+		publishCategorySearch(context.Background(), nil, deptID, dto)
+	}
 
 	return result, nil
 }

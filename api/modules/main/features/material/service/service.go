@@ -11,10 +11,6 @@ import (
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
-	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
-	searchutils "github.com/khiemnd777/noah_api/shared/search"
-	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -135,26 +131,11 @@ func (s *materialService) Update(ctx context.Context, deptID int, input model.Ma
 // ----------------------------------------------------------------------------
 
 func (s *materialService) upsertSearch(ctx context.Context, deptID int, dto *model.MaterialDTO) {
-	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "material", []any{dto.Code}, dto.CustomFields)
-
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
-		EntityType: "material",
-		EntityID:   int64(dto.ID),
-		Title:      *dto.Name,
-		Subtitle:   nil,
-		Keywords:   &kwPtr,
-		Content:    nil,
-		Attributes: map[string]any{},
-		OrgID:      utils.Ptr(int64(deptID)),
-		OwnerID:    nil,
-	})
+	publishMaterialSearch(ctx, s.cfMgr, deptID, dto)
 }
 
-func (s *materialService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
-		EntityType: "material",
-		EntityID:   int64(id),
-	})
+func (s *materialService) unlinkSearch(ctx context.Context, id int) {
+	publishMaterialUnlink(ctx, id)
 }
 
 // ----------------------------------------------------------------------------
@@ -205,7 +186,7 @@ func (s *materialService) Delete(ctx context.Context, deptID int, id int) error 
 	cache.InvalidateKeys(kMaterialByID(deptID, id))
 	cache.InvalidateKeys(kMaterialOverviewByID(deptID, id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

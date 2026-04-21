@@ -8,6 +8,7 @@ import type {
 } from "@core/module/types";
 import { on } from "@core/module/event-bus";
 import { RouteMetaProvider, type RouteMeta } from "@core/module/route-meta";
+import { flattenRouteNodes } from "@core/module/route-flatten";
 import React from "react";
 import GeneralPage from "@core/pages/general-page";
 
@@ -116,31 +117,13 @@ export function withMeta(
 }
 
 /** Flatten RouteNode -> RouteConfig[] (cho react-router) */
-function flattenRoutes(nodes: RouteNode[]): RouteConfig[] {
-  const out: RouteConfig[] = [];
-
-  const walk = (arr: RouteNode[]) => {
-    for (const n of sortByPriority(arr)) {
-      const meta: RouteMeta = {
-        key: n.key,
-        label: n.label,
-        title: n.title,
-        subtitle: n.subtitle,
-        path: n.path,
-      };
-
-      out.push({
-        path: n.path,
-        permissions: n.permissions,
-        element: withMeta(n.element, meta),
-      });
-
-      if (n.children?.length) walk(n.children);
-    }
-  };
-
-  walk(nodes);
-  return out;
+export function flattenRoutes(nodes: RouteNode[]): RouteConfig[] {
+  return flattenRouteNodes(nodes, (node, meta) => ({
+    path: node.path,
+    permissions: node.permissions,
+    element: withMeta(node.element, meta),
+    meta,
+  }));
 }
 
 function toMenu(nodes: RouteNode[]): MenuItem[] {

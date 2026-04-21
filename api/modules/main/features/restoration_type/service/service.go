@@ -10,9 +10,6 @@ import (
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/module"
-	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
-	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -88,7 +85,7 @@ func (s *restorationTypeService) Create(ctx context.Context, deptID int, input m
 	}
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
@@ -104,33 +101,17 @@ func (s *restorationTypeService) Update(ctx context.Context, deptID int, input m
 	}
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
 
-func (s *restorationTypeService) upsertSearch(deptID int, dto *model.RestorationTypeDTO) {
-	if dto == nil || dto.Name == nil {
-		return
-	}
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
-		EntityType: "restoration_type",
-		EntityID:   int64(dto.ID),
-		Title:      *dto.Name,
-		Subtitle:   nil,
-		Keywords:   dto.Name,
-		Content:    nil,
-		Attributes: nil,
-		OrgID:      utils.Ptr(int64(deptID)),
-		OwnerID:    nil,
-	})
+func (s *restorationTypeService) upsertSearch(ctx context.Context, deptID int, dto *model.RestorationTypeDTO) {
+	publishRestorationTypeSearch(ctx, deptID, dto)
 }
 
-func (s *restorationTypeService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
-		EntityType: "restoration_type",
-		EntityID:   int64(id),
-	})
+func (s *restorationTypeService) unlinkSearch(ctx context.Context, id int) {
+	publishRestorationTypeUnlink(ctx, id)
 }
 
 func (s *restorationTypeService) GetByID(ctx context.Context, deptID, id int) (*model.RestorationTypeDTO, error) {
@@ -164,7 +145,7 @@ func (s *restorationTypeService) Delete(ctx context.Context, deptID int, id int)
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
 	cache.InvalidateKeys(kRestorationTypeByID(id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

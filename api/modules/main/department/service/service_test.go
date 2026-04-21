@@ -65,6 +65,9 @@ func TestDepartmentServiceCreateBootstrapsFromParent(t *testing.T) {
 	if !syncer.sawTx {
 		t.Fatal("expected bootstrap syncer to receive tx context")
 	}
+	if !syncer.afterCommitRan {
+		t.Fatal("expected bootstrap after-commit callback to run")
+	}
 	if syncer.sourceDeptID != 9 || syncer.targetDeptID != 7 {
 		t.Fatalf("bootstrap source/target = %d/%d, want 9/7", syncer.sourceDeptID, syncer.targetDeptID)
 	}
@@ -137,6 +140,9 @@ func TestDepartmentServiceCreateRollsBackWhenBootstrapFails(t *testing.T) {
 	if _, err := svc.Create(context.Background(), deptmodel.DepartmentDTO{Name: "Child", ParentID: intPtr(3)}); !errors.Is(err, sentinel) {
 		t.Fatalf("Create() error = %v, want sentinel", err)
 	}
+	if syncer.afterCommitRan {
+		t.Fatal("after-commit callback should not run on rollback")
+	}
 
 	if stats.beginCount != 1 || stats.commitCount != 0 || stats.rollbackCount != 1 {
 		t.Fatalf("tx stats = begin:%d commit:%d rollback:%d, want 1/0/1", stats.beginCount, stats.commitCount, stats.rollbackCount)
@@ -195,10 +201,11 @@ func (r *createDepartmentRepo) GetFirstDepartmentOfUser(context.Context, int) (*
 }
 
 type fakeBootstrapSyncer struct {
-	sourceDeptID int
-	targetDeptID int
-	sawTx        bool
-	err          error
+	sourceDeptID   int
+	targetDeptID   int
+	sawTx          bool
+	afterCommitRan bool
+	err            error
 }
 
 func (s *fakeBootstrapSyncer) PreviewFromParent(context.Context, int) (*deptmodel.DepartmentSyncPreviewDTO, error) {
@@ -213,5 +220,8 @@ func (s *fakeBootstrapSyncer) BootstrapFromSource(ctx context.Context, sourceDep
 	s.sawTx = dbutils.TxFromContext(ctx) != nil
 	s.sourceDeptID = sourceDeptID
 	s.targetDeptID = targetDeptID
+	dbutils.RegisterAfterCommit(ctx, func() {
+		s.afterCommitRan = true
+	})
 	return s.err
 }

@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/lib/pq"
 
@@ -13,10 +14,40 @@ import (
 )
 
 type txContextKey struct{}
+type afterCommitContextKey struct{}
+
+type afterCommitQueue struct {
+	mu        sync.Mutex
+	callbacks []func()
+}
+
+func (q *afterCommitQueue) add(fn func()) {
+	if fn == nil {
+		return
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.callbacks = append(q.callbacks, fn)
+}
+
+func (q *afterCommitQueue) run() {
+	q.mu.Lock()
+	callbacks := append([]func(){}, q.callbacks...)
+	q.callbacks = nil
+	q.mu.Unlock()
+
+	for _, fn := range callbacks {
+		if fn != nil {
+			fn()
+		}
+	}
+}
 
 type PqStringArray []string
 
 func (a PqStringArray) Value() (driver.Value, error) { return "{" + strings.Join(a, ",") + "}", nil }
+
+var afterCommitQueues sync.Map
 
 func SortByIDs(ctx context.Context, db *sql.DB, table, orderField string, ids []int) error {
 	if len(ids) == 0 {
@@ -52,15 +83,20 @@ func WithTx[D any](ctx context.Context, db *generated.Client, fn func(tx *genera
 	if err != nil {
 		return zero, err
 	}
+	queue := &afterCommitQueue{}
+	afterCommitQueues.Store(tx, queue)
 
 	defer func() {
+		defer afterCommitQueues.Delete(tx)
 		if err != nil {
 			_ = tx.Rollback()
 			return
 		}
 		if txErr := tx.Commit(); txErr != nil {
 			err = txErr
+			return
 		}
+		queue.run()
 	}()
 
 	var out D
@@ -69,7 +105,14 @@ func WithTx[D any](ctx context.Context, db *generated.Client, fn func(tx *genera
 }
 
 func WithExistingTx(ctx context.Context, tx *generated.Tx) context.Context {
-	return context.WithValue(ctx, txContextKey{}, tx)
+	ctx = context.WithValue(ctx, txContextKey{}, tx)
+	if tx == nil {
+		return ctx
+	}
+	if queue, ok := afterCommitQueues.Load(tx); ok {
+		ctx = context.WithValue(ctx, afterCommitContextKey{}, queue)
+	}
+	return ctx
 }
 
 func TxFromContext(ctx context.Context) *generated.Tx {
@@ -80,4 +123,28 @@ func TxFromContext(ctx context.Context) *generated.Tx {
 		return tx
 	}
 	return nil
+}
+
+func RegisterAfterCommit(ctx context.Context, fn func()) {
+	if fn == nil {
+		return
+	}
+
+	tx := TxFromContext(ctx)
+	if tx == nil {
+		fn()
+		return
+	}
+
+	if queue, ok := ctx.Value(afterCommitContextKey{}).(*afterCommitQueue); ok && queue != nil {
+		queue.add(fn)
+		return
+	}
+
+	if queue, ok := afterCommitQueues.Load(tx); ok {
+		queue.(*afterCommitQueue).add(fn)
+		return
+	}
+
+	fn()
 }

@@ -4,8 +4,7 @@ import SearchItem from "@root/core/search/search-item";
 import { Badge } from "@shared/components/ui/badge";
 import BrandingWatermarkIcon from '@mui/icons-material/BrandingWatermark';
 
-registerSearchRenderer("brand_name", "Thương hiệu",
-  (o, { highlight }) => (
+const brandNameRenderer = (o, { highlight }) => (
     <SearchItem
       title={highlight(o.title)}
       subtitle={
@@ -20,7 +19,7 @@ registerSearchRenderer("brand_name", "Thương hiệu",
       }
       right={<Badge badge={{ avatar: o.attributes?.["logo"] }} />}
     />
-  ),
-  <BrandingWatermarkIcon color="primary" />,
-  (_) => "/brand-name",
-);
+  );
+
+registerSearchRenderer("brand_name", "Thương hiệu", brandNameRenderer, <BrandingWatermarkIcon color="primary" />, (_) => "/brand-name");
+registerSearchRenderer("brand", "Thương hiệu", brandNameRenderer, <BrandingWatermarkIcon color="primary" />, (_) => "/brand-name");

@@ -45,4 +45,53 @@ SELECT
 	'{}'::jsonb,
 	NOW(),
 	NOW()
-FROM seed_materials s;
+FROM seed_materials s
+WHERE NOT EXISTS (
+	SELECT 1
+	FROM materials m
+	WHERE m.department_id = 1
+	  AND m.deleted_at IS NULL
+	  AND m.type = 'loaner'
+	  AND m.is_implant = s.is_implant
+	  AND m.code = s.name
+);
+
+INSERT INTO search_index (
+	entity_type,
+	entity_id,
+	title,
+	subtitle,
+	keywords,
+	content,
+	attributes,
+	org_id,
+	owner_id,
+	acl_hash,
+	updated_at
+)
+SELECT
+	'material',
+	m.id,
+	m.name,
+	NULLIF(concat_ws(' | ', m.code, m.type, format('implant=%s', m.is_implant)), ''),
+	NULLIF(concat_ws('|', m.code, m.name, m.type, CASE WHEN m.is_implant THEN 'implant' ELSE 'non-implant' END), ''),
+	NULL,
+	'{}'::jsonb,
+	m.department_id::bigint,
+	NULL,
+	NULL,
+	NOW()
+FROM materials m
+WHERE m.department_id = 1
+  AND m.deleted_at IS NULL
+  AND m.type = 'loaner'
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();

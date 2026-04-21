@@ -27,6 +27,7 @@ import MyAccountBadge from "@root/shared/components/ui/account-badge";
 import { PageToolbar } from "@root/shared/components/ui/page-toolbar";
 import { useRouteMeta } from "../module/route-meta";
 import { useNavigate } from "react-router-dom";
+import { resolveBackTarget } from "@core/navigation/back-navigation";
 
 const SIDEBAR_W = 280;
 const SIDEBAR_COLLAPSED_W = 76;
@@ -37,7 +38,8 @@ interface CollapsibleChipProps {
 
 export function BasePage({ children }: { children: React.ReactNode }) {
   const { department } = useAuth();
-  const { key, title, subtitle } = useRouteMeta();
+  const routeMeta = useRouteMeta();
+  const { key, title, subtitle } = routeMeta;
   const reactNavigate = useNavigate();
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down("md"));
@@ -47,6 +49,7 @@ export function BasePage({ children }: { children: React.ReactNode }) {
 
   const { pathname } = useLocation();
   const menu = useModuleMenu({ flattenChildren: false });
+  const backTarget = resolveBackTarget(routeMeta);
 
   const renderChip = React.useCallback(
     (chip?: React.ReactNode) => {
@@ -471,7 +474,7 @@ export function BasePage({ children }: { children: React.ReactNode }) {
             key={key}
             title={title ?? ""}
             subtitle={subtitle ?? ""}
-            onBack={history.length > 1 ? () => reactNavigate(-1) : undefined}
+            onBack={backTarget ? () => reactNavigate(backTarget) : undefined}
             actions={
               <>
               </>

@@ -6,6 +6,10 @@ export type RouteMeta = {
   title?: string;
   subtitle?: string;
   path: string;
+  hidden?: boolean;
+  parentKey?: string;
+  parentPath?: string;
+  isDetail?: boolean;
 };
 
 const Ctx = React.createContext<RouteMeta | null>(null);

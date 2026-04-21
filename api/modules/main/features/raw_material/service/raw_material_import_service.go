@@ -34,6 +34,7 @@ func (s *rawMaterialImportService) ImportFromExcel(ctx context.Context, deptID i
 	if len(rows) == 0 {
 		return result, nil
 	}
+	touched := make([]*model.RawMaterialDTO, 0, len(rows))
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -69,12 +70,19 @@ func (s *rawMaterialImportService) ImportFromExcel(ctx context.Context, deptID i
 			return result, fmt.Errorf("row %d: lookup category failed: %w", rowIndex, err)
 		}
 
-		_, created, err := s.repo.GetOrCreateRawMaterial(ctx, deptID, categoryID, categoryName, row.Name)
+		id, created, err := s.repo.GetOrCreateRawMaterial(ctx, deptID, categoryID, categoryName, row.Name)
 		if err != nil {
 			return result, fmt.Errorf("row %d: cannot create raw material: %w", rowIndex, err)
 		}
 		if created {
 			result.Added++
+			touched = append(touched, &model.RawMaterialDTO{
+				ID:           id,
+				DepartmentID: &deptID,
+				CategoryID:   &categoryID,
+				CategoryName: &categoryName,
+				Name:         &row.Name,
+			})
 		} else {
 			result.Skipped++
 		}
@@ -86,6 +94,9 @@ func (s *rawMaterialImportService) ImportFromExcel(ctx context.Context, deptID i
 	committed = true
 
 	cache.InvalidateKeys(kRawMaterialAll(deptID)...)
+	for _, dto := range touched {
+		publishRawMaterialSearch(context.Background(), deptID, dto)
+	}
 	return result, nil
 }
 

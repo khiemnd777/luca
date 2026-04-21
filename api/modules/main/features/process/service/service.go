@@ -11,8 +11,8 @@ import (
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
+	sharedsearch "github.com/khiemnd777/noah_api/shared/modules/search"
 	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
 	searchutils "github.com/khiemnd777/noah_api/shared/search"
 	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
@@ -138,7 +138,7 @@ func (s *processService) Update(ctx context.Context, deptID int, input model.Pro
 func (s *processService) upsertSearch(ctx context.Context, deptID int, dto *model.ProcessDTO) {
 	kwPtr, _ := searchutils.BuildKeywords(ctx, s.cfMgr, "process", []any{dto.Code}, dto.CustomFields)
 
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
+	sharedsearch.PublishUpsert(ctx, &searchmodel.Doc{
 		EntityType: "process",
 		EntityID:   int64(dto.ID),
 		Title:      *dto.Name,
@@ -151,8 +151,8 @@ func (s *processService) upsertSearch(ctx context.Context, deptID int, dto *mode
 	})
 }
 
-func (s *processService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
+func (s *processService) unlinkSearch(ctx context.Context, id int) {
+	sharedsearch.PublishUnlink(ctx, &searchmodel.UnlinkDoc{
 		EntityType: "process",
 		EntityID:   int64(id),
 	})
@@ -205,7 +205,7 @@ func (s *processService) Delete(ctx context.Context, deptID int, id int) error {
 	cache.InvalidateKeys(kProcessAll(deptID)...)
 	cache.InvalidateKeys(kProcessByID(deptID, id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

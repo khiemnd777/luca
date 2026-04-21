@@ -1369,3 +1369,269 @@ WHERE NOT EXISTS (
   WHERE f.collection_id = c.id
     AND f.name = s.name
 );
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'category',
+  c.id,
+  c.name,
+  NULLIF(concat_ws(' > ', c.category_name_lv1, c.category_name_lv2), ''),
+  NULLIF(concat_ws('|', c.name, c.category_name_lv1, c.category_name_lv2, c.category_name_lv3), ''),
+  NULL,
+  '{}'::jsonb,
+  c.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM categories c
+WHERE c.department_id = 1
+  AND c.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'brand_name',
+  b.id,
+  b.name,
+  NULLIF(b.category_name, ''),
+  NULLIF(concat_ws('|', b.name, b.category_name), ''),
+  NULL,
+  '{}'::jsonb,
+  b.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM brand_names b
+WHERE b.department_id = 1
+  AND b.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'raw_material',
+  rm.id,
+  rm.name,
+  NULLIF(rm.category_name, ''),
+  NULLIF(concat_ws('|', rm.name, rm.category_name), ''),
+  NULL,
+  '{}'::jsonb,
+  rm.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM raw_materials rm
+WHERE rm.department_id = 1
+  AND rm.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'technique',
+  t.id,
+  t.name,
+  NULLIF(t.category_name, ''),
+  NULLIF(concat_ws('|', t.name, t.category_name), ''),
+  NULL,
+  '{}'::jsonb,
+  t.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM techniques t
+WHERE t.department_id = 1
+  AND t.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'restoration_type',
+  rt.id,
+  rt.name,
+  NULLIF(rt.category_name, ''),
+  NULLIF(concat_ws('|', rt.name, rt.category_name), ''),
+  NULL,
+  '{}'::jsonb,
+  rt.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM restoration_types rt
+WHERE rt.department_id = 1
+  AND rt.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
+
+INSERT INTO search_index (
+  entity_type,
+  entity_id,
+  title,
+  subtitle,
+  keywords,
+  content,
+  attributes,
+  org_id,
+  owner_id,
+  acl_hash,
+  updated_at
+)
+SELECT
+  'product',
+  p.id,
+  p.name,
+  NULLIF(p.category_name, ''),
+  NULLIF(concat_ws('|', p.code, p.name, p.category_name, brand_refs.names, raw_material_refs.names, technique_refs.names, restoration_refs.names, p.process_names), ''),
+  NULL,
+  '{}'::jsonb,
+  p.department_id::bigint,
+  NULL,
+  NULL,
+  NOW()
+FROM products p
+LEFT JOIN LATERAL (
+  SELECT string_agg(DISTINCT b.name, '|' ORDER BY b.name) AS names
+  FROM product_brand_names pbn
+  JOIN brand_names b
+    ON b.id = pbn.brand_name_id
+   AND b.deleted_at IS NULL
+  WHERE pbn.product_id = p.id
+) brand_refs ON TRUE
+LEFT JOIN LATERAL (
+  SELECT string_agg(DISTINCT rm.name, '|' ORDER BY rm.name) AS names
+  FROM product_raw_materials prm
+  JOIN raw_materials rm
+    ON rm.id = prm.raw_material_id
+   AND rm.deleted_at IS NULL
+  WHERE prm.product_id = p.id
+) raw_material_refs ON TRUE
+LEFT JOIN LATERAL (
+  SELECT string_agg(DISTINCT t.name, '|' ORDER BY t.name) AS names
+  FROM product_techniques pt
+  JOIN techniques t
+    ON t.id = pt.technique_id
+   AND t.deleted_at IS NULL
+  WHERE pt.product_id = p.id
+) technique_refs ON TRUE
+LEFT JOIN LATERAL (
+  SELECT string_agg(DISTINCT rt.name, '|' ORDER BY rt.name) AS names
+  FROM product_restoration_types prt
+  JOIN restoration_types rt
+    ON rt.id = prt.restoration_type_id
+   AND rt.deleted_at IS NULL
+  WHERE prt.product_id = p.id
+) restoration_refs ON TRUE
+WHERE p.department_id = 1
+  AND p.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();

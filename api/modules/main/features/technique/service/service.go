@@ -10,9 +10,6 @@ import (
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/module"
-	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
-	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -88,7 +85,7 @@ func (s *techniqueService) Create(ctx context.Context, deptID int, input model.T
 	}
 	cache.InvalidateKeys(kTechniqueAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
@@ -104,33 +101,17 @@ func (s *techniqueService) Update(ctx context.Context, deptID int, input model.T
 	}
 	cache.InvalidateKeys(kTechniqueAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
 
-func (s *techniqueService) upsertSearch(deptID int, dto *model.TechniqueDTO) {
-	if dto == nil || dto.Name == nil {
-		return
-	}
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
-		EntityType: "technique",
-		EntityID:   int64(dto.ID),
-		Title:      *dto.Name,
-		Subtitle:   nil,
-		Keywords:   dto.Name,
-		Content:    nil,
-		Attributes: nil,
-		OrgID:      utils.Ptr(int64(deptID)),
-		OwnerID:    nil,
-	})
+func (s *techniqueService) upsertSearch(ctx context.Context, deptID int, dto *model.TechniqueDTO) {
+	publishTechniqueSearch(ctx, deptID, dto)
 }
 
-func (s *techniqueService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
-		EntityType: "technique",
-		EntityID:   int64(id),
-	})
+func (s *techniqueService) unlinkSearch(ctx context.Context, id int) {
+	publishTechniqueUnlink(ctx, id)
 }
 
 func (s *techniqueService) GetByID(ctx context.Context, deptID int, id int) (*model.TechniqueDTO, error) {
@@ -164,7 +145,7 @@ func (s *techniqueService) Delete(ctx context.Context, deptID int, id int) error
 	cache.InvalidateKeys(kTechniqueAll(deptID)...)
 	cache.InvalidateKeys(kTechniqueByID(deptID, id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

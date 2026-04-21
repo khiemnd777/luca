@@ -34,6 +34,7 @@ func (s *restorationTypeImportService) ImportFromExcel(ctx context.Context, dept
 	if len(rows) == 0 {
 		return result, nil
 	}
+	touched := make([]*model.RestorationTypeDTO, 0, len(rows))
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -69,12 +70,19 @@ func (s *restorationTypeImportService) ImportFromExcel(ctx context.Context, dept
 			return result, fmt.Errorf("row %d: lookup category failed: %w", rowIndex, err)
 		}
 
-		_, created, err := s.repo.GetOrCreateRestorationType(ctx, deptID, categoryID, row.CategoryName, row.Name)
+		id, created, err := s.repo.GetOrCreateRestorationType(ctx, deptID, categoryID, row.CategoryName, row.Name)
 		if err != nil {
 			return result, fmt.Errorf("row %d: cannot create restoration type: %w", rowIndex, err)
 		}
 		if created {
 			result.Added++
+			categoryName := row.CategoryName
+			touched = append(touched, &model.RestorationTypeDTO{
+				ID:           id,
+				CategoryID:   &categoryID,
+				CategoryName: &categoryName,
+				Name:         &row.Name,
+			})
 		} else {
 			result.Skipped++
 		}
@@ -86,6 +94,9 @@ func (s *restorationTypeImportService) ImportFromExcel(ctx context.Context, dept
 	committed = true
 
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
+	for _, dto := range touched {
+		publishRestorationTypeSearch(context.Background(), deptID, dto)
+	}
 
 	return result, nil
 }

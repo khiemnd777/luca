@@ -485,6 +485,54 @@ func TestDepartmentSyncerApplyMaterialsMatchesByImplantFlag(t *testing.T) {
 	}
 }
 
+func TestDepartmentSyncerApplySectionsUsesSectionServiceWithoutSearchSpecialCase(t *testing.T) {
+	t.Parallel()
+
+	sectionSvc := &fakeSectionService{createIDs: []int{31}}
+	syncer := &departmentSyncer{sectionSvc: sectionSvc}
+	snapshot := &syncSnapshot{
+		targetDeptID: 2,
+		sourceSections: []deptrepo.DepartmentSyncSectionRecord{
+			{Name: "Thiết kế", Code: stringPtr("TK"), ProcessNames: []string{"Wax"}},
+			{Name: "Đúc", Code: stringPtr("DC"), ProcessNames: []string{"Cast"}},
+		},
+		targetSections: []deptrepo.DepartmentSyncSectionRecord{
+			{ID: 21, Name: "Thiết kế"},
+		},
+	}
+	targetProcessIDs := map[string]int{
+		normalizeKey("Wax"):  101,
+		normalizeKey("Cast"): 102,
+	}
+
+	if err := syncer.applySections(context.Background(), snapshot, targetProcessIDs); err != nil {
+		t.Fatalf("applySections() error = %v", err)
+	}
+
+	if len(sectionSvc.updateInputs) != 1 {
+		t.Fatalf("section update calls = %d, want 1", len(sectionSvc.updateInputs))
+	}
+	if got := sectionSvc.updateInputs[0].ID; got != 21 {
+		t.Fatalf("updated section id = %d, want 21", got)
+	}
+	if !slices.Equal(sectionSvc.updateInputs[0].ProcessIDs, []int{101}) {
+		t.Fatalf("updated section process ids = %v, want [101]", sectionSvc.updateInputs[0].ProcessIDs)
+	}
+
+	if len(sectionSvc.createInputs) != 1 {
+		t.Fatalf("section create calls = %d, want 1", len(sectionSvc.createInputs))
+	}
+	if got := sectionSvc.createInputs[0].DepartmentID; got != 2 {
+		t.Fatalf("created section department id = %d, want 2", got)
+	}
+	if !slices.Equal(sectionSvc.createInputs[0].ProcessIDs, []int{102}) {
+		t.Fatalf("created section process ids = %v, want [102]", sectionSvc.createInputs[0].ProcessIDs)
+	}
+	if got := sectionSvc.createInputs[0].Name; got != "Đúc" {
+		t.Fatalf("created section name = %q, want %q", got, "Đúc")
+	}
+}
+
 func TestDepartmentSyncerApplyFromParentRollsBackTransactionOnFailure(t *testing.T) {
 	driverName := registerTestTxDriver()
 	statsKey := t.Name()
@@ -533,6 +581,53 @@ func TestDepartmentSyncerApplyFromParentRollsBackTransactionOnFailure(t *testing
 	}
 	if stats.commitCount != 0 {
 		t.Fatalf("commit count = %d, want 0", stats.commitCount)
+	}
+}
+
+func TestDepartmentSyncerApplyFromParentRunsAfterCommitCallbacks(t *testing.T) {
+	driverName := registerTestTxDriver()
+	statsKey := t.Name()
+	stats := getTestTxStats(statsKey)
+
+	db, err := sql.Open(driverName, statsKey)
+	if err != nil {
+		t.Fatalf("sql.Open() error = %v", err)
+	}
+	defer db.Close()
+
+	client := generated.NewClient(generated.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	defer client.Close()
+
+	processSvc := &fakeProcessService{createIDs: []int{11}, registerAfterCommit: true}
+	syncer := &departmentSyncer{
+		db: client,
+		deptRepo: fakeDepartmentRepo{
+			items: map[int]*deptmodel.DepartmentDTO{
+				1: {ID: 1, Name: "Parent"},
+				2: {ID: 2, Name: "Child", ParentID: intPtr(1)},
+			},
+		},
+		syncRepo: fakeSyncRepo{
+			sourceProcesses: []deptrepo.DepartmentSyncProcessRecord{
+				{Name: "Wax", Code: stringPtr("WAX")},
+			},
+		},
+		processSvc: processSvc,
+	}
+
+	preview, err := syncer.PreviewFromParent(context.Background(), 2)
+	if err != nil {
+		t.Fatalf("PreviewFromParent() error = %v", err)
+	}
+
+	if _, err := syncer.ApplyFromParent(context.Background(), 2, preview.PreviewToken); err != nil {
+		t.Fatalf("ApplyFromParent() error = %v", err)
+	}
+	if !processSvc.afterCommitRan {
+		t.Fatal("expected after-commit callback to run after apply commit")
+	}
+	if stats.beginCount != 1 || stats.commitCount != 1 || stats.rollbackCount != 0 {
+		t.Fatalf("tx stats = begin:%d commit:%d rollback:%d, want 1/1/0", stats.beginCount, stats.commitCount, stats.rollbackCount)
 	}
 }
 
@@ -708,28 +803,40 @@ func (f fakeSyncRepo) pickProducts(source bool) []deptrepo.DepartmentSyncProduct
 }
 
 type fakeProcessService struct {
-	createIDs    []int
-	updateIDs    []int
-	createErr    error
-	updateErr    error
-	createInputs []model.ProcessDTO
-	updateInputs []model.ProcessDTO
+	createIDs           []int
+	updateIDs           []int
+	createErr           error
+	updateErr           error
+	createInputs        []model.ProcessDTO
+	updateInputs        []model.ProcessDTO
+	registerAfterCommit bool
+	afterCommitRan      bool
 }
 
-func (f *fakeProcessService) Create(_ context.Context, _ int, input model.ProcessDTO) (*model.ProcessDTO, error) {
+func (f *fakeProcessService) Create(ctx context.Context, _ int, input model.ProcessDTO) (*model.ProcessDTO, error) {
 	f.createInputs = append(f.createInputs, input)
 	if f.createErr != nil {
 		return nil, f.createErr
+	}
+	if f.registerAfterCommit {
+		dbutils.RegisterAfterCommit(ctx, func() {
+			f.afterCommitRan = true
+		})
 	}
 	dto := input
 	dto.ID = nextID(&f.createIDs, 1)
 	return &dto, nil
 }
 
-func (f *fakeProcessService) Update(_ context.Context, _ int, input model.ProcessDTO) (*model.ProcessDTO, error) {
+func (f *fakeProcessService) Update(ctx context.Context, _ int, input model.ProcessDTO) (*model.ProcessDTO, error) {
 	f.updateInputs = append(f.updateInputs, input)
 	if f.updateErr != nil {
 		return nil, f.updateErr
+	}
+	if f.registerAfterCommit {
+		dbutils.RegisterAfterCommit(ctx, func() {
+			f.afterCommitRan = true
+		})
 	}
 	dto := input
 	dto.ID = keepOrNextID(input.ID, &f.updateIDs, 1)
@@ -972,14 +1079,34 @@ func (f *fakeRestorationTypeService) Delete(context.Context, int, int) error {
 	panic("unexpected call to Delete")
 }
 
-type fakeSectionService struct{}
-
-func (f *fakeSectionService) Create(context.Context, model.SectionDTO) (*model.SectionDTO, error) {
-	panic("unexpected call to Create")
+type fakeSectionService struct {
+	createIDs    []int
+	updateErr    error
+	createErr    error
+	createInputs []model.SectionDTO
+	updateInputs []model.SectionDTO
 }
 
-func (f *fakeSectionService) Update(context.Context, model.SectionDTO) (*model.SectionDTO, error) {
-	panic("unexpected call to Update")
+func (f *fakeSectionService) Create(_ context.Context, input model.SectionDTO) (*model.SectionDTO, error) {
+	f.createInputs = append(f.createInputs, input)
+	if f.createErr != nil {
+		return nil, f.createErr
+	}
+	dto := input
+	dto.ID = nextID(&f.createIDs, 1)
+	return &dto, nil
+}
+
+func (f *fakeSectionService) Update(_ context.Context, input model.SectionDTO) (*model.SectionDTO, error) {
+	f.updateInputs = append(f.updateInputs, input)
+	if f.updateErr != nil {
+		return nil, f.updateErr
+	}
+	dto := input
+	if dto.ID == 0 {
+		dto.ID = nextID(&f.createIDs, 1)
+	}
+	return &dto, nil
 }
 
 func (f *fakeSectionService) GetByID(context.Context, int) (*model.SectionDTO, error) {

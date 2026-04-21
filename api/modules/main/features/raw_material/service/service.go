@@ -10,9 +10,6 @@ import (
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/module"
-	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
-	"github.com/khiemnd777/noah_api/shared/pubsub"
-	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -88,7 +85,7 @@ func (s *rawMaterialService) Create(ctx context.Context, deptID int, input model
 	}
 	cache.InvalidateKeys(kRawMaterialAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
@@ -104,33 +101,17 @@ func (s *rawMaterialService) Update(ctx context.Context, deptID int, input model
 	}
 	cache.InvalidateKeys(kRawMaterialAll(deptID)...)
 
-	s.upsertSearch(deptID, dto)
+	s.upsertSearch(ctx, deptID, dto)
 
 	return dto, nil
 }
 
-func (s *rawMaterialService) upsertSearch(deptID int, dto *model.RawMaterialDTO) {
-	if dto == nil || dto.Name == nil {
-		return
-	}
-	pubsub.PublishAsync("search:upsert", &searchmodel.Doc{
-		EntityType: "raw_material",
-		EntityID:   int64(dto.ID),
-		Title:      *dto.Name,
-		Subtitle:   nil,
-		Keywords:   dto.Name,
-		Content:    nil,
-		Attributes: nil,
-		OrgID:      utils.Ptr(int64(deptID)),
-		OwnerID:    nil,
-	})
+func (s *rawMaterialService) upsertSearch(ctx context.Context, deptID int, dto *model.RawMaterialDTO) {
+	publishRawMaterialSearch(ctx, deptID, dto)
 }
 
-func (s *rawMaterialService) unlinkSearch(id int) {
-	pubsub.PublishAsync("search:unlink", &searchmodel.UnlinkDoc{
-		EntityType: "raw_material",
-		EntityID:   int64(id),
-	})
+func (s *rawMaterialService) unlinkSearch(ctx context.Context, id int) {
+	publishRawMaterialUnlink(ctx, id)
 }
 
 func (s *rawMaterialService) GetByID(ctx context.Context, deptID int, id int) (*model.RawMaterialDTO, error) {
@@ -164,7 +145,7 @@ func (s *rawMaterialService) Delete(ctx context.Context, deptID int, id int) err
 	cache.InvalidateKeys(kRawMaterialAll(deptID)...)
 	cache.InvalidateKeys(kRawMaterialByID(deptID, id))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(ctx, id)
 	return nil
 }
 

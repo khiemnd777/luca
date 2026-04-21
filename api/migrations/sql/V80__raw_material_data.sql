@@ -32,3 +32,42 @@ JOIN categories c
 	ON c.name = v.category_name
 	AND c.deleted_at IS NULL
 ON CONFLICT DO NOTHING;
+
+INSERT INTO search_index (
+	entity_type,
+	entity_id,
+	title,
+	subtitle,
+	keywords,
+	content,
+	attributes,
+	org_id,
+	owner_id,
+	acl_hash,
+	updated_at
+)
+SELECT
+	'raw_material',
+	rm.id,
+	rm.name,
+	NULLIF(rm.category_name, ''),
+	NULLIF(concat_ws('|', rm.name, rm.category_name), ''),
+	NULL,
+	'{}'::jsonb,
+	rm.department_id::bigint,
+	NULL,
+	NULL,
+	NOW()
+FROM raw_materials rm
+WHERE rm.department_id = 1
+  AND rm.deleted_at IS NULL
+ON CONFLICT (entity_type, entity_id) DO UPDATE
+SET title = EXCLUDED.title,
+    subtitle = EXCLUDED.subtitle,
+    keywords = EXCLUDED.keywords,
+    content = EXCLUDED.content,
+    attributes = EXCLUDED.attributes,
+    org_id = EXCLUDED.org_id,
+    owner_id = EXCLUDED.owner_id,
+    acl_hash = EXCLUDED.acl_hash,
+    updated_at = NOW();
