@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	entgo.io/ent v0.14.4
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/chromedp/cdproto v0.0.0-20250803210736-d308e07a266d
 	github.com/chromedp/chromedp v0.14.2
 	github.com/disintegration/imaging v1.6.2

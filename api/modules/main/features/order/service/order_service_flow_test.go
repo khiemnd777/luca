@@ -468,10 +468,26 @@ func TestOrderServiceCreate_NewOrder(t *testing.T) {
 
 	input := makeOrderUpsertFixture("24060001", "Nha khoa A", "Bac si B", "Benh nhan C")
 	expected := makeOrderDTOFixture(101, "24060001", "24060001", 1001, 0)
-	expected.LeaderIDLatest = ptr(88)
-	expected.LeaderNameLatest = ptr("To truong")
-	expected.SectionNameLatest = ptr("Section A")
-	expected.ProcessNameLatest = ptr("Wax-up")
+	expected.LatestOrderItem.OrderItemProcesses = []*model.OrderItemProcessDTO{
+		{
+			LeaderID:    ptr(88),
+			LeaderName:  ptr("To truong A"),
+			SectionName: ptr("Section A"),
+			ProcessName: ptr("Wax-up"),
+		},
+		{
+			LeaderID:    ptr(99),
+			LeaderName:  ptr("To truong B"),
+			SectionName: ptr("Section B"),
+			ProcessName: ptr("Stain"),
+		},
+		{
+			LeaderID:    ptr(88),
+			LeaderName:  ptr("To truong A"),
+			SectionName: ptr("Section A"),
+			ProcessName: ptr("Polish"),
+		},
+	}
 
 	var gotDeptID, gotUserID int
 	var gotInput *model.OrderUpsertDTO
@@ -509,12 +525,19 @@ func TestOrderServiceCreate_NewOrder(t *testing.T) {
 	assertContainsKey(t, keys, "order:list:dpt7:*")
 	assertContainsKey(t, keys, "order:search:dpt7:*")
 
-	if len(recorder.notifications) != 1 {
-		t.Fatalf("expected 1 notification call, got %d", len(recorder.notifications))
+	if len(recorder.notifications) != 2 {
+		t.Fatalf("expected 2 notification calls, got %d", len(recorder.notifications))
 	}
-	notification := recorder.notifications[0]
-	if notification.receiverID != 88 || notification.notifierID != 22 || notification.notificationType != "order:checkin" {
-		t.Fatalf("unexpected notification call: %#v", notification)
+	first := recorder.notifications[0]
+	if first.receiverID != 88 || first.notifierID != 22 || first.notificationType != "order:new" {
+		t.Fatalf("unexpected first notification call: %#v", first)
+	}
+	if got := first.data["related_process_count"]; got != 2 {
+		t.Fatalf("unexpected first notification payload: %#v", first.data)
+	}
+	second := recorder.notifications[1]
+	if second.receiverID != 99 || second.notifierID != 22 || second.notificationType != "order:new" {
+		t.Fatalf("unexpected second notification call: %#v", second)
 	}
 
 	searchDoc := requirePublishedPayload[*searchmodel.Doc](t, recorder, "search:upsert")
@@ -581,6 +604,36 @@ func TestOrderServiceCreate_RemakeOrder(t *testing.T) {
 	}
 	if derefStringAny(t, audit.Data["order_item_code"]) != "A24060001" {
 		t.Fatalf("unexpected remake audit order_item_code: %#v", audit.Data["order_item_code"])
+	}
+}
+
+func TestOrderServiceCreate_NewOrderSkipsProcessesWithoutLeader(t *testing.T) {
+	recorder := installServiceHooks(t)
+	ctx := context.Background()
+
+	input := makeOrderUpsertFixture("24060002", "Nha khoa A", "Bac si B", "Benh nhan C")
+	expected := makeOrderDTOFixture(111, "24060002", "24060002", 1101, 0)
+	expected.LatestOrderItem.OrderItemProcesses = []*model.OrderItemProcessDTO{
+		{
+			SectionName: ptr("Section A"),
+			ProcessName: ptr("Wax-up"),
+		},
+	}
+
+	svc := &orderService{
+		repo: &orderRepositoryStub{
+			createFn: func(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error) {
+				return expected, nil
+			},
+		},
+	}
+
+	_, err := svc.Create(ctx, 7, 22, input)
+	if err != nil {
+		t.Fatalf("Create returned error: %v", err)
+	}
+	if len(recorder.notifications) != 0 {
+		t.Fatalf("expected no notifications, got %#v", recorder.notifications)
 	}
 }
 

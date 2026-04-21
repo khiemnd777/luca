@@ -605,9 +605,11 @@ func (r *orderItemRepository) Create(ctx context.Context, tx *generated.Tx, orde
 			productIDs = append(productIDs, product.ProductID)
 		}
 		if len(productIDs) > 0 {
-			if _, err := r.orderItemProcessRepo.CreateManyByProductIDs(ctx, tx, entity.ID, entity.OrderID, entity.Code, &priority, productIDs); err != nil {
+			processes, err := r.orderItemProcessRepo.CreateManyByProductIDs(ctx, tx, entity.ID, entity.OrderID, entity.Code, &priority, productIDs)
+			if err != nil {
 				return nil, err
 			}
+			out.OrderItemProcesses = processes
 		}
 	}
 

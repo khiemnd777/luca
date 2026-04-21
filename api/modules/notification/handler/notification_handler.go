@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/modules/notification/config"
+	"github.com/khiemnd777/noah_api/modules/notification/notificationModel"
 	"github.com/khiemnd777/noah_api/modules/notification/service"
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
@@ -25,6 +26,11 @@ func NewNotificationHandler(svc *service.NotificationService, deps *module.Modul
 }
 
 func (h *NotificationHandler) RegisterRoutes(router fiber.Router) {
+	app.RouterGet(router, "/push-config", h.GetPushConfig)
+	app.RouterGet(router, "/push-subscriptions", h.ListPushSubscriptions)
+	app.RouterPost(router, "/push-subscriptions", h.UpsertPushSubscription)
+	app.RouterDelete(router, "/push-subscriptions/:id", h.DeletePushSubscription)
+	app.RouterPost(router, "/push-subscriptions/test", h.TestPushSubscription)
 	app.RouterGet(router, "/unread/count", h.CountUnread)
 	app.RouterGet(router, "/short", h.ShortList)
 	app.RouterGet(router, "/latest", h.LatestNotification)
@@ -37,6 +43,64 @@ func (h *NotificationHandler) RegisterRoutes(router fiber.Router) {
 
 func (h *NotificationHandler) RegisterRoutesInternal(router fiber.Router) {
 	app.RouterPost(router, "/create", h.Create)
+}
+
+func (h *NotificationHandler) GetPushConfig(c *fiber.Ctx) error {
+	return c.JSON(h.svc.GetPushPublicConfig())
+}
+
+func (h *NotificationHandler) ListPushSubscriptions(c *fiber.Ctx) error {
+	userID, _ := utils.GetUserIDInt(c)
+
+	items, err := h.svc.ListPushSubscriptions(c.UserContext(), userID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Failed to list push subscriptions")
+	}
+
+	return c.JSON(items)
+}
+
+func (h *NotificationHandler) UpsertPushSubscription(c *fiber.Ctx) error {
+	var req notificationModel.PushSubscriptionUpsertRequest
+	if err := c.BodyParser(&req); err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "Invalid request body")
+	}
+	if req.Endpoint == "" || req.P256DH == "" || req.Auth == "" {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "Push subscription endpoint and keys are required")
+	}
+
+	userID, _ := utils.GetUserIDInt(c)
+	item, err := h.svc.UpsertPushSubscription(c.UserContext(), userID, req)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Failed to save push subscription")
+	}
+
+	return c.JSON(item)
+}
+
+func (h *NotificationHandler) DeletePushSubscription(c *fiber.Ctx) error {
+	subscriptionID, err := utils.GetParamAsInt(c, "id")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "Invalid push subscription ID")
+	}
+
+	userID, _ := utils.GetUserIDInt(c)
+	if err := h.svc.DeletePushSubscription(c.UserContext(), userID, subscriptionID); err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Failed to delete push subscription")
+	}
+
+	return c.SendStatus(fiber.StatusOK)
+}
+
+func (h *NotificationHandler) TestPushSubscription(c *fiber.Ctx) error {
+	userID, _ := utils.GetUserIDInt(c)
+
+	stats, err := h.svc.SendTestPush(c.UserContext(), userID)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Failed to send test notification")
+	}
+
+	return c.JSON(stats)
 }
 
 func (h *NotificationHandler) LatestNotification(c *fiber.Ctx) error {

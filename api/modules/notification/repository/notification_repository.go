@@ -1,15 +1,15 @@
-// scripts/create_module/templates/repository_repo.go.tmpl
 package repository
 
 import (
 	"context"
-
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated/notification"
-	"github.com/khiemnd777/noah_api/shared/db/ent/generated/user"
+	"time"
 
 	"github.com/khiemnd777/noah_api/modules/notification/config"
 	"github.com/khiemnd777/noah_api/modules/notification/notificationModel"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/devicepushsubscription"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/notification"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/user"
 	"github.com/khiemnd777/noah_api/shared/module"
 )
 
@@ -227,4 +227,168 @@ func (r *NotificationRepository) DeleteAll(ctx context.Context, userID int) erro
 		SetDeleted(true).
 		Save(ctx)
 	return err
+}
+
+func (r *NotificationRepository) UpsertPushSubscription(
+	ctx context.Context,
+	userID int,
+	req notificationModel.PushSubscriptionUpsertRequest,
+) (*notificationModel.PushSubscription, error) {
+	existing, err := r.client.DevicePushSubscription.Query().
+		Where(devicepushsubscription.Endpoint(req.Endpoint)).
+		Only(ctx)
+	if err != nil && !generated.IsNotFound(err) {
+		return nil, err
+	}
+
+	now := time.Now()
+	deviceLabel := nilIfEmpty(req.DeviceLabel)
+	userAgent := nilIfEmpty(req.UserAgent)
+
+	if existing != nil {
+		entity, updateErr := r.client.DevicePushSubscription.UpdateOne(existing).
+			SetUserID(userID).
+			SetP256dh(req.P256DH).
+			SetAuth(req.Auth).
+			SetPlatform(req.Platform).
+			SetInstallMode(req.InstallMode).
+			SetPermissionState(req.PermissionState).
+			SetLastSeenAt(now).
+			ClearDisabledAt().
+			ClearRevokedAt().
+			ClearLastErrorAt().
+			ClearLastError().
+			SetUpdatedAt(now).
+			SetNillableDeviceLabel(deviceLabel).
+			SetNillableUserAgent(userAgent).
+			Save(ctx)
+		if updateErr != nil {
+			return nil, updateErr
+		}
+		return mapPushSubscription(entity), nil
+	}
+
+	entity, createErr := r.client.DevicePushSubscription.Create().
+		SetUserID(userID).
+		SetEndpoint(req.Endpoint).
+		SetP256dh(req.P256DH).
+		SetAuth(req.Auth).
+		SetPlatform(req.Platform).
+		SetInstallMode(req.InstallMode).
+		SetPermissionState(req.PermissionState).
+		SetLastSeenAt(now).
+		SetNillableDeviceLabel(deviceLabel).
+		SetNillableUserAgent(userAgent).
+		Save(ctx)
+	if createErr != nil {
+		return nil, createErr
+	}
+
+	return mapPushSubscription(entity), nil
+}
+
+func (r *NotificationRepository) ListPushSubscriptionsByUser(
+	ctx context.Context,
+	userID int,
+) ([]*notificationModel.PushSubscription, error) {
+	rows, err := r.client.DevicePushSubscription.Query().
+		Where(devicepushsubscription.UserIDEQ(userID)).
+		Order(generated.Desc(devicepushsubscription.FieldUpdatedAt)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*notificationModel.PushSubscription, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, mapPushSubscription(row))
+	}
+
+	return result, nil
+}
+
+func (r *NotificationRepository) DeletePushSubscription(ctx context.Context, userID, id int) error {
+	return r.client.DevicePushSubscription.DeleteOneID(id).
+		Where(devicepushsubscription.UserIDEQ(userID)).
+		Exec(ctx)
+}
+
+func (r *NotificationRepository) ListActivePushSubscriptionsByUser(
+	ctx context.Context,
+	userID int,
+) ([]*generated.DevicePushSubscription, error) {
+	return r.client.DevicePushSubscription.Query().
+		Where(
+			devicepushsubscription.UserIDEQ(userID),
+			devicepushsubscription.DisabledAtIsNil(),
+			devicepushsubscription.RevokedAtIsNil(),
+		).
+		Order(generated.Desc(devicepushsubscription.FieldUpdatedAt)).
+		All(ctx)
+}
+
+func (r *NotificationRepository) MarkPushSubscriptionSent(ctx context.Context, id int, sentAt time.Time) error {
+	return r.client.DevicePushSubscription.UpdateOneID(id).
+		SetLastSeenAt(sentAt).
+		SetLastSentAt(sentAt).
+		ClearLastErrorAt().
+		ClearLastError().
+		Exec(ctx)
+}
+
+func (r *NotificationRepository) MarkPushSubscriptionError(ctx context.Context, id int, errMsg string, at time.Time) error {
+	return r.client.DevicePushSubscription.UpdateOneID(id).
+		SetLastSeenAt(at).
+		SetLastErrorAt(at).
+		SetLastError(errMsg).
+		Exec(ctx)
+}
+
+func (r *NotificationRepository) DisablePushSubscription(ctx context.Context, id int, at time.Time, errMsg string) error {
+	return r.client.DevicePushSubscription.UpdateOneID(id).
+		SetLastSeenAt(at).
+		SetDisabledAt(at).
+		SetRevokedAt(at).
+		SetLastErrorAt(at).
+		SetLastError(errMsg).
+		Exec(ctx)
+}
+
+func mapPushSubscription(ent *generated.DevicePushSubscription) *notificationModel.PushSubscription {
+	if ent == nil {
+		return nil
+	}
+
+	return &notificationModel.PushSubscription{
+		ID:              ent.ID,
+		UserID:          ent.UserID,
+		Endpoint:        ent.Endpoint,
+		Platform:        ent.Platform,
+		DeviceLabel:     stringValue(ent.DeviceLabel),
+		UserAgent:       stringValue(ent.UserAgent),
+		InstallMode:     ent.InstallMode,
+		PermissionState: ent.PermissionState,
+		LastSeenAt:      ent.LastSeenAt,
+		LastSentAt:      ent.LastSentAt,
+		LastErrorAt:     ent.LastErrorAt,
+		LastError:       ent.LastError,
+		DisabledAt:      ent.DisabledAt,
+		RevokedAt:       ent.RevokedAt,
+		CreatedAt:       ent.CreatedAt,
+		UpdatedAt:       ent.UpdatedAt,
+	}
+}
+
+func nilIfEmpty(v string) *string {
+	if v == "" {
+		return nil
+	}
+	return &v
+}
+
+func stringValue(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
 }

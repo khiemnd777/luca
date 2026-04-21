@@ -7,12 +7,13 @@ import { stack } from "@root/core/network/websocket/ws-stack";
 import { mapper } from "@root/core/mapper/auto-mapper";
 
 type OrderCheckinNotificationData = {
+  orderId?: number | string;
   leaderId?: number | string;
   leaderName?: string;
   orderItemId?: number | string;
   orderItemCode?: string;
-  sectionName?: string;
-  processName?: string;
+  relatedSectionNames?: string[] | string;
+  relatedProcessNames?: string[] | string;
   href?: string;
 };
 
@@ -22,7 +23,7 @@ function NotificationStackWidget(msg: any) {
     const result = mapper.map<any, OrderCheckinNotificationData>("Common", msg.payload.payload, "dto_to_model");
     return (
       <Stack spacing={0.5}>
-        <Typography variant="subtitle2">Đơn hàng #{result.orderItemCode} đang chờ xử lý</Typography>
+        <Typography variant="subtitle2">Đơn hàng #{result.orderItemCode} mới liên quan đến bộ phận bạn phụ trách</Typography>
         {/* <Typography variant="body2" color="text.secondary">
           {message}
         </Typography> */}
@@ -36,7 +37,7 @@ function NotificationWSCheckinWidget() {
   const { lastMessage } = useWebSocket();
 
   useEffect(() => {
-    if (lastMessage?.type === "order:checkin") {
+    if (lastMessage?.type === "order:new" || lastMessage?.type === "order:checkin") {
       stack(<NotificationStackWidget payload={lastMessage} />);
       invalidate("notification-unread-count");
       invalidate("notification-list");

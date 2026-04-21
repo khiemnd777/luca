@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 	"github.com/khiemnd777/noah_api/shared/module"
 	auditlogmodel "github.com/khiemnd777/noah_api/shared/modules/auditlog/model"
+	notificationmodule "github.com/khiemnd777/noah_api/shared/modules/notification"
 	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
 	searchutils "github.com/khiemnd777/noah_api/shared/search"
 	"github.com/khiemnd777/noah_api/shared/utils"
@@ -68,6 +70,13 @@ type orderService struct {
 	repo  repository.OrderRepository
 	deps  *module.ModuleDeps[config.ModuleConfig]
 	cfMgr *customfields.Manager
+}
+
+type relatedLeaderNotification struct {
+	LeaderID            int
+	LeaderName          string
+	RelatedSectionNames []string
+	RelatedProcessNames []string
 }
 
 func NewOrderService(repo repository.OrderRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) OrderService {
@@ -254,14 +263,18 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 
 	s.upsertSearch(ctx, deptID, dto)
 
-	if dto.LeaderIDLatest != nil {
-		notifyHook(*dto.LeaderIDLatest, userID, "order:checkin", map[string]any{
-			"leader_id":       dto.LeaderIDLatest,
-			"leader_name":     dto.LeaderNameLatest,
-			"order_item_id":   dto.LatestOrderItem.ID,
-			"order_item_code": dto.LatestOrderItem.Code,
-			"section_name":    dto.SectionNameLatest,
-			"process_name":    dto.ProcessNameLatest,
+	for _, leader := range s.resolveRelatedLeaders(dto) {
+		notifyHook(leader.LeaderID, userID, notificationmodule.TypeOrderNew, map[string]any{
+			"leader_id":             leader.LeaderID,
+			"leader_name":           leader.LeaderName,
+			"order_id":              dto.ID,
+			"order_item_id":         dto.LatestOrderItem.ID,
+			"order_item_code":       dto.LatestOrderItem.Code,
+			"related_section_names": leader.RelatedSectionNames,
+			"related_process_names": leader.RelatedProcessNames,
+			"related_section_count": len(leader.RelatedSectionNames),
+			"related_process_count": len(leader.RelatedProcessNames),
+			"href":                  fmt.Sprintf("/order/%d", dto.ID),
 		})
 	}
 	broadcastAllHook("order:newest", nil)
@@ -301,6 +314,68 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 	})
 
 	return dto, nil
+}
+
+func (s *orderService) resolveRelatedLeaders(dto *model.OrderDTO) []relatedLeaderNotification {
+	if dto == nil || dto.LatestOrderItem == nil || len(dto.LatestOrderItem.OrderItemProcesses) == 0 {
+		return nil
+	}
+
+	byLeader := make(map[int]*relatedLeaderNotification)
+
+	for _, process := range dto.LatestOrderItem.OrderItemProcesses {
+		if process == nil || process.LeaderID == nil {
+			continue
+		}
+
+		leaderID := *process.LeaderID
+		entry, exists := byLeader[leaderID]
+		if !exists {
+			entry = &relatedLeaderNotification{LeaderID: leaderID}
+			byLeader[leaderID] = entry
+		}
+
+		if entry.LeaderName == "" && process.LeaderName != nil {
+			entry.LeaderName = *process.LeaderName
+		}
+		if process.SectionName != nil {
+			entry.RelatedSectionNames = appendUniqueString(entry.RelatedSectionNames, *process.SectionName)
+		}
+		if process.ProcessName != nil {
+			entry.RelatedProcessNames = appendUniqueString(entry.RelatedProcessNames, *process.ProcessName)
+		}
+	}
+
+	leaderIDs := make([]int, 0, len(byLeader))
+	for leaderID := range byLeader {
+		leaderIDs = append(leaderIDs, leaderID)
+	}
+	slices.Sort(leaderIDs)
+
+	result := make([]relatedLeaderNotification, 0, len(leaderIDs))
+	for _, leaderID := range leaderIDs {
+		entry := byLeader[leaderID]
+		slices.Sort(entry.RelatedSectionNames)
+		slices.Sort(entry.RelatedProcessNames)
+		result = append(result, *entry)
+	}
+
+	return result
+}
+
+func appendUniqueString(items []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return items
+	}
+
+	for _, item := range items {
+		if item == value {
+			return items
+		}
+	}
+
+	return append(items, value)
 }
 
 func (s *orderService) GetProductOverview(ctx context.Context, deptID int, productID int) (*model.ProductOverviewDTO, error) {

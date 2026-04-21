@@ -7,6 +7,7 @@ import { FormDialogHost } from "@core/form/form-dialog-host";
 import { WebSocketProvider } from "@root/core/network/websocket/ws-provider";
 import { WebSocketWidgets } from "@root/core/network/websocket/ws-widgets";
 import { StackMessage } from "@root/core/network/websocket/ws-stack";
+import { PushNotificationBootstrap } from "@root/core/notification/push-notification.bootstrap";
 import { useAuthStore } from "@root/store/auth-store";
 
 function SessionBootstrap() {
@@ -24,6 +25,7 @@ export default function App() {
     <WebSocketProvider>
       <WebSocketWidgets />
       <StackMessage />
+      <PushNotificationBootstrap />
       <SessionBootstrap />
       <LocalizationProvider dateAdapter={AdapterDayjs}>
         <AppRouter />

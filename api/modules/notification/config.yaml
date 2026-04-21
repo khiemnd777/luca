@@ -15,3 +15,12 @@ database:
     password: "${PG_PASSWORD}"
     name: "${PG_DBNAME}"
     sslmode: "${PG_SSL}"
+
+push:
+  enabled: ${M_NOTIFICATION_PUSH_ENABLED}
+  subject: "${M_NOTIFICATION_PUSH_SUBJECT}"
+  public_key: "${M_NOTIFICATION_PUSH_PUBLIC_KEY}"
+  private_key: "${M_NOTIFICATION_PUSH_PRIVATE_KEY}"
+  ttl: "${M_NOTIFICATION_PUSH_TTL}"
+  urgency: "${M_NOTIFICATION_PUSH_URGENCY}"
+  allowed_types: []
