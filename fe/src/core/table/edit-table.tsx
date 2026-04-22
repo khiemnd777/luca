@@ -397,6 +397,8 @@ export function EditTable<T extends { id?: string | number }>({
       icon: React.ReactNode;
       color?: "inherit" | "default" | "primary" | "secondary" | "error" | "info" | "success" | "warning";
       sx?: Record<string, unknown>;
+      visible?: (row: T) => boolean;
+      disabled?: (row: T) => boolean;
       onClick?: (row: T) => void | Promise<void>;
     }> = [];
 
@@ -431,6 +433,8 @@ export function EditTable<T extends { id?: string | number }>({
         icon: action.icon,
         color: action.color,
         sx: action.sx as Record<string, unknown> | undefined,
+        visible: action.visible,
+        disabled: action.disabled,
         onClick: action.onClick,
       });
     });
@@ -450,14 +454,19 @@ export function EditTable<T extends { id?: string | number }>({
 
   const renderActionButtons = React.useCallback((row?: T) => (
     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-      {actionButtons.map((action) => {
+      {actionButtons
+        .filter((action) => !row || !action.visible || action.visible(row))
+        .map((action) => {
+        const disabled = !!(row && action.disabled?.(row));
         const button = (
           <IconButton
             size="small"
             tabIndex={row ? undefined : -1}
             color={action.color}
+            disabled={disabled}
             onClick={row ? (event) => {
               stopRowClick(event);
+              if (disabled) return;
               void action.onClick?.(row);
             } : undefined}
             sx={action.sx}

@@ -120,6 +120,8 @@ export type TableRowAction<T> = {
   icon: React.ReactNode;
   onClick: (row: T) => void | Promise<void>;
   permissions?: string[];
+  visible?: (row: T) => boolean;
+  disabled?: (row: T) => boolean;
   color?: TableRowActionColor;
   sx?: SxProps<Theme>;
 };

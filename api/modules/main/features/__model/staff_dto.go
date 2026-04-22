@@ -15,6 +15,7 @@ type StaffDTO struct {
 	SectionIDs   []int          `json:"section_ids,omitempty"`
 	SectionNames []string       `json:"section_names,omitempty"`
 	RoleIDs      []int          `json:"role_ids,omitempty"`
+	RoleNames    []string       `json:"role_names,omitempty"`
 	CustomFields map[string]any `json:"custom_fields,omitempty"`
 	CreatedAt    time.Time      `json:"created_at,omitempty"`
 	UpdatedAt    time.Time      `json:"updated_at,omitempty"`
