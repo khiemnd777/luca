@@ -73,6 +73,8 @@ For schema/persistence changes:
 - Do not hand-wire modules when registries or auto-loading already exist.
 - Do not mix frontend transport assumptions directly into UI components.
 - Do not move business logic into handlers, boot code, or presentational layers.
+- Do not use shortcut patches when an existing utility, router param source, shared helper, store, mapper, or abstraction already exists for the job.
+- If a value is already available from route params, feature params, shared context, or an existing utility, use that source instead of re-parsing URLs or rebuilding the value ad hoc.
 - Make the smallest coherent change that fully solves the task.
 
 ## Output expectations

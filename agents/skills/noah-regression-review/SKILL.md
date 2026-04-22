@@ -18,6 +18,7 @@ Look for:
 5. registration or boot omissions
 6. stale cache, realtime, search, or job side effects
 7. missing tests or unverified flows
+8. shortcut patches that bypass existing repo utilities, params flow, shared helpers, or abstractions
 
 ## Review method
 
@@ -74,3 +75,4 @@ If no findings are discovered:
 - review summaries that only restate the diff
 - approving contract or permission changes without tracing both sides
 - assuming hidden pages, comments, or UI affordances enforce backend safety
+- missing ad hoc shortcut fixes that should have used existing repo utilities or params flow

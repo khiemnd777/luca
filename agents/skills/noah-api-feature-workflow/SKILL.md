@@ -38,6 +38,7 @@ Feature registration should continue to flow through the existing registry patte
 - reuse existing Ent/raw SQL conventions already used nearby
 - follow existing transaction patterns
 - inspect cron, worker, cache, metadata, search, or realtime side effects when entity behavior changes
+- do not ship quick workaround patches that bypass existing shared middleware, auth helpers, request parsing helpers, or repository/service patterns just to make one path work
 
 ## Minimum implementation checklist
 
@@ -71,5 +72,6 @@ Migration rule:
 - business logic in handlers
 - persistence logic in boot code
 - bypassing feature registries
+- ad hoc shortcut fixes that skip existing shared helpers or layering
 - schema-only changes without tracing downstream consumers
 - ad hoc auth checks when shared middleware or auth utilities already exist

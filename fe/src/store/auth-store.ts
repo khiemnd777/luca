@@ -50,6 +50,28 @@ function hasStoredSession(): boolean {
   return !!getAccessToken() || !!getRefreshToken();
 }
 
+function normalizePermission(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function matchesRequestedPermission(requested: string, candidate: { id: number; value?: string; name?: string }): boolean {
+  const normalizedRequested = normalizePermission(requested);
+  const candidateValues = [candidate.value, candidate.name]
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map(normalizePermission);
+
+  if (candidateValues.some((value) => value === normalizedRequested)) {
+    return true;
+  }
+
+  if (normalizedRequested.endsWith(".*")) {
+    const prefix = normalizedRequested.slice(0, -1);
+    return candidateValues.some((value) => value.startsWith(prefix));
+  }
+
+  return false;
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -143,22 +165,31 @@ export const useAuthStore = create<AuthState>()(
         const matrix = state.matrixPermission;
         if (!matrix || !matrix.permissions?.length || !matrix.roles?.length) return false;
 
-        // Xác định index của permission theo value → name → id
-        const idx = matrix.permissions.findIndex((p) => {
-          if (typeof perm === "number") return p.id === perm;
-          // perm là string
-          return p.value === perm || p.name === perm || String(p.id) === perm;
-        });
-        if (idx < 0) return false;
-
         // Tập role của user
         const userRoles = new Set(state.roles);
         if (userRoles.size === 0) return false;
 
-        // Nếu bất kỳ role của user có cờ true tại vị trí idx -> có permission
+        if (typeof perm === "number") {
+          const idx = matrix.permissions.findIndex((p) => p.id === perm);
+          if (idx < 0) return false;
+          for (const r of matrix.roles) {
+            if (userRoles.has(r.roleName) && Array.isArray(r.flags) && r.flags[idx]) {
+              return true;
+            }
+          }
+          return false;
+        }
+
+        const matchingIndexes = matrix.permissions
+          .map((p, idx) => (matchesRequestedPermission(perm, p) ? idx : -1))
+          .filter((idx) => idx >= 0);
+
+        if (matchingIndexes.length === 0) return false;
+
         for (const r of matrix.roles) {
-          if (userRoles.has(r.roleName)) {
-            if (Array.isArray(r.flags) && r.flags[idx]) return true;
+          if (!userRoles.has(r.roleName) || !Array.isArray(r.flags)) continue;
+          for (const idx of matchingIndexes) {
+            if (r.flags[idx]) return true;
           }
         }
         return false;

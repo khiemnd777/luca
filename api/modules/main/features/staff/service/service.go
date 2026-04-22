@@ -10,6 +10,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
+	"github.com/khiemnd777/noah_api/shared/middleware/rbac"
 	"github.com/khiemnd777/noah_api/shared/module"
 	searchmodel "github.com/khiemnd777/noah_api/shared/modules/search/model"
 	"github.com/khiemnd777/noah_api/shared/pubsub"
@@ -22,7 +23,8 @@ type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error)
-	AssignAdminToDepartment(ctx context.Context, adminID int, departmentID int) error
+	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error
+	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error
 	ChangePassword(ctx context.Context, id int, newPassword string) error
 	GetByID(ctx context.Context, id int) (*model.StaffDTO, error)
 	CheckPhoneExists(ctx context.Context, userID int, phone string) (bool, error)
@@ -79,6 +81,10 @@ func kStaffSectionList(staffID int) string {
 
 func kUserRoleList(staffID int) string {
 	return fmt.Sprintf("rbac:roles:user:%d:*", staffID)
+}
+
+func kDepartmentByID(id int) string {
+	return fmt.Sprintf("department:%d", id)
 }
 
 func kStaffList(deptID int, q table.TableQuery) string {
@@ -173,20 +179,56 @@ func (s *staffService) AssignStaffToDepartment(ctx context.Context, staffID int,
 	return dto, nil
 }
 
-func (s *staffService) AssignAdminToDepartment(ctx context.Context, adminID int, departmentID int) error {
-	if err := s.repo.AssignAdminToDepartment(ctx, adminID, departmentID); err != nil {
+func (s *staffService) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error {
+	result, err := s.repo.AssignAdminToDepartment(ctx, staffID, departmentID)
+	if err != nil {
 		return err
 	}
 
+	s.invalidateAdminAssignmentCaches(result.CurrentAdminID, staffID)
+	if result.PreviousAdminID != nil && *result.PreviousAdminID > 0 && *result.PreviousAdminID != result.CurrentAdminID {
+		s.invalidateAdminAssignmentCaches(*result.PreviousAdminID, *result.PreviousAdminID)
+	}
+	s.invalidateDepartmentAdminCaches(departmentID)
+	return nil
+}
+
+func (s *staffService) UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error {
+	adminID, err := s.repo.UnassignAdminFromDepartment(ctx, staffID, departmentID)
+	if err != nil {
+		return err
+	}
+
+	s.invalidateAdminAssignmentCaches(adminID, staffID)
+	s.invalidateDepartmentAdminCaches(departmentID)
+	return nil
+}
+
+func (s *staffService) invalidateAdminAssignmentCaches(adminID int, staffID int) {
+	rbac.InvalidateUserRoleSet(adminID)
+	rbac.InvalidateUserPermissionSet(adminID)
 	cache.InvalidateKeys(
+		fmt.Sprintf("user:%d:perms", adminID),
 		fmt.Sprintf("department:first_of_user:%d", adminID),
-		fmt.Sprintf("staff:id:%d", adminID),
-		fmt.Sprintf("section:staff:%d:*", adminID),
+		fmt.Sprintf("staff:id:%d", staffID),
+		fmt.Sprintf("section:staff:%d:*", staffID),
 		kStaffListAll(),
 		kStaffSearchAll(),
 		kStaffSectionAll(),
 	)
-	return nil
+}
+
+func (s *staffService) invalidateDepartmentAdminCaches(departmentID int) {
+	if departmentID <= 0 {
+		return
+	}
+
+	cache.InvalidateKeys(
+		kDepartmentByID(departmentID),
+		"department:list:*",
+		"department:children:*",
+		"department:search:*",
+	)
 }
 
 func (s *staffService) upsertSearch(ctx context.Context, deptID int, dto *model.StaffDTO) {

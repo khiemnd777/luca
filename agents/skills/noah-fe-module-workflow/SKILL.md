@@ -58,6 +58,8 @@ When adding or changing routes:
 - Keep DTOs, models, and mapping separated.
 - Keep normalization in mapper profiles, not scattered across widgets.
 - Follow the cache invalidation pattern already used by the target feature.
+- Never use quick ad hoc UI patches when a repo utility, route param source, shared hook, table param, store, or mapper already provides the needed value or behavior.
+- Do not parse `window.location`, rebuild route state manually, or duplicate feature params in component code when the router, widget props, or table/form params already carry that information.
 
 ## AutoForm contract
 
@@ -111,6 +113,7 @@ Do not assume generic `camel_to_snake` conversion is sufficient for backend wire
 - raw `fetch` or custom axios instances
 - route mounting in unrelated files
 - hardcoded backend response shapes in multiple components
+- raw URL parsing or manual browser-global lookups when router params, shared hooks, or component params already exist
 - custom form or table patterns for one-off screens
 - broad UI refactors inside focused feature work
 - scattering utility logic across widgets/components when it belongs in `utils/*.utils.ts`

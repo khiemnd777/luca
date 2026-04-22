@@ -44,6 +44,7 @@ Frontend side:
 - Keep DTO-to-model mapping centralized.
 - Do not let UI components depend directly on transport naming.
 - If the backend becomes more restrictive, verify frontend affordances and error handling still match.
+- Do not bridge FE/API mismatches with shortcut patches in UI code when the correct fix belongs in params flow, API wrappers, mappers, shared helpers, or backend contracts.
 
 ## Minimum delivery checklist
 

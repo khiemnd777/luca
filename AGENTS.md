@@ -41,6 +41,49 @@ When tradeoffs exist, prefer decisions in this order:
 - reuse existing local patterns and infrastructure
 - make the smallest coherent change that fully solves the task
 
+## Critical Rule: Absolute No Fabrication and Absolute No Hallucination
+
+This rule is critically important and must never be broken.
+
+- Never invent anything beyond the user's request.
+- Never hallucinate facts, requirements, constraints, results, files, code behavior, or completion status.
+- If the user's request is unclear, ask follow-up questions until the real, actionable requirement is clear before proceeding.
+- If any off-path branch, new assumption, or scope expansion appears during execution, stop immediately and confirm with the user before continuing.
+- Fabrication and hallucination are absolutely forbidden.
+
+This rule overrides any tendency to guess, infer extra scope, or continue through ambiguity without explicit user confirmation.
+
+## Critical Rule: Absolute No Shortcut Patches
+
+This rule is critically important and must never be broken.
+
+- Never ship a symptom-only fix, tactical workaround, or "make it pass" patch.
+- Never hide a defect by adding guards, null fallbacks, hardcoded values, skip paths, retries, or local conditionals unless that behavior is the confirmed owning design.
+- Before editing, trace the real owning layer and root cause. If the correct fix crosses handler/service/repository, mapper/API/UI, registry, auth, or cache boundaries, update those layers coherently.
+- Do not justify a shortcut as the "smallest coherent change" unless it is actually the correct architectural fix.
+- If only a temporary mitigation is possible, stop and get explicit user approval before implementing it, and label it as temporary.
+
+## Critical Identity Contract: User vs Staff vs Department
+
+This repo has two distinct identities:
+
+- `users.id` = account/user identity
+- `staffs.id` = staff record identity
+- `staffs.user_staff` = foreign key to `users.id`
+- `departments.administrator_id` stores `users.id`, NEVER `staffs.id`
+
+Rules:
+- Never assume a route param named `id` in `staff/**` means `staffs.id`.
+- Before editing any staff/user/department flow, explicitly verify whether the flow uses `users.id` or `staffs.id`.
+- For department admin assignment/unassignment, the contract uses `users.id`.
+- Do not write code that accepts both `users.id` and `staffs.id` in the same endpoint unless the user explicitly requests that compatibility mode.
+- Variable names must be explicit:
+  - use `userID` for `users.id`
+  - use `staffRecordID` for `staffs.id`
+  - never use ambiguous names like `staffID` unless it truly means `staffs.id`
+
+For any work touching staff/user/department identity, read `docs/identity-contract.md` first.
+
 ## Default Mindset
 
 Act like a senior engineer working inside an existing production codebase:
@@ -64,6 +107,29 @@ Make the smallest coherent change that fully solves the task.
 - Prefer extending existing modules over inventing parallel patterns.
 
 When making non-trivial changes, inspect both sides if the change crosses the API boundary.
+
+### Assistant Platform Note
+
+The repo now includes a reusable AI Assistant Platform under:
+
+- `api/modules/ai`
+- `api/modules/ai/assistant`
+- `api/modules/ai/knowledge`
+- `fe/src/features/ai`
+- `fe/src/features/ai/assistant`
+- `fe/src/features/ai/assistant_profiles`
+- `fe/src/features/ai/knowledge`
+
+Treat this as platform infrastructure, not a domain feature.
+
+Rules:
+- keep assistant runtime, knowledge runtime, prompt governance, retrieval, safety, and evaluation concerns separated
+- preserve the distinction between public assistant contracts and admin review/respond contracts
+- do not mix future domain tools or business workflows into Plan 1 platform primitives unless the task explicitly calls for it
+- preserve traceability for every assistant turn: profile, prompt version, model id, citations, safety, and token/latency metadata
+- preserve the grounding contract: retrieved context is the only citable source set for assistant answers
+- keep uploaded knowledge content out of system/profile prompt layers
+- preserve profile-locked sessions so historical traces remain attributable to the profile/prompt version active at creation time
 
 ---
 
@@ -240,6 +306,21 @@ For changes crossing frontend and backend:
 
 Do not update only one side of a contract unless the change is intentionally backward-compatible.
 
+For Assistant Platform work, explicitly preserve these contracts when touched:
+
+- knowledge source/document/job/chunk admin APIs
+- assistant public session APIs
+- assistant admin session/review/eval APIs
+- chat response shape:
+  - `answer`
+  - `citations`
+  - `confidence`
+  - `safety`
+  - `profile`
+  - `proposed_actions`
+  - `requires_confirmation`
+  - `trace_id`
+
 ### 14. Reuse the shared network and error handling patterns
 
 Frontend should use the shared API client/network layer.
@@ -284,6 +365,22 @@ If the codebase uses org/workspace/member/tenant scoping:
 - preserve boundaries across route, service, repository, and UI behavior
 
 If the new codebase does not use a source-project scope model, do not recreate it accidentally.
+
+For Assistant Platform work, preserve these permission and scope expectations:
+
+- `knowledge.manage`
+- `assistant.view`
+- `assistant.respond`
+- `assistant.profile.manage`
+- `assistant.review`
+
+And preserve assistant content scope boundaries:
+
+- `public_assistant`
+- `internal_assistant`
+- `admin_only`
+
+`admin_only` content must never leak into public assistant retrieval.
 
 ---
 
@@ -369,6 +466,8 @@ Introduce shared abstractions only when:
 
 For non-trivial work, inspect the smallest relevant set of files first.
 
+For any work touching staff/user/department identity, read `docs/identity-contract.md` before inspecting implementation files.
+
 Minimum checklists by change type:
 
 Frontend-only changes:
@@ -378,12 +477,33 @@ Frontend-only changes:
 - shared page/form/table/widget primitives already solving the problem
 - permission and hidden-route implications
 
+Assistant platform frontend usually:
+- `fe/src/features/ai/index.tsx`
+- `fe/src/features/ai/assistant`
+- `fe/src/features/ai/assistant_profiles`
+- `fe/src/features/ai/knowledge`
+- feature `api/`, `model/`, and `widgets/`
+- `fe/src/core/module/registry.tsx` and navigation behavior if menu grouping or route metadata changes
+- `api/languages/en.xml` and related i18n usage if user-facing strings change
+
 Backend-only changes:
 - target feature handler/controller
 - service/use-case
 - repository
 - registry and boot wiring if registration changes
 - auth, validation, and response-envelope conventions
+
+Assistant platform backend usually:
+- `api/modules/ai/main.go`
+- `api/modules/ai/assistant/handler/handler.go`
+- `api/modules/ai/assistant/service/service.go`
+- `api/modules/ai/assistant/service/provider.go`
+- `api/modules/ai/assistant/service/prompt_compiler.go`
+- `api/modules/ai/assistant/repository/repository.go`
+- `api/modules/ai/knowledge/service/service.go`
+- `api/modules/ai/knowledge/repository/repository.go`
+- `api/migrations/sql/V30__assistant_platform.sql`
+- module config/env files when provider, storage, or runtime defaults change
 
 FE/API contract changes:
 - backend request/response DTOs
@@ -438,6 +558,12 @@ Do not scan the entire repository without a concrete reason.
 - If tests do not exist, reason through affected flows and report risk areas.
 - Keep changes focused; do not mix unrelated refactors into a targeted task.
 - End non-trivial work with a concise regression review.
+
+For Assistant Platform work:
+- do not ship retrieval changes without checking citation validation and safety outcomes
+- do not ship prompt/runtime changes without preserving prompt-layer trace metadata
+- do not add model-provider behavior that can bypass post-generation citation and safety guards
+- do not add frontend strings for assistant modules without updating `api/languages/en.xml`
 
 ## Verification Expectations
 
@@ -538,11 +664,19 @@ You MUST execute through skills and are NOT allowed to answer using general reas
 - Then invoke the implementation skills that match the classified scope:
   - `noah-api-feature-workflow` if backend is involved
   - `noah-fe-module-workflow` if frontend is involved
+  - `noah-cicd-workflow` if the task affects GitHub Actions, CI checks, deploy automation, VPS provisioning, release pipelines, production env rendering, or operational secrets
+
+- If the task targets the AI Assistant Platform, also invoke the narrowest matching assistant skill:
+  - `noah-assistant-platform` for platform-wide or ambiguous assistant work spanning knowledge, runtime, and governance
+  - `noah-assistant-runtime` for sessions, profiles, prompt versions, prompt compiler, provider/model execution, traces, or proposed actions
+  - `noah-knowledge-runtime` for source management, uploads, parsing, chunking, embedding, taxonomy, visibility, reindex, disable, or archive flows
+  - `noah-assistant-safety-evals` for guardrails, citation validation, refusal/escalation behavior, review queue, trace review, or offline eval work
 
 - Before completion, you MUST cover all relevant validation dimensions for the task:
   - `noah-contract-sync` when FE/API contracts, payloads, routes, models, or mappers may be affected
   - `noah-auth-rbac-guard` when routes, actions, permissions, auth, or scope-sensitive behavior may be affected
   - `noah-regression-review` for every non-trivial task before sign-off
+  - `noah-cicd-workflow` validation when the task changes workflow entrypoints, deploy scripts, healthchecks, Docker production packaging, or secret handoff
 
 - Coverage is mandatory, but explicit invocation is conditional by scope and complexity.
 - Do not invoke unrelated skills only to satisfy ceremony.
@@ -564,6 +698,7 @@ Use the smallest orchestration shape that fully covers the task:
 
 - `cross-boundary`
   - main agent may delegate independent implementation to `noah-api-worker` and `noah-fe-worker` in parallel
+  - main agent may delegate CI/CD implementation to `noah-cicd-worker` when the write scope is `.github/**`, `deploy/**`, or tightly related production packaging files
   - use only when the write scopes are clearly separable between `api/**` and `fe/**`
 
 - `high-risk`
@@ -579,6 +714,7 @@ The main agent remains responsible for:
 Subagents must receive bounded scopes only:
 - `noah-api-worker` owns `api/**`
 - `noah-fe-worker` owns `fe/**`
+- `noah-cicd-worker` owns `.github/**`, `deploy/**`, and tightly related production packaging files
 - explorer and reviewer roles are read-heavy by default unless the task explicitly assigns edits
 
 Do not delegate immediate blocking work if the main agent needs that result first to decide the approach.
