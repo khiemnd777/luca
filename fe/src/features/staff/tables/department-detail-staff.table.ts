@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { registerTable } from "@core/table/table-registry";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
 import { reloadTable } from "@core/table/table-reload";
+import { createBackNavigationState } from "@core/navigation/back-navigation";
 import { navigate } from "@root/core/navigation/navigate";
 import type { StaffModel } from "@features/staff/model/staff.model";
 import {
@@ -59,7 +60,7 @@ export function createDepartmentDetailStaffTableSchema(
     allowUpdating: ["staff.update"],
     allowDeleting: ["staff.delete"],
     onEdit(row) {
-      navigate(`/staff/${row.id}`);
+      navigate(`/staff/${row.id}`, { state: createBackNavigationState() });
     },
     rowActions: [
       {

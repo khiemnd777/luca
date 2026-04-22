@@ -4,6 +4,7 @@ import type { StaffModel } from "@features/staff/model/staff.model";
 import { table, unlink } from "@features/staff/api/staff.api";
 import { reloadTable } from "@core/table/table-reload";
 import { navigate } from "@root/core/navigation/navigate";
+import { createBackNavigationState } from "@core/navigation/back-navigation";
 
 const columns: ColumnDef<StaffModel>[] = [
   { key: "avatar", header: "Avatar", type: "image", shape: "circle", width: 80 },
@@ -40,7 +41,7 @@ registerTable("staffs", () =>
     allowDeleting: ["staff.delete"],
     onEdit(row) {
       // openFormDialog("staff-edit-dialog", { initial: { id: row.id } });
-      navigate(`/staff/${row.id}`);
+      navigate(`/staff/${row.id}`, { state: createBackNavigationState() });
     },
     // onView(row) {
     //   navigate(`/staff/${row.id}`);

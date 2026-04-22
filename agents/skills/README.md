@@ -57,6 +57,17 @@ Optional:
 
 Skills define workflow. They tell the main agent or a subagent how work should be approached.
 
+## Hard Prohibition On Shortcut Patching
+
+Repo-managed Noah skills must not permit symptom-only fixes or "make it pass" edits.
+
+Rules:
+
+- always trace the owning layer and root cause before editing
+- never hide defects with guards, null fallbacks, hardcoded values, skip paths, retries, or local conditionals unless that behavior is the confirmed design
+- when the correct fix crosses module, contract, auth, cache, or registration boundaries, update those layers coherently
+- temporary mitigations require explicit user approval and must be described as temporary
+
 ## Subagents
 
 Each subagent lives under:
@@ -137,6 +148,51 @@ These are generic job-type profiles, not business-feature-specific agents.
 - main agent may spawn `noah-contract-reviewer`
 - main agent may spawn `noah-regression-reviewer`
 - findings flow back to the main agent, which decides on fixes and owns the final output
+
+## Assistant Platform Guidance
+
+When the task targets the AI Assistant Platform, treat it as platform work rather than domain workflow work.
+
+Typical ownership areas:
+
+- `api/modules/knowledge`: source management, ingestion jobs, chunking, storage, taxonomy, visibility
+- `api/modules/assistant`: profiles, prompt versions, sessions, messages, traces, feedback, evals, provider integration
+- `fe/src/features/knowledge`: admin knowledge surfaces
+- `fe/src/features/assistant`: admin session, review, and eval surfaces
+- `fe/src/features/assistant_profiles`: profile and prompt-version admin surfaces
+
+Default validation focus for these tasks:
+
+- knowledge visibility and scope boundaries
+- FE/API response-shape consistency for session/profile/knowledge payloads
+- citation validity against retrieved chunks only
+- prompt-layer traceability
+- permission boundaries:
+  - `knowledge.manage`
+  - `assistant.view`
+  - `assistant.respond`
+  - `assistant.profile.manage`
+  - `assistant.review`
+
+### Dedicated Assistant Platform skills
+
+The Noah generic skills still apply, but Assistant Platform work now also has dedicated workflow skills:
+
+- `noah-assistant-platform`
+  - use first when the assistant task is broad, ambiguous, or crosses knowledge/runtime/governance boundaries
+- `noah-assistant-runtime`
+  - use for sessions, messages, profiles, prompt versions, prompt compiler, provider/model execution, traces, and proposed actions
+- `noah-knowledge-runtime`
+  - use for sources, uploads, parsing, chunking, embeddings, taxonomy, visibility, and ingestion lifecycle work
+- `noah-assistant-safety-evals`
+  - use for guardrails, citation validation, refusals, review queue, trace review, and offline eval scoring
+
+Recommended pairing:
+
+- keep starting with `noah-repo-architect`
+- add `noah-api-feature-workflow` and/or `noah-fe-module-workflow` by scope
+- add the narrowest assistant-specific skill above for assistant-platform tasks
+- finish with `noah-contract-sync`, `noah-auth-rbac-guard`, and `noah-regression-review` as the task requires
 
 ## Validate
 

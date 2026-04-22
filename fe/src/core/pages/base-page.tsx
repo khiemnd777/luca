@@ -47,9 +47,10 @@ export function BasePage({ children }: { children: React.ReactNode }) {
   // Collapse khi màn hình nhỏ; cho phép toggle thủ công
   const [collapsed, setCollapsed] = React.useState<boolean>(isSmall);
 
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const menu = useModuleMenu({ flattenChildren: false });
-  const backTarget = resolveBackTarget(routeMeta);
+  const backTarget = resolveBackTarget(routeMeta, state);
 
   const renderChip = React.useCallback(
     (chip?: React.ReactNode) => {

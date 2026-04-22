@@ -7,6 +7,13 @@ description: Use when implementing or modifying backend work in Noah so changes 
 
 Use this skill for work under `api/**`.
 
+## No shortcut patch rule
+
+- trace the owning backend layer and root cause before editing
+- do not hide defects with guard-only checks, null fallbacks, hardcoded values, skip paths, or "make it pass" conditionals
+- if the correct fix crosses handler, service, repository, migration, or registry boundaries, update those layers coherently
+- temporary mitigations require explicit user approval and must be labeled as temporary
+
 ## Required reading
 
 1. `/AGENTS.md`
@@ -38,7 +45,14 @@ Feature registration should continue to flow through the existing registry patte
 - reuse existing Ent/raw SQL conventions already used nearby
 - follow existing transaction patterns
 - inspect cron, worker, cache, metadata, search, or realtime side effects when entity behavior changes
-- do not ship quick workaround patches that bypass existing shared middleware, auth helpers, request parsing helpers, or repository/service patterns just to make one path work
+
+For AI Assistant Platform backend work:
+
+- load the narrowest assistant skill as well:
+  - `noah-assistant-runtime`
+  - `noah-knowledge-runtime`
+  - `noah-assistant-safety-evals`
+- keep this skill focused on Noah backend layering, registry, persistence, and migration discipline
 
 ## Minimum implementation checklist
 
@@ -50,6 +64,8 @@ Feature registration should continue to flow through the existing registry patte
 - register new routes through the feature handler
 - verify feature enablement and registry behavior if new components are added
 
+Assistant-platform additions usually require loading the matching assistant skill instead of re-encoding assistant-specific workflow here.
+
 ## When schema changes are involved
 
 Also inspect:
@@ -59,6 +75,8 @@ Also inspect:
 - service validation and business rules
 - handler request/response payloads
 - dependent frontend contracts if the API response changes
+
+If the change touches assistant or knowledge schema, also load the matching assistant skill to review feature-specific schema expectations.
 
 Migration rule:
 
@@ -72,6 +90,5 @@ Migration rule:
 - business logic in handlers
 - persistence logic in boot code
 - bypassing feature registries
-- ad hoc shortcut fixes that skip existing shared helpers or layering
 - schema-only changes without tracing downstream consumers
 - ad hoc auth checks when shared middleware or auth utilities already exist

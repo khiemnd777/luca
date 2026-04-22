@@ -693,16 +693,23 @@ Use the smallest orchestration shape that fully covers the task:
   - still classify with `noah-repo-architect` and apply any directly relevant skills
 
 - `medium` or ambiguous
-  - main agent may delegate discovery to `noah-boundary-explorer`
+  - main agent should automatically delegate discovery to `noah-boundary-explorer` when ownership, scope, or the minimum file set is not already clear
   - use this when the next edit depends on clarifying ownership, scope, or the minimum file set first
 
 - `cross-boundary`
-  - main agent may delegate independent implementation to `noah-api-worker` and `noah-fe-worker` in parallel
-  - main agent may delegate CI/CD implementation to `noah-cicd-worker` when the write scope is `.github/**`, `deploy/**`, or tightly related production packaging files
+  - main agent should automatically delegate independent implementation to `noah-api-worker` and `noah-fe-worker` in parallel when the write scopes are clearly separable
+  - main agent should automatically delegate CI/CD implementation to `noah-cicd-worker` when the write scope is `.github/**`, `deploy/**`, or tightly related production packaging files
   - use only when the write scopes are clearly separable between `api/**` and `fe/**`
 
 - `high-risk`
-  - add `noah-contract-reviewer` and/or `noah-regression-reviewer` when contract drift, permission regressions, registration omissions, or stale side effects are likely
+  - main agent should automatically add `noah-contract-reviewer` and/or `noah-regression-reviewer` when contract drift, permission regressions, registration omissions, or stale side effects are likely
+
+Default orchestration policy:
+- treat subagent use as automatic by default for `medium`, `cross-boundary`, and `high-risk` tasks
+- keep `simple` tasks on the main agent only
+- do not delegate immediate blocking work if the main agent needs that result first to decide the approach
+- do not assign overlapping write scopes to multiple subagents
+- the main agent remains responsible for orchestration decisions, integration, validation, and the final answer
 
 The main agent remains responsible for:
 - planning

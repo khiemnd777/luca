@@ -7,6 +7,13 @@ description: Use when a Noah task affects GitHub Actions workflows, CI checks, d
 
 Use this skill for work that changes or operates Noah's delivery pipeline.
 
+## No shortcut patch rule
+
+- trace the real pipeline or deployment failure path before editing
+- do not hide defects with skipped checks, permissive workflow branches, hardcoded env fallbacks, or "make it pass" conditionals
+- if the correct fix crosses workflow, script, packaging, or secret handoff boundaries, update those layers coherently
+- temporary mitigations require explicit user approval and must be labeled as temporary
+
 Typical triggers:
 
 - GitHub Actions workflow creation or edits

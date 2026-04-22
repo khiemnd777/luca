@@ -1,4 +1,5 @@
 import React from "react";
+import AssessmentOutlinedIcon from "@mui/icons-material/AssessmentOutlined";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
@@ -19,6 +20,8 @@ import { openFormDialog } from "@core/form/form-dialog.service";
 import { subscribeTableReload } from "@core/table/table-reload";
 import { useAuthStore } from "@store/auth-store";
 import { createDepartmentDetailStaffTableSchema } from "@features/staff/tables/department-detail-staff.table";
+import { DashboardOverview } from "@features/dashboard/components/dashboard-overview";
+import { DashboardProvider } from "@features/dashboard/context/dashboard-context";
 
 const DEPARTMENT_DETAIL_STAFFS_TABLE = "department-detail-staffs";
 
@@ -28,6 +31,7 @@ function DeparmentDetailWidget() {
   const [syncOpen, setSyncOpen] = React.useState(false);
   const [formVersion, setFormVersion] = React.useState(0);
   const resolvedDepartmentId = Number(departmentId ?? 0);
+  const canViewOrder = useAuthStore((state) => state.hasPermission("order.view"));
   const canViewStaff = useAuthStore((state) => state.hasPermission("staff.view"));
   const { data: detail, reload } = useAsync(async () => {
     if (!resolvedDepartmentId) return null;
@@ -46,6 +50,19 @@ function DeparmentDetailWidget() {
   }, [reload, resolvedDepartmentId]);
 
   const tabs: TabItem[] = [
+    ...(canViewOrder ? [{
+      label: "Tổng quan",
+      icon: <AssessmentOutlinedIcon />,
+      value: "overview",
+      content: (
+        <DashboardProvider
+          departmentId={resolvedDepartmentId}
+          cacheNamespace={`department-${resolvedDepartmentId || "unknown"}`}
+        >
+          <DashboardOverview />
+        </DashboardProvider>
+      ),
+    }] : []),
     {
       label: "Thông tin chi tiết",
       icon: <InfoOutlinedIcon />,
@@ -127,7 +144,7 @@ function DeparmentDetailWidget() {
 
   return (
     <>
-      <TabContainer tabs={tabs} defaultValue="info" />
+      <TabContainer tabs={tabs} defaultValue={canViewOrder ? "overview" : "info"} />
       <DepartmentSyncReviewDialog
         open={syncOpen}
         departmentId={resolvedDepartmentId || undefined}

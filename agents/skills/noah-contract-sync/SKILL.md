@@ -7,6 +7,13 @@ description: Use when a Noah task changes data crossing the FE/API boundary so r
 
 Use this skill whenever a task changes an endpoint, payload shape, response field, route behavior, or permission-sensitive user flow across frontend and backend.
 
+## No shortcut patch rule
+
+- trace the real contract owner and root cause before editing
+- do not hide contract drift with mapper-only band-aids, frontend-only guards, backend-only aliases, or "make it pass" fallbacks
+- if the correct fix crosses handler, service, DTO, API wrapper, mapper, or UI consumer boundaries, update those layers coherently
+- temporary mitigations require explicit user approval and must be labeled as temporary
+
 ## Goal
 
 Prevent partially wired changes across the FE/API boundary.
@@ -38,13 +45,14 @@ Frontend side:
 - error envelope and failure-state handling
 - cache invalidation or stale list/detail reads
 
+For AI Assistant Platform changes, explicitly review the assistant-specific contract surface and load the matching assistant skill for detailed workflow and payload ownership.
+
 ## Decision rules
 
 - Update both sides in one coherent change unless the contract is intentionally backward-compatible.
 - Keep DTO-to-model mapping centralized.
 - Do not let UI components depend directly on transport naming.
 - If the backend becomes more restrictive, verify frontend affordances and error handling still match.
-- Do not bridge FE/API mismatches with shortcut patches in UI code when the correct fix belongs in params flow, API wrappers, mappers, shared helpers, or backend contracts.
 
 ## Minimum delivery checklist
 
