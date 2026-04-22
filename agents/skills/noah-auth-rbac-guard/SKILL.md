@@ -7,6 +7,13 @@ description: Use when a Noah task touches protected routes, privileged actions, 
 
 Use this skill when the task affects access control, protected screens, menu visibility, internal routes, role checks, or privileged backend actions.
 
+## No shortcut patch rule
+
+- trace the real authorization path and root cause before editing
+- do not hide defects with UI-only gating, permissive fallbacks, hardcoded roles, or "make it pass" conditionals
+- if the correct fix crosses frontend affordances, backend guards, shared auth utilities, or scope enforcement, update those layers coherently
+- temporary mitigations require explicit user approval and must be labeled as temporary
+
 ## Core rule
 
 Visibility is not authorization. A hidden menu item is not a permission check.
@@ -35,6 +42,8 @@ Backend:
 - whether detail routes remain protected even when hidden from navigation
 - whether create/edit/delete buttons match backend authorization
 - whether tenant/org/workspace/member scope rules exist and must still apply
+
+For AI Assistant Platform work, explicitly review assistant permissions and visibility-scope boundaries, especially that `admin_only` knowledge never becomes eligible for public assistant retrieval.
 
 ## Decision rules
 

@@ -12,6 +12,7 @@ export interface StaffModel {
   sectionIds?: number[];
   sectionNames?: string[];
   roleIds?: number[];
+  roleNames?: string[];
   customFields?: Record<string, any> | null;
   createdAt: string;
   updatedAt: string;

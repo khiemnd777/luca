@@ -16,6 +16,7 @@ mapper.register<StaffModel>({
     sectionIds: [],
     sectionNames: [],
     roleIds: [],
+    roleNames: [],
     active: false,
     customFields: null,
   }),

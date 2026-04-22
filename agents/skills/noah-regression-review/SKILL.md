@@ -7,6 +7,13 @@ description: Use when reviewing or finishing Noah changes to identify likely reg
 
 Use this skill for code review, self-review before completion, or when a task is risky enough that side effects must be traced explicitly.
 
+## No shortcut patch rule
+
+- treat symptom-only fixes, guard-only suppressions, hardcoded fallbacks, and "make it pass" edits as suspected regressions unless proven to be the correct design
+- trace the owning layer and root cause before declaring a shortcut acceptable
+- if the real fix crosses architecture, contract, auth, cache, job, or registration boundaries, require those layers to be updated coherently
+- temporary mitigations require explicit user approval and must be labeled as temporary
+
 ## Review priority
 
 Look for:
@@ -44,6 +51,8 @@ Do not stop at the file that changed if downstream assumptions are obvious.
 - new background jobs or cron registrations
 - cache, websocket, pubsub, metadata, or search integrations
 
+Assistant Platform work is high-risk when it changes grounding, prompt/runtime attribution, visibility filtering, or admin destructive flows. Load the matching assistant skill for the detailed workflow checks.
+
 For schema or migration reviews, explicitly check:
 
 - raw SQL `ALTER` statements are idempotent
@@ -68,6 +77,12 @@ If no findings are discovered:
 - permissions are preserved
 - changed mutations do not leave stale reads behind
 - nearby tests were updated or the missing coverage was called out
+
+For AI Assistant Platform changes, also verify:
+
+- citations only reference retrieved chunks
+- permissions and visibility boundaries are preserved
+- profile/prompt/model attribution still lands in traces
 
 ## Avoid
 

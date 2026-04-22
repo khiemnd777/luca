@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/role"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/staff"
@@ -19,9 +20,21 @@ func SyncDepartmentAdminInTx(ctx context.Context, tx *generated.Tx, adminID, dep
 		return fmt.Errorf("invalid department id")
 	}
 
+	if err := ensureAdminRoleInTx(ctx, tx, adminID); err != nil {
+		return err
+	}
+
+	if err := ensureDepartmentMembershipInTx(ctx, tx, adminID, departmentID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func ensureAdminRoleInTx(ctx context.Context, tx *generated.Tx, userID int) error {
 	exists, err := tx.User.Query().
 		Where(
-			user.IDEQ(adminID),
+			user.IDEQ(userID),
 			user.DeletedAtIsNil(),
 			user.HasRolesWith(role.RoleNameEQ("admin")),
 		).
@@ -29,15 +42,49 @@ func SyncDepartmentAdminInTx(ctx context.Context, tx *generated.Tx, adminID, dep
 	if err != nil {
 		return err
 	}
-	if !exists {
-		return fmt.Errorf("admin user not found")
+	if exists {
+		return nil
 	}
 
-	if err := ensureDepartmentMembershipInTx(ctx, tx, adminID, departmentID); err != nil {
+	adminRole, err := tx.Role.Query().
+		Where(role.RoleNameEQ("admin")).
+		Only(ctx)
+	if err != nil {
 		return err
 	}
 
-	return ensureStaffInDepartmentInTx(ctx, tx, adminID, departmentID)
+	return tx.User.UpdateOneID(userID).
+		AddRoleIDs(adminRole.ID).
+		Exec(ctx)
+}
+
+func removeAdminRoleIfUnusedInTx(ctx context.Context, tx *generated.Tx, userID int, excludedDepartmentID int) error {
+	hasOtherAdminDepartment, err := tx.Department.Query().
+		Where(
+			department.AdministratorIDEQ(userID),
+			department.IDNEQ(excludedDepartmentID),
+		).
+		Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if hasOtherAdminDepartment {
+		return nil
+	}
+
+	adminRole, err := tx.Role.Query().
+		Where(role.RoleNameEQ("admin")).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	return tx.User.UpdateOneID(userID).
+		RemoveRoleIDs(adminRole.ID).
+		Exec(ctx)
 }
 
 func ensureDepartmentMembershipInTx(ctx context.Context, tx *generated.Tx, userID, departmentID int) error {

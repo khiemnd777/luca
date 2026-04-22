@@ -11,6 +11,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/role"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/section"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/staff"
@@ -29,7 +30,8 @@ type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error)
-	AssignAdminToDepartment(ctx context.Context, adminID int, departmentID int) error
+	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error)
+	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) (int, error)
 	ChangePassword(ctx context.Context, id int, newPassword string) error
 	GetByID(ctx context.Context, id int) (*model.StaffDTO, error)
 	CheckPhoneExists(ctx context.Context, userID int, phone string) (bool, error)
@@ -46,6 +48,11 @@ type staffRepo struct {
 	db    *generated.Client
 	deps  *module.ModuleDeps[config.ModuleConfig]
 	cfMgr *customfields.Manager
+}
+
+type AdminAssignmentResult struct {
+	PreviousAdminID *int
+	CurrentAdminID  int
 }
 
 func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
@@ -409,24 +416,15 @@ func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, staffID int, de
 	return r.GetByID(ctx, staffID)
 }
 
-func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, adminID int, departmentID int) error {
-	isAdmin, err := r.db.User.Query().
-		Where(
-			user.IDEQ(adminID),
-			user.DeletedAtIsNil(),
-			user.HasRolesWith(role.RoleNameEQ("admin")),
-		).
-		Exist(ctx)
+func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error) {
+	adminID, err := r.getDepartmentStaffUserID(ctx, staffID, departmentID)
 	if err != nil {
-		return err
-	}
-	if !isAdmin {
-		return fmt.Errorf("user is not admin")
+		return nil, err
 	}
 
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() {
 		if err != nil {
@@ -436,13 +434,117 @@ func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, adminID int, de
 		}
 	}()
 
+	deptEnt, err := tx.Department.Query().
+		Where(department.IDEQ(departmentID)).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, fmt.Errorf("department not found")
+		}
+		return nil, err
+	}
+
+	previousAdminID := deptEnt.AdministratorID
+
 	if _, err = tx.Department.UpdateOneID(departmentID).
 		SetAdministratorID(adminID).
 		Save(ctx); err != nil {
-		return err
+		return nil, err
 	}
 
-	return SyncDepartmentAdminInTx(ctx, tx, adminID, departmentID)
+	if err = SyncDepartmentAdminInTx(ctx, tx, adminID, departmentID); err != nil {
+		return nil, err
+	}
+
+	if previousAdminID != nil && *previousAdminID > 0 && *previousAdminID != adminID {
+		if err = removeAdminRoleIfUnusedInTx(ctx, tx, *previousAdminID, departmentID); err != nil {
+			return nil, err
+		}
+	}
+
+	return &AdminAssignmentResult{
+		PreviousAdminID: previousAdminID,
+		CurrentAdminID:  adminID,
+	}, nil
+}
+
+func (r *staffRepo) UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) (int, error) {
+	adminID, err := r.getDepartmentStaffUserID(ctx, staffID, departmentID)
+	if err != nil {
+		return 0, err
+	}
+
+	tx, err := r.db.Tx(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	deptEnt, err := tx.Department.Query().
+		Where(
+			department.IDEQ(departmentID),
+			department.AdministratorIDEQ(adminID),
+		).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return 0, fmt.Errorf("staff is not the department admin")
+		}
+		return 0, err
+	}
+
+	if err = tx.Department.UpdateOneID(deptEnt.ID).
+		ClearAdministratorID().
+		Exec(ctx); err != nil {
+		return 0, err
+	}
+
+	if err = removeAdminRoleIfUnusedInTx(ctx, tx, adminID, departmentID); err != nil {
+		return 0, err
+	}
+
+	return adminID, nil
+}
+
+func (r *staffRepo) getDepartmentStaffUserID(ctx context.Context, staffIdentifier int, departmentID int) (int, error) {
+	userEnt, err := r.db.User.Query().
+		Where(
+			user.IDEQ(staffIdentifier),
+			user.DeletedAtIsNil(),
+			user.HasStaffWith(staff.DepartmentIDEQ(departmentID)),
+		).
+		Only(ctx)
+	if err != nil {
+		if !generated.IsNotFound(err) {
+			return 0, err
+		}
+	} else {
+		return userEnt.ID, nil
+	}
+
+	staffEnt, err := r.db.Staff.Query().
+		Where(
+			staff.IDEQ(staffIdentifier),
+			staff.DepartmentIDEQ(departmentID),
+		).
+		WithUser().
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return 0, fmt.Errorf("staff not found")
+		}
+		return 0, err
+	}
+	if staffEnt.Edges.User == nil || staffEnt.Edges.User.DeletedAt != nil {
+		return 0, fmt.Errorf("user not found")
+	}
+	return staffEnt.Edges.User.ID, nil
 }
 
 func (r *staffRepo) ChangePassword(ctx context.Context, id int, newPassword string) error {
@@ -534,6 +636,7 @@ func (r *staffRepo) List(ctx context.Context, deptID int, query table.TableQuery
 				user.DeletedAtIsNil(),
 				user.HasStaffWith(staff.DepartmentIDEQ(deptID)),
 			).
+			WithRoles().
 			WithStaff(func(sq *generated.StaffQuery) {
 				sq.WithSections(func(ssq *generated.StaffSectionQuery) {
 					ssq.WithSection()
@@ -557,6 +660,10 @@ func (r *staffRepo) List(ctx context.Context, deptID int, query table.TableQuery
 			for _, u := range src {
 				dto := mapper.MapAs[*generated.User, *model.StaffDTO](u)
 				dto.DepartmentID = deptByUserID[u.ID]
+				for _, roleEnt := range u.Edges.Roles {
+					dto.RoleIDs = append(dto.RoleIDs, roleEnt.ID)
+					dto.RoleNames = append(dto.RoleNames, roleEnt.RoleName)
+				}
 				if u.Edges.Staff != nil {
 					st := u.Edges.Staff
 

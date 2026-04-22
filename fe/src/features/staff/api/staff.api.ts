@@ -6,6 +6,13 @@ import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
 import type { SearchOpts, SearchResult } from "@core/types/search.types";
 
+function staffDeptPath(departmentId?: number): string {
+  const { departmentApiPath } = useAuthStore.getState();
+  const current = departmentApiPath();
+  if (!departmentId || departmentId <= 0) return current;
+  return current.replace(/\/\d+$/, `/${departmentId}`);
+}
+
 export async function getBySectionId(sectionId: number | undefined, tableOpts: FetchTableOpts): Promise<ListResult<StaffModel>> {
   sectionId = sectionId === undefined ? - 1 : sectionId;
   const { departmentApiPath } = useAuthStore.getState();
@@ -44,8 +51,13 @@ export async function searchWithRoleName(roleName: string, opts: SearchOpts): Pr
 
 // general api
 export async function table(tableOpts: FetchTableOpts): Promise<ListResult<StaffModel>> {
+  return tableByDepartment(undefined, tableOpts);
+}
+
+export async function tableByDepartment(departmentId: number | undefined, tableOpts: FetchTableOpts): Promise<ListResult<StaffModel>> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.getTable<any[]>(`${departmentApiPath()}/staff/list`, tableOpts);
+  const basePath = departmentId && departmentId > 0 ? staffDeptPath(departmentId) : departmentApiPath();
+  const { data } = await apiClient.getTable<any[]>(`${basePath}/staff/list`, tableOpts);
   const result = mapper.map<any[], ListResult<StaffModel>>("Staff", data, "dto_to_model");
   return result;
 }
@@ -65,8 +77,13 @@ export async function id(id: number): Promise<StaffModel> {
 }
 
 export async function create(model: StaffModel): Promise<void> {
+  return createForDepartment(undefined, model);
+}
+
+export async function createForDepartment(departmentId: number | undefined, model: StaffModel): Promise<void> {
   const { departmentApiPath } = useAuthStore.getState();
-  await apiClient.post<any>(`${departmentApiPath()}/staff`, model);
+  const basePath = departmentId && departmentId > 0 ? staffDeptPath(departmentId) : departmentApiPath();
+  await apiClient.post<any>(`${basePath}/staff`, model);
 }
 
 export async function update(model: StaffModel): Promise<void> {
@@ -84,13 +101,25 @@ export async function assignDepartment(staffId: number, departmentId: number): P
 }
 
 export async function assignAdminToDepartment(staffId: number, departmentId: number): Promise<void> {
-  const { departmentApiPath } = useAuthStore.getState();
-  await apiClient.post<any>(`${departmentApiPath()}/staff/${staffId}/assign-admin-department`, {
+  const basePath = staffDeptPath(departmentId);
+  await apiClient.post<any>(`${basePath}/staff/${staffId}/assign-admin-department`, {
+    department_id: departmentId,
+  });
+}
+
+export async function unassignAdminFromDepartment(staffId: number, departmentId: number): Promise<void> {
+  const basePath = staffDeptPath(departmentId);
+  await apiClient.post<any>(`${basePath}/staff/${staffId}/unassign-admin-department`, {
     department_id: departmentId,
   });
 }
 
 export async function unlink(id: number): Promise<void> {
+  return unlinkFromDepartment(undefined, id);
+}
+
+export async function unlinkFromDepartment(departmentId: number | undefined, id: number): Promise<void> {
   const { departmentApiPath } = useAuthStore.getState();
-  await apiClient.delete<any>(`${departmentApiPath()}/staff/${id}`);
+  const basePath = departmentId && departmentId > 0 ? staffDeptPath(departmentId) : departmentApiPath();
+  await apiClient.delete<any>(`${basePath}/staff/${id}`);
 }

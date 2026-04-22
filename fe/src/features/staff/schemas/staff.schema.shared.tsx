@@ -3,7 +3,7 @@ import type { FormSchema } from "@core/form/form.types";
 import { uploadImages } from "@core/form/image-upload-utils";
 import { mapper } from "@core/mapper/auto-mapper";
 import type { StaffModel } from "@features/staff/model/staff.model";
-import { create, existsEmail, existsPhone, id, update } from "@features/staff/api/staff.api";
+import { create, createForDepartment, existsEmail, existsPhone, id, update } from "@features/staff/api/staff.api";
 import { reloadTable } from "@core/table/table-reload";
 import { search as searchSection, tableByStaffId } from "@features/section/api/section.api";
 import { openFormDialog } from "@core/form/form-dialog.service";
@@ -12,6 +12,8 @@ import { fetchRolesByUserId, search as searchRoles } from "@root/features/rbac/a
 type Options = {
   withPassword: boolean;
   passwordRequired?: boolean;
+  createDepartmentId?: number;
+  reloadTableNames?: string[];
 };
 
 function passwordField(opts: Options): FieldDef {
@@ -57,6 +59,7 @@ function commonFields(): FieldDef[] {
       kind: "text",
       placeholder: "+84xxxxxxxxx",
       rules: {
+        required: "Yêu cầu nhập số điện thoại",
         async: async (val: string | null, { id }) => {
           if (!val) return null;
           const ok = /^\+?\d{8,15}$/.test(val);
@@ -181,8 +184,16 @@ export function buildStaffSchemaShared(opts: Options): FormSchema {
       create: {
         type: "fn",
         run: async (values) => {
-          await create(values.dto as StaffModel);
-          return values.dto;
+          const dto = values.dto as StaffModel;
+          const resolvedDepartmentId = opts.createDepartmentId && opts.createDepartmentId > 0
+            ? opts.createDepartmentId
+            : Number(dto.departmentId ?? 0);
+          if (resolvedDepartmentId > 0) {
+            await createForDepartment(resolvedDepartmentId, dto);
+          } else {
+            await create(dto);
+          }
+          return dto;
         },
       },
       update: {
@@ -210,7 +221,8 @@ export function buildStaffSchemaShared(opts: Options): FormSchema {
       return {};
     },
     async afterSaved() {
-      reloadTable("staffs");
+      const tableNames = new Set(["staffs", ...(opts.reloadTableNames ?? [])]);
+      tableNames.forEach((tableName) => reloadTable(tableName));
     },
     hooks: {
       mapToDto: (v) => mapper.map("Staff", v, "model_to_dto"),
