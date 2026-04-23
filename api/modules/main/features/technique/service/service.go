@@ -6,6 +6,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/technique/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
@@ -26,6 +27,10 @@ type techniqueService struct {
 	repo repository.TechniqueRepository
 	deps *module.ModuleDeps[config.ModuleConfig]
 }
+
+type ErrConflict string
+
+func (e ErrConflict) Error() string { return string(e) }
 
 func NewTechniqueService(repo repository.TechniqueRepository, deps *module.ModuleDeps[config.ModuleConfig]) TechniqueService {
 	return &techniqueService{repo: repo, deps: deps}
@@ -77,6 +82,9 @@ func kTechniqueSearch(deptID int, categoryID *int, q dbutils.SearchQuery) string
 func (s *techniqueService) Create(ctx context.Context, deptID int, input model.TechniqueDTO) (*model.TechniqueDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("technique code already exists")
+		}
 		return nil, err
 	}
 
@@ -93,6 +101,9 @@ func (s *techniqueService) Create(ctx context.Context, deptID int, input model.T
 func (s *techniqueService) Update(ctx context.Context, deptID int, input model.TechniqueDTO) (*model.TechniqueDTO, error) {
 	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("technique code already exists")
+		}
 		return nil, err
 	}
 

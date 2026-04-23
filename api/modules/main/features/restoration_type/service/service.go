@@ -6,6 +6,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/restoration_type/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
@@ -27,12 +28,16 @@ type restorationTypeService struct {
 	deps *module.ModuleDeps[config.ModuleConfig]
 }
 
+type ErrConflict string
+
+func (e ErrConflict) Error() string { return string(e) }
+
 func NewRestorationTypeService(repo repository.RestorationTypeRepository, deps *module.ModuleDeps[config.ModuleConfig]) RestorationTypeService {
 	return &restorationTypeService{repo: repo, deps: deps}
 }
 
-func kRestorationTypeByID(id int) string {
-	return fmt.Sprintf("restoration_type:id:%d", id)
+func kRestorationTypeByID(deptID int, id int) string {
+	return fmt.Sprintf("restoration_type:dpt%d:id:%d", deptID, id)
 }
 
 func kRestorationTypeAll(deptID int) []string {
@@ -77,11 +82,14 @@ func kRestorationTypeSearch(deptID int, categoryID *int, q dbutils.SearchQuery) 
 func (s *restorationTypeService) Create(ctx context.Context, deptID int, input model.RestorationTypeDTO) (*model.RestorationTypeDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("restoration type code already exists")
+		}
 		return nil, err
 	}
 
 	if dto != nil && dto.ID > 0 {
-		cache.InvalidateKeys(kRestorationTypeByID(dto.ID))
+		cache.InvalidateKeys(kRestorationTypeByID(deptID, dto.ID))
 	}
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
 
@@ -93,11 +101,14 @@ func (s *restorationTypeService) Create(ctx context.Context, deptID int, input m
 func (s *restorationTypeService) Update(ctx context.Context, deptID int, input model.RestorationTypeDTO) (*model.RestorationTypeDTO, error) {
 	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("restoration type code already exists")
+		}
 		return nil, err
 	}
 
 	if dto != nil {
-		cache.InvalidateKeys(kRestorationTypeByID(dto.ID))
+		cache.InvalidateKeys(kRestorationTypeByID(deptID, dto.ID))
 	}
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
 
@@ -115,7 +126,7 @@ func (s *restorationTypeService) unlinkSearch(ctx context.Context, id int) {
 }
 
 func (s *restorationTypeService) GetByID(ctx context.Context, deptID, id int) (*model.RestorationTypeDTO, error) {
-	return cache.Get(kRestorationTypeByID(id), cache.TTLMedium, func() (*model.RestorationTypeDTO, error) {
+	return cache.Get(kRestorationTypeByID(deptID, id), cache.TTLMedium, func() (*model.RestorationTypeDTO, error) {
 		return s.repo.GetByID(ctx, deptID, id)
 	})
 }
@@ -139,11 +150,11 @@ func (s *restorationTypeService) List(ctx context.Context, deptID int, categoryI
 }
 
 func (s *restorationTypeService) Delete(ctx context.Context, deptID int, id int) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
+	if err := s.repo.Delete(ctx, deptID, id); err != nil {
 		return err
 	}
 	cache.InvalidateKeys(kRestorationTypeAll(deptID)...)
-	cache.InvalidateKeys(kRestorationTypeByID(id))
+	cache.InvalidateKeys(kRestorationTypeByID(deptID, id))
 
 	s.unlinkSearch(ctx, id)
 	return nil

@@ -6,6 +6,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/category"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/rawmaterial"
@@ -25,12 +26,13 @@ type RawMaterialRepository interface {
 }
 
 type rawMaterialRepo struct {
-	db   *generated.Client
-	deps *module.ModuleDeps[config.ModuleConfig]
+	db      *generated.Client
+	deps    *module.ModuleDeps[config.ModuleConfig]
+	codeSvc catalogrefcode.Service
 }
 
-func NewRawMaterialRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig]) RawMaterialRepository {
-	return &rawMaterialRepo{db: db, deps: deps}
+func NewRawMaterialRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], codeSvc catalogrefcode.Service) RawMaterialRepository {
+	return &rawMaterialRepo{db: db, deps: deps, codeSvc: codeSvc}
 }
 
 func (r *rawMaterialRepo) Create(ctx context.Context, deptID int, input model.RawMaterialDTO) (*model.RawMaterialDTO, error) {
@@ -48,6 +50,18 @@ func (r *rawMaterialRepo) Create(ctx context.Context, deptID int, input model.Ra
 				_ = tx.Commit()
 			}
 		}()
+	}
+
+	code := r.codeSvc.Normalize(input.Code)
+	if code == nil {
+		nextCode, err := r.codeSvc.Next(ctx, tx, catalogrefcode.Scope{
+			DepartmentID: deptID,
+			Module:       catalogrefcode.ModuleRawMaterial,
+		})
+		if err != nil {
+			return nil, err
+		}
+		code = &nextCode
 	}
 
 	categoryName := input.CategoryName
@@ -68,6 +82,7 @@ func (r *rawMaterialRepo) Create(ctx context.Context, deptID int, input model.Ra
 		SetNillableDepartmentID(&deptID).
 		SetNillableCategoryID(input.CategoryID).
 		SetNillableCategoryName(categoryName).
+		SetNillableCode(code).
 		SetNillableName(input.Name).
 		Save(ctx)
 	if err != nil {
@@ -95,6 +110,7 @@ func (r *rawMaterialRepo) Update(ctx context.Context, deptID int, input model.Ra
 		}()
 	}
 
+	code := r.codeSvc.Normalize(input.Code)
 	categoryName := input.CategoryName
 	if categoryName == nil && input.CategoryID != nil {
 		cat, err := tx.Category.Query().
@@ -113,6 +129,7 @@ func (r *rawMaterialRepo) Update(ctx context.Context, deptID int, input model.Ra
 		SetNillableDepartmentID(&deptID).
 		SetNillableCategoryID(input.CategoryID).
 		SetNillableCategoryName(categoryName).
+		SetNillableCode(code).
 		SetNillableName(input.Name).
 		Save(ctx)
 	if err != nil {
@@ -181,6 +198,7 @@ func (r *rawMaterialRepo) Search(ctx context.Context, deptID int, categoryID *in
 		ctx,
 		q,
 		[]string{
+			dbutils.GetNormField(rawmaterial.FieldCode),
 			dbutils.GetNormField(rawmaterial.FieldName),
 		},
 		query,

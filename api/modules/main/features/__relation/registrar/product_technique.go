@@ -17,7 +17,7 @@ func init() {
 
 			RefList: &policy.RefListConfig{
 				Permissions: []string{"product.view"},
-				RefFields:   []string{"id", "category_id", "name"},
+				RefFields:   []string{"id", "category_id", "code", "name"},
 				CachePrefix: "technique:list",
 			},
 		},
@@ -25,8 +25,8 @@ func init() {
 
 	policy.RegisterRefSearch("products_techniques", policy.ConfigSearch{
 		RefTable:    "techniques",
-		NormFields:  []string{"name"},
-		RefFields:   []string{"id", "category_id", "name"},
+		NormFields:  []string{"code", "name"},
+		RefFields:   []string{"id", "category_id", "code", "name"},
 		Permissions: []string{"product.search"},
 		CachePrefix: "technique:search",
 	})

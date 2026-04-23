@@ -16,7 +16,7 @@ func BuildTechniqueSearchDoc(deptID int, dto *model.TechniqueDTO) *searchmodel.D
 		return nil
 	}
 
-	keywords := joinSearchParts("|", *dto.Name, utils.DerefString(dto.CategoryName))
+	keywords := joinSearchParts("|", utils.DerefString(dto.Code), *dto.Name, utils.DerefString(dto.CategoryName))
 
 	return &searchmodel.Doc{
 		EntityType: techniqueSearchEntityType,
@@ -25,7 +25,7 @@ func BuildTechniqueSearchDoc(deptID int, dto *model.TechniqueDTO) *searchmodel.D
 		Subtitle:   dto.CategoryName,
 		Keywords:   utils.Ptr(keywords),
 		Content:    nil,
-		Attributes: map[string]any{},
+		Attributes: map[string]any{"code": utils.DerefString(dto.Code)},
 		OrgID:      utils.Ptr(int64(deptID)),
 		OwnerID:    nil,
 	}

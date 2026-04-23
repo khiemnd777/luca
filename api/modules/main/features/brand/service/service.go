@@ -7,6 +7,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/modules/main/features/brand/repository"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/module"
@@ -26,6 +27,10 @@ type brandNameService struct {
 	repo repository.BrandNameRepository
 	deps *module.ModuleDeps[config.ModuleConfig]
 }
+
+type ErrConflict string
+
+func (e ErrConflict) Error() string { return string(e) }
 
 func NewBrandNameService(repo repository.BrandNameRepository, deps *module.ModuleDeps[config.ModuleConfig]) BrandNameService {
 	return &brandNameService{repo: repo, deps: deps}
@@ -77,6 +82,9 @@ func kBrandNameSearch(deptID int, categoryID *int, q dbutils.SearchQuery) string
 func (s *brandNameService) Create(ctx context.Context, deptID int, input model.BrandNameDTO) (*model.BrandNameDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("brand code already exists")
+		}
 		return nil, err
 	}
 
@@ -93,6 +101,9 @@ func (s *brandNameService) Create(ctx context.Context, deptID int, input model.B
 func (s *brandNameService) Update(ctx context.Context, deptID int, input model.BrandNameDTO) (*model.BrandNameDTO, error) {
 	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("brand code already exists")
+		}
 		return nil, err
 	}
 

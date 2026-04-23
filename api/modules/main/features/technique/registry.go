@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/technique/handler"
 	"github.com/khiemnd777/noah_api/modules/main/features/technique/repository"
 	"github.com/khiemnd777/noah_api/modules/main/features/technique/service"
@@ -19,12 +20,13 @@ func (feature) ID() string    { return "technique" }
 func (feature) Priority() int { return 90 }
 
 func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) error {
-	repo := repository.NewTechniqueRepository(deps.Ent.(*generated.Client), deps)
+	codeSvc := catalogrefcode.NewService()
+	repo := repository.NewTechniqueRepository(deps.Ent.(*generated.Client), deps, codeSvc)
 	svc := service.NewTechniqueService(repo, deps)
 	h := handler.NewTechniqueHandler(svc, deps)
 	h.RegisterRoutes(router)
 
-	importRepo := repository.NewTechniqueImportRepository(deps.DB)
+	importRepo := repository.NewTechniqueImportRepository(deps.DB, codeSvc)
 	importSvc := service.NewTechniqueImportService(importRepo, deps.DB)
 	importHandler := handler.NewTechniqueImportHandler(importSvc, deps)
 	importHandler.RegisterRoutes(router)
