@@ -6,6 +6,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/category"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/technique"
@@ -25,12 +26,13 @@ type TechniqueRepository interface {
 }
 
 type techniqueRepo struct {
-	db   *generated.Client
-	deps *module.ModuleDeps[config.ModuleConfig]
+	db      *generated.Client
+	deps    *module.ModuleDeps[config.ModuleConfig]
+	codeSvc catalogrefcode.Service
 }
 
-func NewTechniqueRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig]) TechniqueRepository {
-	return &techniqueRepo{db: db, deps: deps}
+func NewTechniqueRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], codeSvc catalogrefcode.Service) TechniqueRepository {
+	return &techniqueRepo{db: db, deps: deps, codeSvc: codeSvc}
 }
 
 func (r *techniqueRepo) Create(ctx context.Context, deptID int, input model.TechniqueDTO) (*model.TechniqueDTO, error) {
@@ -48,6 +50,18 @@ func (r *techniqueRepo) Create(ctx context.Context, deptID int, input model.Tech
 				_ = tx.Commit()
 			}
 		}()
+	}
+
+	code := r.codeSvc.Normalize(input.Code)
+	if code == nil {
+		nextCode, err := r.codeSvc.Next(ctx, tx, catalogrefcode.Scope{
+			DepartmentID: deptID,
+			Module:       catalogrefcode.ModuleTechnique,
+		})
+		if err != nil {
+			return nil, err
+		}
+		code = &nextCode
 	}
 
 	categoryName := input.CategoryName
@@ -68,6 +82,7 @@ func (r *techniqueRepo) Create(ctx context.Context, deptID int, input model.Tech
 		SetNillableDepartmentID(&deptID).
 		SetNillableCategoryID(input.CategoryID).
 		SetNillableCategoryName(categoryName).
+		SetNillableCode(code).
 		SetNillableName(input.Name).
 		Save(ctx)
 	if err != nil {
@@ -95,6 +110,7 @@ func (r *techniqueRepo) Update(ctx context.Context, deptID int, input model.Tech
 		}()
 	}
 
+	code := r.codeSvc.Normalize(input.Code)
 	categoryName := input.CategoryName
 	if categoryName == nil && input.CategoryID != nil {
 		cat, err := tx.Category.Query().
@@ -113,6 +129,7 @@ func (r *techniqueRepo) Update(ctx context.Context, deptID int, input model.Tech
 		SetNillableDepartmentID(&deptID).
 		SetNillableCategoryID(input.CategoryID).
 		SetNillableCategoryName(categoryName).
+		SetNillableCode(code).
 		SetNillableName(input.Name).
 		Save(ctx)
 	if err != nil {
@@ -181,6 +198,7 @@ func (r *techniqueRepo) Search(ctx context.Context, deptID int, categoryID *int,
 		ctx,
 		q,
 		[]string{
+			dbutils.GetNormField(technique.FieldCode),
 			dbutils.GetNormField(technique.FieldName),
 		},
 		query,

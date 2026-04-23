@@ -31,6 +31,10 @@ func (RawMaterial) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		field.String("code").
+			Optional().
+			Nillable(),
+
 		field.Time("created_at").
 			Default(time.Now).
 			Immutable(),
@@ -55,6 +59,7 @@ func (RawMaterial) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("department_id", "id", "deleted_at"),
 		index.Fields("department_id", "category_id", "deleted_at"),
+		index.Fields("department_id", "code", "deleted_at"),
 		index.Fields("department_id", "name", "deleted_at"),
 		index.Fields("deleted_at"),
 	}

@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/raw_material/handler"
 	"github.com/khiemnd777/noah_api/modules/main/features/raw_material/repository"
 	"github.com/khiemnd777/noah_api/modules/main/features/raw_material/service"
@@ -19,12 +20,13 @@ func (feature) ID() string    { return "raw_material" }
 func (feature) Priority() int { return 90 }
 
 func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) error {
-	repo := repository.NewRawMaterialRepository(deps.Ent.(*generated.Client), deps)
+	codeSvc := catalogrefcode.NewService()
+	repo := repository.NewRawMaterialRepository(deps.Ent.(*generated.Client), deps, codeSvc)
 	svc := service.NewRawMaterialService(repo, deps)
 	h := handler.NewRawMaterialHandler(svc, deps)
 	h.RegisterRoutes(router)
 
-	importRepo := repository.NewRawMaterialImportRepository(deps.DB)
+	importRepo := repository.NewRawMaterialImportRepository(deps.DB, codeSvc)
 	importSvc := service.NewRawMaterialImportService(importRepo, deps.DB)
 	importHandler := handler.NewRawMaterialImportHandler(importSvc, deps)
 	importHandler.RegisterRoutes(router)

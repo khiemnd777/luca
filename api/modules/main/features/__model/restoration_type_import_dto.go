@@ -2,6 +2,7 @@ package model
 
 type RestorationTypeExcelRow struct {
 	CategoryName string `json:"category_name"`
+	Code         string `json:"code,omitempty"`
 	Name         string `json:"name"`
 }
 

@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/product/handler"
 	"github.com/khiemnd777/noah_api/modules/main/features/product/repository"
 	"github.com/khiemnd777/noah_api/modules/main/features/product/service"
@@ -24,7 +25,7 @@ func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.Modu
 	h := handler.NewProductHandler(svc, deps)
 	h.RegisterRoutes(router)
 
-	importRepo := repository.NewProductImportRepository(deps.DB)
+	importRepo := repository.NewProductImportRepository(deps.DB, catalogrefcode.NewService())
 	importSvc := service.NewProductImportService(importRepo, svc)
 	importHandler := handler.NewProductImportHandler(importSvc, deps)
 	importHandler.RegisterRoutes(router)

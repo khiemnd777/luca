@@ -6,24 +6,27 @@ import (
 	"errors"
 	"strings"
 
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/lib/pq"
 )
 
 type RawMaterialImportRepository interface {
 	GetCategoryByName(ctx context.Context, deptID int, name string) (id int, categoryName string, err error)
-	GetOrCreateRawMaterial(ctx context.Context, deptID, categoryID int, categoryName, name string) (id int, created bool, err error)
+	GetOrCreateRawMaterial(ctx context.Context, deptID, categoryID int, categoryName, code, name string) (id int, resolvedCode string, created bool, err error)
 }
 
 type rawMaterialImportRepo struct {
-	db *sql.DB
+	db      *sql.DB
+	codeSvc catalogrefcode.Service
 }
 
-func NewRawMaterialImportRepository(db *sql.DB) RawMaterialImportRepository {
-	return &rawMaterialImportRepo{db: db}
+func NewRawMaterialImportRepository(db *sql.DB, codeSvc catalogrefcode.Service) RawMaterialImportRepository {
+	return &rawMaterialImportRepo{db: db, codeSvc: codeSvc}
 }
 
 type sqlRunner interface {
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
@@ -51,34 +54,67 @@ func (r *rawMaterialImportRepo) GetCategoryByName(ctx context.Context, deptID in
 	return id, categoryName, runner.QueryRowContext(ctx, query, name, deptID).Scan(&id, &categoryName)
 }
 
-func (r *rawMaterialImportRepo) GetOrCreateRawMaterial(ctx context.Context, deptID, categoryID int, categoryName, name string) (int, bool, error) {
-	id, err := r.selectByCategoryAndName(ctx, deptID, categoryID, name)
+func (r *rawMaterialImportRepo) GetOrCreateRawMaterial(ctx context.Context, deptID, categoryID int, categoryName, code, name string) (int, string, bool, error) {
+	codePtr := r.codeSvc.Normalize(&code)
+	if codePtr == nil {
+		nextCode, err := r.codeSvc.Next(ctx, r.runner(ctx), catalogrefcode.Scope{
+			DepartmentID: deptID,
+			Module:       catalogrefcode.ModuleRawMaterial,
+		})
+		if err != nil {
+			return 0, "", false, err
+		}
+		codePtr = &nextCode
+	}
+
+	id, err := r.selectByCode(ctx, deptID, *codePtr)
 	if err == nil && id > 0 {
-		return id, false, nil
+		return id, *codePtr, false, nil
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
+		return 0, "", false, err
+	}
+
+	id, err = r.selectByCategoryAndName(ctx, deptID, categoryID, name)
+	if err == nil && id > 0 {
+		return id, "", false, nil
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return 0, "", false, err
 	}
 
 	query := `
-		INSERT INTO raw_materials (department_id, category_id, category_name, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		INSERT INTO raw_materials (department_id, category_id, category_name, code, name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		RETURNING id
 	`
 
 	runner := r.runner(ctx)
-	if err := runner.QueryRowContext(ctx, query, deptID, categoryID, categoryName, name).Scan(&id); err != nil {
+	if err := runner.QueryRowContext(ctx, query, deptID, categoryID, categoryName, *codePtr, name).Scan(&id); err != nil {
 		if isUniqueViolation(err) {
-			id, selErr := r.selectByCategoryAndName(ctx, deptID, categoryID, name)
+			id, selErr := r.selectByCode(ctx, deptID, *codePtr)
 			if selErr != nil {
-				return 0, false, selErr
+				return 0, "", false, selErr
 			}
-			return id, false, nil
+			return id, *codePtr, false, nil
 		}
-		return 0, false, err
+		return 0, "", false, err
 	}
 
-	return id, true, nil
+	return id, *codePtr, true, nil
+}
+
+func (r *rawMaterialImportRepo) selectByCode(ctx context.Context, deptID int, code string) (int, error) {
+	query := `
+	SELECT id
+	FROM raw_materials
+	WHERE department_id = $1 AND code_norm = lower(unaccent_immutable($2)) AND deleted_at IS NULL
+	LIMIT 1
+`
+
+	var id int
+	runner := r.runner(ctx)
+	return id, runner.QueryRowContext(ctx, query, deptID, code).Scan(&id)
 }
 
 func (r *rawMaterialImportRepo) selectByCategoryAndName(ctx context.Context, deptID, categoryID int, name string) (int, error) {

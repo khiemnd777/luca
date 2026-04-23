@@ -154,10 +154,10 @@ func TestDepartmentSyncerApplySnapshotRemapsProductRelations(t *testing.T) {
 			{ID: 10, Name: "Crown", Level: 1, Active: true, ProcessNames: []string{"Wax"}},
 		},
 		sourceRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
-			moduleBrand:           {{Name: "Ivoclar", CategoryName: "Crown", CategoryPath: "Crown"}},
-			moduleRawMaterial:     {{Name: "Zirconia", CategoryName: "Crown", CategoryPath: "Crown"}},
-			moduleTechnique:       {{Name: "CAD/CAM", CategoryName: "Crown", CategoryPath: "Crown"}},
-			moduleRestorationType: {{Name: "Full Contour", CategoryName: "Crown", CategoryPath: "Crown"}},
+			moduleBrand:           {{Name: "Ivoclar", Code: "11111111-1111-4111-8111-111111111111", CategoryName: "Crown", CategoryPath: "Crown"}},
+			moduleRawMaterial:     {{Name: "Zirconia", Code: "22222222-2222-4222-8222-222222222222", CategoryName: "Crown", CategoryPath: "Crown"}},
+			moduleTechnique:       {{Name: "CAD/CAM", Code: "33333333-3333-4333-8333-333333333333", CategoryName: "Crown", CategoryPath: "Crown"}},
+			moduleRestorationType: {{Name: "Full Contour", Code: "44444444-4444-4444-8444-444444444444", CategoryName: "Crown", CategoryPath: "Crown"}},
 		},
 		targetRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
 			moduleBrand:           {},
@@ -172,9 +172,13 @@ func TestDepartmentSyncerApplySnapshotRemapsProductRelations(t *testing.T) {
 				CategoryName:         stringPtr("Crown"),
 				CategoryLV1:          stringPtr("Crown"),
 				ProcessNames:         []string{"Wax"},
+				BrandNameCodes:       []string{"11111111-1111-4111-8111-111111111111"},
 				BrandNameNames:       []string{"Ivoclar"},
+				RawMaterialCodes:     []string{"22222222-2222-4222-8222-222222222222"},
 				RawMaterialNames:     []string{"Zirconia"},
+				TechniqueCodes:       []string{"33333333-3333-4333-8333-333333333333"},
 				TechniqueNames:       []string{"CAD/CAM"},
+				RestorationTypeCodes: []string{"44444444-4444-4444-8444-444444444444"},
 				RestorationTypeNames: []string{"Full Contour"},
 				IsTemplate:           true,
 			},
@@ -184,9 +188,13 @@ func TestDepartmentSyncerApplySnapshotRemapsProductRelations(t *testing.T) {
 				CategoryName:         stringPtr("Crown"),
 				CategoryLV1:          stringPtr("Crown"),
 				ProcessNames:         []string{"Wax"},
+				BrandNameCodes:       []string{"11111111-1111-4111-8111-111111111111"},
 				BrandNameNames:       []string{"Ivoclar"},
+				RawMaterialCodes:     []string{"22222222-2222-4222-8222-222222222222"},
 				RawMaterialNames:     []string{"Zirconia"},
+				TechniqueCodes:       []string{"33333333-3333-4333-8333-333333333333"},
 				TechniqueNames:       []string{"CAD/CAM"},
+				RestorationTypeCodes: []string{"44444444-4444-4444-8444-444444444444"},
 				RestorationTypeNames: []string{"Full Contour"},
 				TemplateCode:         stringPtr("TPL-1"),
 				IsTemplate:           false,
@@ -314,7 +322,7 @@ func TestDepartmentSyncerApplySimpleRefsMatchesByCategoryPath(t *testing.T) {
 		sourceRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
 			moduleBrand: {},
 			moduleRawMaterial: {
-				{ID: 1, CategoryName: "Bar", CategoryPath: "Implant > Bar", Name: "Bar Kim Loại"},
+				{ID: 1, CategoryName: "Bar", CategoryPath: "Implant > Bar", Code: "22222222-2222-4222-8222-222222222222", Name: "Bar Kim Loại"},
 			},
 			moduleTechnique:       {},
 			moduleRestorationType: {},
@@ -322,8 +330,8 @@ func TestDepartmentSyncerApplySimpleRefsMatchesByCategoryPath(t *testing.T) {
 		targetRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
 			moduleBrand: {},
 			moduleRawMaterial: {
-				{ID: 10, CategoryName: "Bar", CategoryPath: "Cố Định > Bar", Name: "Bar Kim Loại"},
-				{ID: 11, CategoryName: "Bar", CategoryPath: "Implant > Bar", Name: "Bar Kim Loại"},
+				{ID: 10, CategoryName: "Bar", CategoryPath: "Cố Định > Bar", Code: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", Name: "Bar Kim Loại"},
+				{ID: 11, CategoryName: "Bar", CategoryPath: "Implant > Bar", Code: "22222222-2222-4222-8222-222222222222", Name: "Bar Kim Loại"},
 			},
 			moduleTechnique:       {},
 			moduleRestorationType: {},
@@ -358,7 +366,7 @@ func TestDepartmentSyncerApplySimpleRefsPrefersExistingUniqueRow(t *testing.T) {
 	syncer := &departmentSyncer{
 		syncRepo: fakeSyncRepo{
 			simpleRefByUnique: map[string]int{
-				"raw_materials|2|163|Bar Kim Loại": 97,
+				"raw_materials|2|22222222-2222-4222-8222-222222222222": 97,
 			},
 		},
 		rawMaterialSvc: rawSvc,
@@ -371,7 +379,7 @@ func TestDepartmentSyncerApplySimpleRefsPrefersExistingUniqueRow(t *testing.T) {
 		sourceRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
 			moduleBrand: {},
 			moduleRawMaterial: {
-				{ID: 1, CategoryName: "Implant", CategoryPath: "Implant", Name: "Bar Kim Loại"},
+				{ID: 1, CategoryName: "Implant", CategoryPath: "Implant", Code: "22222222-2222-4222-8222-222222222222", Name: "Bar Kim Loại"},
 			},
 			moduleTechnique:       {},
 			moduleRestorationType: {},
@@ -379,7 +387,7 @@ func TestDepartmentSyncerApplySimpleRefsPrefersExistingUniqueRow(t *testing.T) {
 		targetRefs: map[syncModuleKey][]deptrepo.DepartmentSyncSimpleRefRecord{
 			moduleBrand: {},
 			moduleRawMaterial: {
-				{ID: 88, CategoryName: "Implant", CategoryPath: "Implant", Name: "Bar Kim Loại"},
+				{ID: 88, CategoryName: "Implant", CategoryPath: "Implant", Code: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", Name: "Bar Kim Loại"},
 			},
 			moduleTechnique:       {},
 			moduleRestorationType: {},
@@ -759,8 +767,8 @@ func (f fakeSyncRepo) ListCollectionFieldSpecs(_ context.Context, collectionID i
 	return append([]categoryrepo.CategoryFieldSpec(nil), f.collectionFields[collectionID]...), nil
 }
 
-func (f fakeSyncRepo) FindSimpleRefID(_ context.Context, table string, deptID int, categoryID int, name string) (*int, error) {
-	key := simpleRefLookupKey(table, deptID, categoryID, name)
+func (f fakeSyncRepo) FindSimpleRefID(_ context.Context, table string, deptID int, categoryID int, code string) (*int, error) {
+	key := simpleRefLookupKey(table, deptID, code)
 	if id, ok := f.simpleRefByUnique[key]; ok {
 		return intPtr(id), nil
 	}
@@ -1321,8 +1329,8 @@ func stringPtr(v string) *string {
 	return &v
 }
 
-func simpleRefLookupKey(table string, deptID int, categoryID int, name string) string {
-	return table + "|" + strconv.Itoa(deptID) + "|" + strconv.Itoa(categoryID) + "|" + name
+func simpleRefLookupKey(table string, deptID int, code string) string {
+	return table + "|" + strconv.Itoa(deptID) + "|" + code
 }
 
 type testTxStats struct {

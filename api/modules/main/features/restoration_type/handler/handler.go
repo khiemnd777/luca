@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -100,6 +102,9 @@ func (h *RestorationTypeHandler) Create(c *fiber.Ctx) error {
 
 	dto, err := h.svc.Create(c.UserContext(), deptID, payload)
 	if err != nil {
+		if errors.Is(err, service.ErrConflict("")) {
+			return client_error.ResponseError(c, fiber.StatusConflict, err, err.Error())
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 
@@ -126,6 +131,9 @@ func (h *RestorationTypeHandler) Update(c *fiber.Ctx) error {
 
 	dto, err := h.svc.Update(c.UserContext(), deptID, payload)
 	if err != nil {
+		if errors.Is(err, service.ErrConflict("")) {
+			return client_error.ResponseError(c, fiber.StatusConflict, err, err.Error())
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 

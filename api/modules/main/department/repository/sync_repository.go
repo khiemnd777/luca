@@ -12,7 +12,7 @@ import (
 type DepartmentSyncRepository interface {
 	ListCategories(ctx context.Context, deptID int) ([]DepartmentSyncCategoryRecord, error)
 	ListSimpleRefs(ctx context.Context, table string, deptID int) ([]DepartmentSyncSimpleRefRecord, error)
-	FindSimpleRefID(ctx context.Context, table string, deptID int, categoryID int, name string) (*int, error)
+	FindSimpleRefID(ctx context.Context, table string, deptID int, categoryID int, code string) (*int, error)
 	ListProcesses(ctx context.Context, deptID int) ([]DepartmentSyncProcessRecord, error)
 	ListSections(ctx context.Context, deptID int) ([]DepartmentSyncSectionRecord, error)
 	ListMaterials(ctx context.Context, deptID int) ([]DepartmentSyncMaterialRecord, error)
@@ -41,6 +41,7 @@ type DepartmentSyncCategoryRecord struct {
 
 type DepartmentSyncSimpleRefRecord struct {
 	ID           int
+	Code         string
 	CategoryName string
 	CategoryPath string
 	Name         string
@@ -85,9 +86,13 @@ type DepartmentSyncProductRecord struct {
 	CostPrice            *float64
 	CustomFields         map[string]any
 	ProcessNames         []string
+	BrandNameCodes       []string
 	BrandNameNames       []string
+	RawMaterialCodes     []string
 	RawMaterialNames     []string
+	TechniqueCodes       []string
 	TechniqueNames       []string
+	RestorationTypeCodes []string
 	RestorationTypeNames []string
 	TemplateID           *int
 	TemplateCode         *string
@@ -144,19 +149,18 @@ func (r *departmentSyncRepo) ListCategories(ctx context.Context, deptID int) ([]
 	return out, rows.Err()
 }
 
-func (r *departmentSyncRepo) FindSimpleRefID(ctx context.Context, table string, deptID int, categoryID int, name string) (*int, error) {
+func (r *departmentSyncRepo) FindSimpleRefID(ctx context.Context, table string, deptID int, categoryID int, code string) (*int, error) {
 	query := `
 		SELECT id
 		FROM ` + table + `
 		WHERE department_id = $1
-			AND category_id = $2
-			AND name = $3
+			AND code_norm = lower(unaccent_immutable($2))
 			AND deleted_at IS NULL
 		LIMIT 1
 	`
 
 	var id int
-	err := r.db.QueryRowContext(ctx, query, deptID, categoryID, name).Scan(&id)
+	err := r.db.QueryRowContext(ctx, query, deptID, code).Scan(&id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -243,6 +247,7 @@ func (r *departmentSyncRepo) ListSimpleRefs(ctx context.Context, table string, d
 				),
 				COALESCE(r.category_name, '')
 			),
+			COALESCE(r.code, ''),
 			COALESCE(r.name, '')
 		FROM ` + table + ` r
 		LEFT JOIN categories c ON c.id = r.category_id
@@ -259,7 +264,7 @@ func (r *departmentSyncRepo) ListSimpleRefs(ctx context.Context, table string, d
 	out := make([]DepartmentSyncSimpleRefRecord, 0)
 	for rows.Next() {
 		var rec DepartmentSyncSimpleRefRecord
-		if err := rows.Scan(&rec.ID, &rec.CategoryName, &rec.CategoryPath, &rec.Name); err != nil {
+		if err := rows.Scan(&rec.ID, &rec.CategoryName, &rec.CategoryPath, &rec.Code, &rec.Name); err != nil {
 			return nil, err
 		}
 		out = append(out, rec)
@@ -395,11 +400,23 @@ func (r *departmentSyncRepo) ListProducts(ctx context.Context, deptID int) ([]De
 				WHERE pp.product_id = p.id
 			), '[]'::json) AS process_names,
 			COALESCE((
+				SELECT json_agg(COALESCE(b.code, '') ORDER BY pbn.id)
+				FROM product_brand_names pbn
+				JOIN brand_names b ON b.id = pbn.brand_name_id
+				WHERE pbn.product_id = p.id
+			), '[]'::json) AS brand_codes,
+			COALESCE((
 				SELECT json_agg(b.name ORDER BY pbn.id)
 				FROM product_brand_names pbn
 				JOIN brand_names b ON b.id = pbn.brand_name_id
 				WHERE pbn.product_id = p.id
 			), '[]'::json) AS brand_names,
+			COALESCE((
+				SELECT json_agg(COALESCE(rm.code, '') ORDER BY prm.id)
+				FROM product_raw_materials prm
+				JOIN raw_materials rm ON rm.id = prm.raw_material_id
+				WHERE prm.product_id = p.id
+			), '[]'::json) AS raw_material_codes,
 			COALESCE((
 				SELECT json_agg(rm.name ORDER BY prm.id)
 				FROM product_raw_materials prm
@@ -407,11 +424,23 @@ func (r *departmentSyncRepo) ListProducts(ctx context.Context, deptID int) ([]De
 				WHERE prm.product_id = p.id
 			), '[]'::json) AS raw_material_names,
 			COALESCE((
+				SELECT json_agg(COALESCE(t.code, '') ORDER BY pt.id)
+				FROM product_techniques pt
+				JOIN techniques t ON t.id = pt.technique_id
+				WHERE pt.product_id = p.id
+			), '[]'::json) AS technique_codes,
+			COALESCE((
 				SELECT json_agg(t.name ORDER BY pt.id)
 				FROM product_techniques pt
 				JOIN techniques t ON t.id = pt.technique_id
 				WHERE pt.product_id = p.id
 			), '[]'::json) AS technique_names,
+			COALESCE((
+				SELECT json_agg(COALESCE(rt.code, '') ORDER BY prt.id)
+				FROM product_restoration_types prt
+				JOIN restoration_types rt ON rt.id = prt.restoration_type_id
+				WHERE prt.product_id = p.id
+			), '[]'::json) AS restoration_type_codes,
 			COALESCE((
 				SELECT json_agg(rt.name ORDER BY prt.id)
 				FROM product_restoration_types prt
@@ -438,9 +467,13 @@ func (r *departmentSyncRepo) ListProducts(ctx context.Context, deptID int) ([]De
 		var rec DepartmentSyncProductRecord
 		var customFieldsRaw []byte
 		var processNamesRaw []byte
+		var brandCodesRaw []byte
 		var brandNamesRaw []byte
+		var rawMaterialCodesRaw []byte
 		var rawMaterialNamesRaw []byte
+		var techniqueCodesRaw []byte
 		var techniqueNamesRaw []byte
+		var restorationTypeCodesRaw []byte
 		var restorationTypeNamesRaw []byte
 		if err := rows.Scan(
 			&rec.ID,
@@ -454,9 +487,13 @@ func (r *departmentSyncRepo) ListProducts(ctx context.Context, deptID int) ([]De
 			&rec.CostPrice,
 			&customFieldsRaw,
 			&processNamesRaw,
+			&brandCodesRaw,
 			&brandNamesRaw,
+			&rawMaterialCodesRaw,
 			&rawMaterialNamesRaw,
+			&techniqueCodesRaw,
 			&techniqueNamesRaw,
+			&restorationTypeCodesRaw,
 			&restorationTypeNamesRaw,
 			&rec.TemplateID,
 			&rec.TemplateCode,
@@ -466,9 +503,13 @@ func (r *departmentSyncRepo) ListProducts(ctx context.Context, deptID int) ([]De
 		}
 		rec.CustomFields = decodeJSONMap(customFieldsRaw)
 		rec.ProcessNames = decodeJSONStringArray(processNamesRaw)
+		rec.BrandNameCodes = decodeJSONStringArray(brandCodesRaw)
 		rec.BrandNameNames = decodeJSONStringArray(brandNamesRaw)
+		rec.RawMaterialCodes = decodeJSONStringArray(rawMaterialCodesRaw)
 		rec.RawMaterialNames = decodeJSONStringArray(rawMaterialNamesRaw)
+		rec.TechniqueCodes = decodeJSONStringArray(techniqueCodesRaw)
 		rec.TechniqueNames = decodeJSONStringArray(techniqueNamesRaw)
+		rec.RestorationTypeCodes = decodeJSONStringArray(restorationTypeCodesRaw)
 		rec.RestorationTypeNames = decodeJSONStringArray(restorationTypeNamesRaw)
 		out = append(out, rec)
 	}

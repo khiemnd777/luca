@@ -6,6 +6,7 @@ import (
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/raw_material/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
@@ -26,6 +27,10 @@ type rawMaterialService struct {
 	repo repository.RawMaterialRepository
 	deps *module.ModuleDeps[config.ModuleConfig]
 }
+
+type ErrConflict string
+
+func (e ErrConflict) Error() string { return string(e) }
 
 func NewRawMaterialService(repo repository.RawMaterialRepository, deps *module.ModuleDeps[config.ModuleConfig]) RawMaterialService {
 	return &rawMaterialService{repo: repo, deps: deps}
@@ -77,6 +82,9 @@ func kRawMaterialSearch(deptID int, categoryID *int, q dbutils.SearchQuery) stri
 func (s *rawMaterialService) Create(ctx context.Context, deptID int, input model.RawMaterialDTO) (*model.RawMaterialDTO, error) {
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("raw material code already exists")
+		}
 		return nil, err
 	}
 
@@ -93,6 +101,9 @@ func (s *rawMaterialService) Create(ctx context.Context, deptID int, input model
 func (s *rawMaterialService) Update(ctx context.Context, deptID int, input model.RawMaterialDTO) (*model.RawMaterialDTO, error) {
 	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
+		if catalogrefcode.NewService().IsUniqueViolation(err) {
+			return nil, ErrConflict("raw material code already exists")
+		}
 		return nil, err
 	}
 

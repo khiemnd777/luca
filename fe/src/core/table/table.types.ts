@@ -138,12 +138,15 @@ export type TableSchema<T> = {
   stickyHeader?: boolean;                  // default true
   dense?: boolean;                         // default true
   stickyTopOffset?: number;                // default 0
+  hidePagination?: boolean;                // default false
 
   // row actions
   onView?: (row: T) => void | Promise<void>;
   onRowClick?: (row: T) => void | Promise<void>;
   onEdit?: (row: T) => void | Promise<void>;
+  canEdit?: (row: T) => boolean;
   onDelete?: (row: T) => void | Promise<void>;
+  canDelete?: (row: T) => boolean;
   rowActions?: TableRowAction<T>[];
   onReorder?: (newRows: T[], from: number, to: number) => void;
 
