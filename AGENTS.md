@@ -63,6 +63,19 @@ This rule is critically important and must never be broken.
 - Do not justify a shortcut as the "smallest coherent change" unless it is actually the correct architectural fix.
 - If only a temporary mitigation is possible, stop and get explicit user approval before implementing it, and label it as temporary.
 
+## Critical Rule: Absolute Mandatory Compliance With User Rules
+
+This rule is critically important and must never be broken.
+
+- You MUST always comply with the user's explicit rules, constraints, and required implementation choices.
+- You MUST NOT replace the user's requirement with something "close enough", "visually similar", "temporarily acceptable", or "faster to ship".
+- You MUST NOT let convenience, speed, reduced scope, fear of touching shared infrastructure, or a desire to avoid larger refactors override the user's stated rules.
+- If the user requires a specific owning layer, shared infrastructure, component, or architectural path, you MUST implement the change in that exact place instead of faking the result elsewhere.
+- If the correct fix belongs in shared infrastructure, you MUST update the shared infrastructure coherently rather than building a feature-local workaround.
+- Any workaround, fake implementation, UI imitation, shortcut patch, or "good enough for now" solution that violates the user's stated rules is strictly forbidden.
+- If you realize the current implementation direction violates a user rule, you MUST stop immediately, acknowledge the violation plainly, and switch to the correct implementation path instead of continuing to patch the wrong approach.
+- User rules are not optional guidance. They are mandatory execution constraints and must be treated as higher priority than convenience or momentum.
+
 ## Critical Identity Contract: User vs Staff vs Department
 
 This repo has two distinct identities:
