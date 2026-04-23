@@ -81,21 +81,15 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var brandIDs []int
 		if row.HasBrandField {
-			brandIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.BrandNames, s.repo.GetOrCreateBrandName, func(id int, name string) {
+			brandIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.BrandNames, s.repo.GetOrCreateBrandName, func(ref *repository.ProductImportCategoryRef) {
 				categoryName := lv1Name
-				brandservice.BuildBrandNameSearchDoc(deptID, &model.BrandNameDTO{
-					ID:           id,
-					DepartmentID: utils.Ptr(deptID),
-					CategoryID:   utils.Ptr(lv1ID),
-					CategoryName: &categoryName,
-					Name:         &name,
-				})
 				brandservice.PublishSearch(deptID, &model.BrandNameDTO{
-					ID:           id,
+					ID:           ref.ID,
 					DepartmentID: utils.Ptr(deptID),
 					CategoryID:   utils.Ptr(lv1ID),
 					CategoryName: &categoryName,
-					Name:         &name,
+					Code:         utils.Ptr(ref.Code),
+					Name:         utils.Ptr(ref.Name),
 				})
 			})
 			if err != nil {
@@ -105,14 +99,15 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var rawMaterialIDs []int
 		if row.HasRawMaterialField {
-			rawMaterialIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RawMaterialNames, s.repo.GetOrCreateRawMaterial, func(id int, name string) {
+			rawMaterialIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RawMaterialNames, s.repo.GetOrCreateRawMaterial, func(ref *repository.ProductImportCategoryRef) {
 				categoryName := lv1Name
 				rawmaterialservice.PublishSearch(deptID, &model.RawMaterialDTO{
-					ID:           id,
+					ID:           ref.ID,
 					DepartmentID: utils.Ptr(deptID),
 					CategoryID:   utils.Ptr(lv1ID),
 					CategoryName: &categoryName,
-					Name:         &name,
+					Code:         utils.Ptr(ref.Code),
+					Name:         utils.Ptr(ref.Name),
 				})
 			})
 			if err != nil {
@@ -122,14 +117,15 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var techniqueIDs []int
 		if row.HasTechniqueField {
-			techniqueIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.TechniqueNames, s.repo.GetOrCreateTechnique, func(id int, name string) {
+			techniqueIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.TechniqueNames, s.repo.GetOrCreateTechnique, func(ref *repository.ProductImportCategoryRef) {
 				categoryName := lv1Name
 				techniqueservice.PublishSearch(deptID, &model.TechniqueDTO{
-					ID:           id,
+					ID:           ref.ID,
 					DepartmentID: utils.Ptr(deptID),
 					CategoryID:   utils.Ptr(lv1ID),
 					CategoryName: &categoryName,
-					Name:         &name,
+					Code:         utils.Ptr(ref.Code),
+					Name:         utils.Ptr(ref.Name),
 				})
 			})
 			if err != nil {
@@ -139,13 +135,15 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 
 		var restorationTypeIDs []int
 		if row.HasRestorationTypeField {
-			restorationTypeIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RestorationTypeNames, s.repo.GetOrCreateRestorationType, func(id int, name string) {
+			restorationTypeIDs, err = s.resolveCategoryRefIDs(ctx, deptID, lv1ID, lv1Name, row.RestorationTypeNames, s.repo.GetOrCreateRestorationType, func(ref *repository.ProductImportCategoryRef) {
 				categoryName := lv1Name
 				restorationservice.PublishSearch(deptID, &model.RestorationTypeDTO{
-					ID:           id,
+					ID:           ref.ID,
+					DepartmentID: utils.Ptr(deptID),
 					CategoryID:   utils.Ptr(lv1ID),
 					CategoryName: &categoryName,
-					Name:         &name,
+					Code:         utils.Ptr(ref.Code),
+					Name:         utils.Ptr(ref.Name),
 				})
 			})
 			if err != nil {
@@ -219,8 +217,8 @@ func (s *productImportService) ImportFromExcel(ctx context.Context, deptID int, 
 	return result, nil
 }
 
-type categoryRefUpserter func(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
-type createdRefHook func(id int, name string)
+type categoryRefUpserter func(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*repository.ProductImportCategoryRef, error)
+type createdRefHook func(ref *repository.ProductImportCategoryRef)
 
 func (s *productImportService) resolveCategoryRefIDs(
 	ctx context.Context,
@@ -238,14 +236,14 @@ func (s *productImportService) resolveCategoryRefIDs(
 
 	out := make([]int, 0, len(names))
 	for _, name := range names {
-		id, created, err := upsert(ctx, deptID, categoryID, categoryName, name)
+		ref, err := upsert(ctx, deptID, categoryID, categoryName, "", name)
 		if err != nil {
 			return nil, err
 		}
-		if created && onCreated != nil {
-			onCreated(id, name)
+		if ref.Created && onCreated != nil {
+			onCreated(ref)
 		}
-		out = append(out, id)
+		out = append(out, ref.ID)
 	}
 	return dedupInts(out), nil
 }

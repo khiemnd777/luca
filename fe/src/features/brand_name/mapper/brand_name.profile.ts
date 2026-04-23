@@ -9,6 +9,7 @@ mapper.register<BrandNameModel>({
     id: 0,
     categoryId: null,
     categoryName: null,
+    code: "",
     name: "",
     createdAt: "",
     updatedAt: "",

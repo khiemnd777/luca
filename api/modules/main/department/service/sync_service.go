@@ -16,6 +16,7 @@ import (
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	brandrepo "github.com/khiemnd777/noah_api/modules/main/features/brand/repository"
 	brandservice "github.com/khiemnd777/noah_api/modules/main/features/brand/service"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	categoryrepo "github.com/khiemnd777/noah_api/modules/main/features/category/repository"
 	categoryservice "github.com/khiemnd777/noah_api/modules/main/features/category/service"
 	materialrepo "github.com/khiemnd777/noah_api/modules/main/features/material/repository"
@@ -72,6 +73,7 @@ func NewDepartmentSyncer(
 ) DepartmentSyncer {
 	cfStore := &customfields.PGStore{DB: deps.DB}
 	cfMgr := customfields.NewManager(cfStore)
+	codeSvc := catalogrefcode.NewService()
 
 	return &departmentSyncer{
 		db:               deps.Ent.(*generated.Client),
@@ -79,10 +81,10 @@ func NewDepartmentSyncer(
 		syncRepo:         deptrepo.NewDepartmentSyncRepository(deps.DB),
 		categoryMetaRepo: categoryrepo.NewCategoryImportRepository(deps.Ent.(*generated.Client)),
 		categorySvc:      categoryservice.NewCategoryService(categoryrepo.NewCategoryRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
-		brandSvc:         brandservice.NewBrandNameService(brandrepo.NewBrandNameRepository(deps.Ent.(*generated.Client), deps), deps),
-		rawMaterialSvc:   rawmaterialservice.NewRawMaterialService(rawmaterialrepo.NewRawMaterialRepository(deps.Ent.(*generated.Client), deps), deps),
-		techniqueSvc:     techniqueservice.NewTechniqueService(techniquerepo.NewTechniqueRepository(deps.Ent.(*generated.Client), deps), deps),
-		restorationSvc:   restorationservice.NewRestorationTypeService(restorationrepo.NewRestorationTypeRepository(deps.Ent.(*generated.Client), deps), deps),
+		brandSvc:         brandservice.NewBrandNameService(brandrepo.NewBrandNameRepository(deps.Ent.(*generated.Client), deps, codeSvc), deps),
+		rawMaterialSvc:   rawmaterialservice.NewRawMaterialService(rawmaterialrepo.NewRawMaterialRepository(deps.Ent.(*generated.Client), deps, codeSvc), deps),
+		techniqueSvc:     techniqueservice.NewTechniqueService(techniquerepo.NewTechniqueRepository(deps.Ent.(*generated.Client), deps, codeSvc), deps),
+		restorationSvc:   restorationservice.NewRestorationTypeService(restorationrepo.NewRestorationTypeRepository(deps.Ent.(*generated.Client), deps, codeSvc), deps),
 		processSvc:       processservice.NewProcessService(processrepo.NewProcessRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
 		sectionSvc:       sectionservice.NewSectionService(sectionrepo.NewSectionRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
 		materialSvc:      materialservice.NewMaterialService(materialrepo.NewMaterialRepository(deps.Ent.(*generated.Client), deps, cfMgr), deps, cfMgr),
@@ -382,16 +384,17 @@ func (s *departmentSyncer) previewCategories(snapshot *syncSnapshot) deptmodel.D
 func (s *departmentSyncer) previewSimpleRefs(snapshot *syncSnapshot, key syncModuleKey, label string) deptmodel.DepartmentSyncModuleDiffDTO {
 	targetByKey := make(map[string]deptrepo.DepartmentSyncSimpleRefRecord, len(snapshot.targetRefs[key]))
 	for _, rec := range snapshot.targetRefs[key] {
-		targetByKey[simpleRefKey(rec.CategoryPath, rec.Name)] = rec
+		targetByKey[simpleRefKey(rec.Code)] = rec
 	}
 	mod := deptmodel.DepartmentSyncModuleDiffDTO{Key: string(key), Label: label}
 	items := make([]deptmodel.DepartmentSyncItemDiffDTO, 0, len(snapshot.sourceRefs[key]))
 	for _, src := range snapshot.sourceRefs[key] {
-		k := simpleRefKey(src.CategoryPath, src.Name)
+		k := simpleRefKey(src.Code)
 		item := deptmodel.DepartmentSyncItemDiffDTO{Key: k, Label: fmt.Sprintf("%s / %s", src.CategoryPath, src.Name)}
 		if target, ok := targetByKey[k]; ok {
 			fields := diffFields(
 				fieldDiff("Danh mục", target.CategoryPath, src.CategoryPath),
+				fieldDiff("Mã", target.Code, src.Code),
 				fieldDiff("Tên", target.Name, src.Name),
 			)
 			if len(fields) == 0 {
@@ -406,6 +409,7 @@ func (s *departmentSyncer) previewSimpleRefs(snapshot *syncSnapshot, key syncMod
 			item.ChangeType = "create"
 			item.Fields = diffFields(
 				fieldDiff("Danh mục", "", src.CategoryPath),
+				fieldDiff("Mã", "", src.Code),
 				fieldDiff("Tên", "", src.Name),
 			)
 			mod.Create++
@@ -763,8 +767,9 @@ func (s *departmentSyncer) applySimpleRefs(ctx context.Context, snapshot *syncSn
 	for _, key := range []syncModuleKey{moduleBrand, moduleRawMaterial, moduleTechnique, moduleRestorationType} {
 		targetByKey[key] = make(map[string]deptrepo.DepartmentSyncSimpleRefRecord, len(snapshot.targetRefs[key]))
 		for _, rec := range snapshot.targetRefs[key] {
-			targetByKey[key][simpleRefKey(rec.CategoryPath, rec.Name)] = rec
-			targetRefIDs[key][simpleRefKey(rec.CategoryPath, rec.Name)] = rec.ID
+			refKey := simpleRefKey(rec.Code)
+			targetByKey[key][refKey] = rec
+			targetRefIDs[key][refKey] = rec.ID
 		}
 	}
 
@@ -774,14 +779,14 @@ func (s *departmentSyncer) applySimpleRefs(ctx context.Context, snapshot *syncSn
 			if !ok {
 				continue
 			}
-			refKey := simpleRefKey(src.CategoryPath, src.Name)
-			existingID, err := s.syncRepo.FindSimpleRefID(ctx, tableForSimpleRef(key), snapshot.targetDeptID, categoryID, src.Name)
+			refKey := simpleRefKey(src.Code)
+			existingID, err := s.syncRepo.FindSimpleRefID(ctx, tableForSimpleRef(key), snapshot.targetDeptID, categoryID, src.Code)
 			if err != nil {
 				return nil, err
 			}
 			switch key {
 			case moduleBrand:
-				dto := model.BrandNameDTO{Name: utils.Ptr(src.Name), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
+				dto := model.BrandNameDTO{Name: utils.Ptr(src.Name), Code: utils.Ptr(src.Code), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
 				if existingID != nil {
 					dto.ID = *existingID
 					res, err := s.brandSvc.Update(ctx, snapshot.targetDeptID, dto)
@@ -804,7 +809,7 @@ func (s *departmentSyncer) applySimpleRefs(ctx context.Context, snapshot *syncSn
 					targetRefIDs[key][refKey] = res.ID
 				}
 			case moduleRawMaterial:
-				dto := model.RawMaterialDTO{Name: utils.Ptr(src.Name), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
+				dto := model.RawMaterialDTO{Name: utils.Ptr(src.Name), Code: utils.Ptr(src.Code), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
 				if existingID != nil {
 					dto.ID = *existingID
 					res, err := s.rawMaterialSvc.Update(ctx, snapshot.targetDeptID, dto)
@@ -827,7 +832,7 @@ func (s *departmentSyncer) applySimpleRefs(ctx context.Context, snapshot *syncSn
 					targetRefIDs[key][refKey] = res.ID
 				}
 			case moduleTechnique:
-				dto := model.TechniqueDTO{Name: utils.Ptr(src.Name), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
+				dto := model.TechniqueDTO{Name: utils.Ptr(src.Name), Code: utils.Ptr(src.Code), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
 				if existingID != nil {
 					dto.ID = *existingID
 					res, err := s.techniqueSvc.Update(ctx, snapshot.targetDeptID, dto)
@@ -850,7 +855,7 @@ func (s *departmentSyncer) applySimpleRefs(ctx context.Context, snapshot *syncSn
 					targetRefIDs[key][refKey] = res.ID
 				}
 			case moduleRestorationType:
-				dto := model.RestorationTypeDTO{Name: utils.Ptr(src.Name), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
+				dto := model.RestorationTypeDTO{Name: utils.Ptr(src.Name), Code: utils.Ptr(src.Code), CategoryID: utils.Ptr(categoryID), CategoryName: utils.Ptr(src.CategoryName)}
 				if existingID != nil {
 					dto.ID = *existingID
 					res, err := s.restorationSvc.Update(ctx, snapshot.targetDeptID, dto)
@@ -992,10 +997,10 @@ func (s *departmentSyncer) applyProducts(
 			CustomFields: src.CustomFields,
 		}
 		dto.ProcessIDs = resolveRefIDs(src.ProcessNames, targetProcessIDs)
-		dto.BrandNameIDs = resolveSimpleRefIDs(src.CategoryLV1, src.BrandNameNames, targetRefIDs[moduleBrand])
-		dto.RawMaterialIDs = resolveSimpleRefIDs(src.CategoryLV1, src.RawMaterialNames, targetRefIDs[moduleRawMaterial])
-		dto.TechniqueIDs = resolveSimpleRefIDs(src.CategoryLV1, src.TechniqueNames, targetRefIDs[moduleTechnique])
-		dto.RestorationTypeIDs = resolveSimpleRefIDs(src.CategoryLV1, src.RestorationTypeNames, targetRefIDs[moduleRestorationType])
+		dto.BrandNameIDs = resolveSimpleRefIDs(src.CategoryLV1, src.BrandNameCodes, src.BrandNameNames, targetRefIDs[moduleBrand])
+		dto.RawMaterialIDs = resolveSimpleRefIDs(src.CategoryLV1, src.RawMaterialCodes, src.RawMaterialNames, targetRefIDs[moduleRawMaterial])
+		dto.TechniqueIDs = resolveSimpleRefIDs(src.CategoryLV1, src.TechniqueCodes, src.TechniqueNames, targetRefIDs[moduleTechnique])
+		dto.RestorationTypeIDs = resolveSimpleRefIDs(src.CategoryLV1, src.RestorationTypeCodes, src.RestorationTypeNames, targetRefIDs[moduleRestorationType])
 
 		if !src.IsTemplate && src.TemplateCode != nil {
 			if templateID, exists := targetTemplateIDs[normalizeKey(*src.TemplateCode)]; exists {
@@ -1060,8 +1065,8 @@ func buildCategoryPaths(categories []deptrepo.DepartmentSyncCategoryRecord) cate
 	return categoryPathIndex{byID: paths}
 }
 
-func simpleRefKey(categoryName string, name string) string {
-	return normalizeKey(categoryName + "::" + name)
+func simpleRefKey(code string) string {
+	return normalizeKey(code)
 }
 
 func materialKey(name string, isImplant bool) string {
@@ -1118,11 +1123,21 @@ func resolveRefIDs(names []string, idMap map[string]int) []int {
 	return dedupInts(out)
 }
 
-func resolveSimpleRefIDs(categoryName *string, names []string, idMap map[string]int) []int {
-	category := safeString(categoryName)
-	out := make([]int, 0, len(names))
-	for _, name := range names {
-		if id, ok := idMap[simpleRefKey(category, name)]; ok {
+func resolveSimpleRefIDs(categoryName *string, codes []string, names []string, idMap map[string]int) []int {
+	size := len(codes)
+	if len(names) > size {
+		size = len(names)
+	}
+	out := make([]int, 0, size)
+	for idx := 0; idx < size; idx++ {
+		code := ""
+		if idx < len(codes) {
+			code = codes[idx]
+		}
+		if strings.TrimSpace(code) == "" && idx < len(names) {
+			code = names[idx]
+		}
+		if id, ok := idMap[simpleRefKey(code)]; ok {
 			out = append(out, id)
 		}
 	}

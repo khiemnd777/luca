@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/lib/pq"
 )
@@ -14,10 +15,10 @@ type ProductImportRepository interface {
 	FindProductByCode(ctx context.Context, deptID int, code string) (*ProductImportProductRef, error)
 	ResolveCategoryBranch(ctx context.Context, deptID int, lv1, lv2, lv3 string) (id int, name string, err error)
 	ResolveCategoryLV1(ctx context.Context, deptID int, lv1 string) (id int, name string, err error)
-	GetOrCreateBrandName(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
-	GetOrCreateRawMaterial(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
-	GetOrCreateTechnique(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
-	GetOrCreateRestorationType(ctx context.Context, deptID int, categoryID int, categoryName, name string) (id int, created bool, err error)
+	GetOrCreateBrandName(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error)
+	GetOrCreateRawMaterial(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error)
+	GetOrCreateTechnique(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error)
+	GetOrCreateRestorationType(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error)
 	GetOrCreateProcess(ctx context.Context, deptID int, name string) (id int, created bool, err error)
 }
 
@@ -26,12 +27,20 @@ type ProductImportProductRef struct {
 	TemplateID *int
 }
 
-type productImportRepo struct {
-	db *sql.DB
+type ProductImportCategoryRef struct {
+	ID      int
+	Code    string
+	Name    string
+	Created bool
 }
 
-func NewProductImportRepository(db *sql.DB) ProductImportRepository {
-	return &productImportRepo{db: db}
+type productImportRepo struct {
+	db      *sql.DB
+	codeSvc catalogrefcode.Service
+}
+
+func NewProductImportRepository(db *sql.DB, codeSvc catalogrefcode.Service) ProductImportRepository {
+	return &productImportRepo{db: db, codeSvc: codeSvc}
 }
 
 func (r *productImportRepo) FindProductByCode(ctx context.Context, deptID int, code string) (*ProductImportProductRef, error) {
@@ -171,112 +180,78 @@ func (r *productImportRepo) queryCategory(
 	return id, displayName, err
 }
 
-func (r *productImportRepo) GetOrCreateBrandName(ctx context.Context, deptID int, categoryID int, categoryName, name string) (int, bool, error) {
-	id, err := r.selectRefByCategoryAndName(ctx, "brand_names", deptID, categoryID, name)
-	if err == nil && id > 0 {
-		return id, false, nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	query := `
-		INSERT INTO brand_names (department_id, category_id, category_name, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		RETURNING id
-	`
-	if err := r.db.QueryRowContext(ctx, query, deptID, categoryID, categoryName, name).Scan(&id); err != nil {
-		if isUniqueViolation(err) {
-			id, selErr := r.selectRefByCategoryAndName(ctx, "brand_names", deptID, categoryID, name)
-			if selErr != nil {
-				return 0, false, selErr
-			}
-			return id, false, nil
-		}
-		return 0, false, err
-	}
-	return id, true, nil
+func (r *productImportRepo) GetOrCreateBrandName(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error) {
+	return r.getOrCreateRef(ctx, "brand_names", catalogrefcode.ModuleBrandName, deptID, categoryID, categoryName, code, name)
 }
 
-func (r *productImportRepo) GetOrCreateRawMaterial(ctx context.Context, deptID int, categoryID int, categoryName, name string) (int, bool, error) {
-	id, err := r.selectRefByCategoryAndName(ctx, "raw_materials", deptID, categoryID, name)
-	if err == nil && id > 0 {
-		return id, false, nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	query := `
-		INSERT INTO raw_materials (department_id, category_id, category_name, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		RETURNING id
-	`
-	if err := r.db.QueryRowContext(ctx, query, deptID, categoryID, categoryName, name).Scan(&id); err != nil {
-		if isUniqueViolation(err) {
-			id, selErr := r.selectRefByCategoryAndName(ctx, "raw_materials", deptID, categoryID, name)
-			if selErr != nil {
-				return 0, false, selErr
-			}
-			return id, false, nil
-		}
-		return 0, false, err
-	}
-	return id, true, nil
+func (r *productImportRepo) GetOrCreateRawMaterial(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error) {
+	return r.getOrCreateRef(ctx, "raw_materials", catalogrefcode.ModuleRawMaterial, deptID, categoryID, categoryName, code, name)
 }
 
-func (r *productImportRepo) GetOrCreateTechnique(ctx context.Context, deptID int, categoryID int, categoryName, name string) (int, bool, error) {
-	id, err := r.selectRefByCategoryAndName(ctx, "techniques", deptID, categoryID, name)
-	if err == nil && id > 0 {
-		return id, false, nil
-	}
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
-	}
-
-	query := `
-		INSERT INTO techniques (department_id, category_id, category_name, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
-		RETURNING id
-	`
-	if err := r.db.QueryRowContext(ctx, query, deptID, categoryID, categoryName, name).Scan(&id); err != nil {
-		if isUniqueViolation(err) {
-			id, selErr := r.selectRefByCategoryAndName(ctx, "techniques", deptID, categoryID, name)
-			if selErr != nil {
-				return 0, false, selErr
-			}
-			return id, false, nil
-		}
-		return 0, false, err
-	}
-	return id, true, nil
+func (r *productImportRepo) GetOrCreateTechnique(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error) {
+	return r.getOrCreateRef(ctx, "techniques", catalogrefcode.ModuleTechnique, deptID, categoryID, categoryName, code, name)
 }
 
-func (r *productImportRepo) GetOrCreateRestorationType(ctx context.Context, deptID int, categoryID int, categoryName, name string) (int, bool, error) {
-	id, err := r.selectRefByCategoryAndName(ctx, "restoration_types", deptID, categoryID, name)
+func (r *productImportRepo) GetOrCreateRestorationType(ctx context.Context, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error) {
+	return r.getOrCreateRef(ctx, "restoration_types", catalogrefcode.ModuleRestorationType, deptID, categoryID, categoryName, code, name)
+}
+
+func (r *productImportRepo) getOrCreateRef(ctx context.Context, table string, module catalogrefcode.Module, deptID int, categoryID int, categoryName, code, name string) (*ProductImportCategoryRef, error) {
+	codePtr := r.codeSvc.Normalize(stringPtr(code))
+	if codePtr != nil {
+		id, err := r.selectRefByCode(ctx, table, deptID, *codePtr)
+		if err == nil && id > 0 {
+			return r.selectCategoryRef(ctx, table, deptID, id, false)
+		}
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	id, err := r.selectRefByCategoryAndName(ctx, table, deptID, categoryID, name)
 	if err == nil && id > 0 {
-		return id, false, nil
+		return r.selectCategoryRef(ctx, table, deptID, id, false)
 	}
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return 0, false, err
+		return nil, err
+	}
+
+	if codePtr == nil {
+		nextCode, err := r.codeSvc.Next(ctx, r.db, catalogrefcode.Scope{
+			DepartmentID: deptID,
+			Module:       module,
+		})
+		if err != nil {
+			return nil, err
+		}
+		codePtr = &nextCode
 	}
 
 	query := `
-		INSERT INTO restoration_types (department_id, category_id, category_name, name, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NOW(), NOW())
+		INSERT INTO ` + table + ` (department_id, category_id, category_name, code, name, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
 		RETURNING id
 	`
-	if err := r.db.QueryRowContext(ctx, query, deptID, categoryID, categoryName, name).Scan(&id); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, deptID, categoryID, categoryName, *codePtr, name).Scan(&id); err != nil {
 		if isUniqueViolation(err) {
-			id, selErr := r.selectRefByCategoryAndName(ctx, "restoration_types", deptID, categoryID, name)
-			if selErr != nil {
-				return 0, false, selErr
+			if codePtr != nil {
+				id, selErr := r.selectRefByCode(ctx, table, deptID, *codePtr)
+				if selErr == nil {
+					return r.selectCategoryRef(ctx, table, deptID, id, false)
+				}
+				if !errors.Is(selErr, sql.ErrNoRows) {
+					return nil, selErr
+				}
 			}
-			return id, false, nil
+			id, selErr := r.selectRefByCategoryAndName(ctx, table, deptID, categoryID, name)
+			if selErr != nil {
+				return nil, selErr
+			}
+			return r.selectCategoryRef(ctx, table, deptID, id, false)
 		}
-		return 0, false, err
+		return nil, err
 	}
-	return id, true, nil
+	return &ProductImportCategoryRef{ID: id, Code: *codePtr, Name: name, Created: true}, nil
 }
 
 func (r *productImportRepo) GetOrCreateProcess(ctx context.Context, deptID int, name string) (int, bool, error) {
@@ -334,6 +309,37 @@ func (r *productImportRepo) selectRefByCategoryAndName(ctx context.Context, tabl
 	return id, r.db.QueryRowContext(ctx, query, deptID, categoryID, name).Scan(&id)
 }
 
+func (r *productImportRepo) selectRefByCode(ctx context.Context, table string, deptID int, code string) (int, error) {
+	query := `
+		SELECT id
+		FROM ` + table + `
+		WHERE department_id = $1
+			AND code_norm = lower(unaccent_immutable($2))
+			AND deleted_at IS NULL
+		LIMIT 1
+	`
+
+	var id int
+	return id, r.db.QueryRowContext(ctx, query, deptID, code).Scan(&id)
+}
+
+func (r *productImportRepo) selectCategoryRef(ctx context.Context, table string, deptID int, id int, created bool) (*ProductImportCategoryRef, error) {
+	query := `
+		SELECT id, COALESCE(code, ''), COALESCE(name, '')
+		FROM ` + table + `
+		WHERE department_id = $1
+			AND id = $2
+			AND deleted_at IS NULL
+		LIMIT 1
+	`
+
+	out := &ProductImportCategoryRef{Created: created}
+	if err := r.db.QueryRowContext(ctx, query, deptID, id).Scan(&out.ID, &out.Code, &out.Name); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func isUniqueViolation(err error) bool {
 	var pqErr *pq.Error
 	if errors.As(err, &pqErr) {
@@ -341,4 +347,11 @@ func isUniqueViolation(err error) bool {
 	}
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "duplicate key value") || strings.Contains(msg, "unique constraint")
+}
+
+func stringPtr(value string) *string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return &value
 }

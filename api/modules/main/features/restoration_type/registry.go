@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
+	catalogrefcode "github.com/khiemnd777/noah_api/modules/main/features/catalog_ref_code"
 	"github.com/khiemnd777/noah_api/modules/main/features/restoration_type/handler"
 	"github.com/khiemnd777/noah_api/modules/main/features/restoration_type/repository"
 	"github.com/khiemnd777/noah_api/modules/main/features/restoration_type/service"
@@ -19,12 +20,13 @@ func (feature) ID() string    { return "restoration_type" }
 func (feature) Priority() int { return 90 }
 
 func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) error {
-	repo := repository.NewRestorationTypeRepository(deps.Ent.(*generated.Client), deps)
+	codeSvc := catalogrefcode.NewService()
+	repo := repository.NewRestorationTypeRepository(deps.Ent.(*generated.Client), deps, codeSvc)
 	svc := service.NewRestorationTypeService(repo, deps)
 	h := handler.NewRestorationTypeHandler(svc, deps)
 	h.RegisterRoutes(router)
 
-	importRepo := repository.NewRestorationTypeImportRepository(deps.DB)
+	importRepo := repository.NewRestorationTypeImportRepository(deps.DB, codeSvc)
 	importSvc := service.NewRestorationTypeImportService(importRepo, deps.DB)
 	importHandler := handler.NewRestorationTypeImportHandler(importSvc, deps)
 	importHandler.RegisterRoutes(router)

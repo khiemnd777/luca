@@ -307,11 +307,14 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         stickyHeader={schema.stickyHeader ?? true}
         dense={schema.dense ?? true}
         stickyTopOffset={schema.stickyTopOffset ?? 0}
+        hidePagination={schema.hidePagination ?? false}
 
         // actions
         onView={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onView : undefined}
         onEdit={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onEdit : undefined}
+        canEdit={schema.canEdit}
         onDelete={hasAnyPermissions(...(schema.allowDeleting ?? [])) ? (schema.onDelete ? askDelete : undefined) : undefined}
+        canDelete={schema.canDelete}
         rowActions={visibleRowActions}
         onReorder={schema.onReorder}
       />

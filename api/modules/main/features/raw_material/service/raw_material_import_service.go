@@ -14,6 +14,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/features/raw_material/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	"github.com/khiemnd777/noah_api/shared/logger"
+	"github.com/khiemnd777/noah_api/shared/utils"
 )
 
 type RawMaterialImportService interface {
@@ -70,7 +71,7 @@ func (s *rawMaterialImportService) ImportFromExcel(ctx context.Context, deptID i
 			return result, fmt.Errorf("row %d: lookup category failed: %w", rowIndex, err)
 		}
 
-		id, created, err := s.repo.GetOrCreateRawMaterial(ctx, deptID, categoryID, categoryName, row.Name)
+		id, resolvedCode, created, err := s.repo.GetOrCreateRawMaterial(ctx, deptID, categoryID, categoryName, row.Code, row.Name)
 		if err != nil {
 			return result, fmt.Errorf("row %d: cannot create raw material: %w", rowIndex, err)
 		}
@@ -81,6 +82,7 @@ func (s *rawMaterialImportService) ImportFromExcel(ctx context.Context, deptID i
 				DepartmentID: &deptID,
 				CategoryID:   &categoryID,
 				CategoryName: &categoryName,
+				Code:         utils.Ptr(resolvedCode),
 				Name:         &row.Name,
 			})
 		} else {
@@ -137,8 +139,14 @@ func ParseRawMaterialExcel(file io.Reader) ([]model.RawMaterialExcelRow, error) 
 			continue
 		}
 
-		cat := normalizeCell(getCell(cols, 0))
-		name := normalizeCell(getCell(cols, 1))
+		offset := 0
+		code := ""
+		if len(cols) >= 3 {
+			code = normalizeCell(getCell(cols, 0))
+			offset = 1
+		}
+		cat := normalizeCell(getCell(cols, offset))
+		name := normalizeCell(getCell(cols, offset+1))
 
 		if cat == "" {
 			cat = lastCategory
@@ -155,6 +163,7 @@ func ParseRawMaterialExcel(file io.Reader) ([]model.RawMaterialExcelRow, error) 
 		if name == "" {
 			out = append(out, model.RawMaterialExcelRow{
 				CategoryName: cat,
+				Code:         code,
 				Name:         "",
 			})
 			continue
@@ -162,6 +171,7 @@ func ParseRawMaterialExcel(file io.Reader) ([]model.RawMaterialExcelRow, error) 
 
 		out = append(out, model.RawMaterialExcelRow{
 			CategoryName: cat,
+			Code:         code,
 			Name:         name,
 		})
 	}

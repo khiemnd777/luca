@@ -16,6 +16,10 @@ export function formatDepartmentPhoneNumbers(value?: DepartmentPhoneShape | null
   return collectDepartmentPhoneNumbers(value).join(" - ");
 }
 
+export function getPrimaryDepartmentPhoneNumber(value?: DepartmentPhoneShape | null): string {
+  return collectDepartmentPhoneNumbers(value)[0] ?? "";
+}
+
 export function validateDepartmentPhoneNumber(val: string | null | undefined): string | null {
   if (!val) return null;
   const normalized = val.replace(/\s+/g, "").trim();

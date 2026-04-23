@@ -46,7 +46,9 @@ export type EditTableProps<T> = {
   onView?: (row: T) => void;
   onRowClick?: (row: T) => void;
   onEdit?: (row: T) => void;
+  canEdit?: (row: T) => boolean;
   onDelete?: (row: T) => void;
+  canDelete?: (row: T) => boolean;
   rowActions?: TableRowAction<T>[];
   error?: string | null;
   /** Header dính khi scroll dọc */
@@ -61,6 +63,7 @@ export type EditTableProps<T> = {
 
   /** Khoảng offset top cho header sticky (ví dụ có appbar) */
   stickyTopOffset?: number;
+  hidePagination?: boolean;
 
   /** Drag & Drop reorder (client-side) */
   onReorder?: (newRows: T[], from: number, to: number) => void;
@@ -335,7 +338,9 @@ export function EditTable<T extends { id?: string | number }>({
   onView,
   onRowClick,
   onEdit,
+  canEdit,
   onDelete,
+  canDelete,
   rowActions = [],
   error = null,
   stickyHeader = true,
@@ -344,6 +349,7 @@ export function EditTable<T extends { id?: string | number }>({
   sortBy: controlledSortBy,
   sortDirection: controlledSortDir,
   stickyTopOffset = 0,
+  hidePagination = false,
   onReorder,
 }: EditTableProps<T>) {
   const { t } = useI18n();
@@ -416,6 +422,7 @@ export function EditTable<T extends { id?: string | number }>({
         key: "edit",
         label: "Edit",
         icon: <EditRoundedIcon fontSize="small" />,
+        visible: canEdit,
         onClick: onEdit,
         sx: {
           color: "#1976D2",
@@ -445,12 +452,13 @@ export function EditTable<T extends { id?: string | number }>({
         label: "Delete",
         icon: <DeleteRoundedIcon fontSize="small" />,
         color: "error",
+        visible: canDelete,
         onClick: onDelete,
       });
     }
 
     return actions;
-  }, [onDelete, onEdit, onView, rowActions, t]);
+  }, [canDelete, canEdit, onDelete, onEdit, onView, rowActions, t]);
 
   const renderActionButtons = React.useCallback((row?: T) => (
     <Stack direction="row" spacing={0.5} justifyContent="flex-end">
@@ -1322,47 +1330,49 @@ export function EditTable<T extends { id?: string | number }>({
         </Box>
       </Box>
 
-      <Box
-        sx={{
-          px: 1.5,
-          py: 0.5,
-          borderTop: "1px solid",
-          borderColor: footerBorderColor,
-          backgroundColor: footerBackground,
-        }}
-      >
-        <TablePagination
-          component="div"
-          count={total ?? -1}
-          page={page - 1}
-          onPageChange={(_, p) => onPageChange(p + 1)}
-          rowsPerPage={pageSize}
-          onRowsPerPageChange={(e) => 
-            onPageSizeChange?.(parseInt(e.target.value, 10))
-          }
-          rowsPerPageOptions={[10, 20, 50, 100]}
+      {!hidePagination && (
+        <Box
           sx={{
-            color: "text.secondary",
-            "& .MuiTablePagination-toolbar": {
-              minHeight: 52,
-              px: 0.5,
-              gap: 1,
-            },
-            "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
-              color: "text.secondary",
-              fontSize: theme.typography.body2.fontSize,
-              fontWeight: 500,
-            },
-            "& .MuiTablePagination-select": {
-              borderRadius: 1,
-              fontWeight: 600,
-            },
-            "& .MuiTablePagination-actions .MuiIconButton-root": {
-              borderRadius: 1.5,
-            },
+            px: 1.5,
+            py: 0.5,
+            borderTop: "1px solid",
+            borderColor: footerBorderColor,
+            backgroundColor: footerBackground,
           }}
-        />
-      </Box>
+        >
+          <TablePagination
+            component="div"
+            count={total ?? -1}
+            page={page - 1}
+            onPageChange={(_, p) => onPageChange(p + 1)}
+            rowsPerPage={pageSize}
+            onRowsPerPageChange={(e) =>
+              onPageSizeChange?.(parseInt(e.target.value, 10))
+            }
+            rowsPerPageOptions={[10, 20, 50, 100]}
+            sx={{
+              color: "text.secondary",
+              "& .MuiTablePagination-toolbar": {
+                minHeight: 52,
+                px: 0.5,
+                gap: 1,
+              },
+              "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
+                color: "text.secondary",
+                fontSize: theme.typography.body2.fontSize,
+                fontWeight: 500,
+              },
+              "& .MuiTablePagination-select": {
+                borderRadius: 1,
+                fontWeight: 600,
+              },
+              "& .MuiTablePagination-actions .MuiIconButton-root": {
+                borderRadius: 1.5,
+              },
+            }}
+          />
+        </Box>
+      )}
     </Paper>
   );
 }

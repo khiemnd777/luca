@@ -14,6 +14,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/main/features/restoration_type/repository"
 	"github.com/khiemnd777/noah_api/shared/cache"
 	"github.com/khiemnd777/noah_api/shared/logger"
+	"github.com/khiemnd777/noah_api/shared/utils"
 )
 
 type RestorationTypeImportService interface {
@@ -60,7 +61,7 @@ func (s *restorationTypeImportService) ImportFromExcel(ctx context.Context, dept
 			continue
 		}
 
-		categoryID, err := s.repo.GetCategoryIDByName(ctx, deptID, row.CategoryName)
+		categoryID, categoryName, err := s.repo.GetCategoryByName(ctx, deptID, row.CategoryName)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				result.Skipped++
@@ -70,17 +71,18 @@ func (s *restorationTypeImportService) ImportFromExcel(ctx context.Context, dept
 			return result, fmt.Errorf("row %d: lookup category failed: %w", rowIndex, err)
 		}
 
-		id, created, err := s.repo.GetOrCreateRestorationType(ctx, deptID, categoryID, row.CategoryName, row.Name)
+		id, resolvedCode, created, err := s.repo.GetOrCreateRestorationType(ctx, deptID, categoryID, categoryName, row.Code, row.Name)
 		if err != nil {
 			return result, fmt.Errorf("row %d: cannot create restoration type: %w", rowIndex, err)
 		}
 		if created {
 			result.Added++
-			categoryName := row.CategoryName
 			touched = append(touched, &model.RestorationTypeDTO{
 				ID:           id,
+				DepartmentID: &deptID,
 				CategoryID:   &categoryID,
 				CategoryName: &categoryName,
+				Code:         utils.Ptr(resolvedCode),
 				Name:         &row.Name,
 			})
 		} else {
@@ -138,8 +140,14 @@ func ParseRestorationTypeExcel(file io.Reader) ([]model.RestorationTypeExcelRow,
 			continue
 		}
 
-		cat := normalizeCell(getCell(cols, 0))
-		name := normalizeCell(getCell(cols, 1))
+		offset := 0
+		code := ""
+		if len(cols) >= 3 {
+			code = normalizeCell(getCell(cols, 0))
+			offset = 1
+		}
+		cat := normalizeCell(getCell(cols, offset))
+		name := normalizeCell(getCell(cols, offset+1))
 
 		if cat == "" {
 			cat = lastCategory
@@ -156,6 +164,7 @@ func ParseRestorationTypeExcel(file io.Reader) ([]model.RestorationTypeExcelRow,
 		if name == "" {
 			out = append(out, model.RestorationTypeExcelRow{
 				CategoryName: cat,
+				Code:         code,
 				Name:         "",
 			})
 			continue
@@ -163,6 +172,7 @@ func ParseRestorationTypeExcel(file io.Reader) ([]model.RestorationTypeExcelRow,
 
 		out = append(out, model.RestorationTypeExcelRow{
 			CategoryName: cat,
+			Code:         code,
 			Name:         name,
 		})
 	}
