@@ -5,8 +5,12 @@ export GOCACHE="${PWD}/.gocache"
 export GOTOOLCHAIN="${GOTOOLCHAIN:-auto}"
 INIT_PROJECT_MODE="${INIT_PROJECT_MODE:-full}"
 
+run_go_module_sync() {
+  [[ "$INIT_PROJECT_MODE" == "full" || "$INIT_PROJECT_MODE" == "ci" ]]
+}
+
 run_db_bootstrap_steps() {
-  [[ "$INIT_PROJECT_MODE" == "full" ]]
+  [[ "$INIT_PROJECT_MODE" == "full" || "$INIT_PROJECT_MODE" == "runtime" ]]
 }
 
 go_mod_sync() {
@@ -83,8 +87,12 @@ for schema_dir in $(find modules -type d -path "*/ent/schema"); do
   fi
 done
 
-# Step 3: Tidy & Vendor
-go_mod_sync
+if run_go_module_sync; then
+  # Step 3: Tidy & Vendor
+  go_mod_sync
+else
+  echo "⏭️ Skipping go mod tidy/vendor in ${INIT_PROJECT_MODE} mode"
+fi
 
 if run_db_bootstrap_steps; then
   # Step 4: Init roles

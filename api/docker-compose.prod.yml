@@ -55,6 +55,7 @@ services:
       - .env.prod
     environment:
       APP_ENV: production
+      INIT_PROJECT_MODE: runtime
       DELIVERY_NOTE_BROWSER_BIN: /usr/bin/chromium
       GOCACHE: ${GOCACHE}
       OBSERVABLE: ${OBSERVABLE:-false}
