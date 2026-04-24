@@ -7,23 +7,31 @@ import {
 } from "@core/notification/notification-renderer";
 
 type OrderCheckinNotificationData = {
+  orderId?: number | string;
   leaderId?: number | string;
   leaderName?: string;
   orderItemId?: number | string;
   orderItemCode?: string;
-  productCode?: string;
-  productName?: string;
-  sectionName?: string;
-  processName?: string;
+  relatedSectionNames?: string[] | string;
+  relatedProcessNames?: string[] | string;
   href?: string;
 };
+
+function normalizeList(value?: string[] | string): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.filter(Boolean);
+  return String(value)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 const OrderCheckinNotificationRenderer: NotificationRenderer<
   OrderCheckinNotificationData
 > = (notification, ctx) => {
   const data = notification.data;
 
-  const title = `Đơn hàng #${data?.orderItemCode} đang chờ xử lý`;
+  const title = `Đơn hàng #${data?.orderItemCode} mới liên quan đến bộ phận bạn phụ trách`;
 
   const bodyLines: string[] = [];
 
@@ -31,16 +39,14 @@ const OrderCheckinNotificationRenderer: NotificationRenderer<
     bodyLines.push(`Mã: ${data.orderItemCode}`);
   }
 
-  if (data?.productCode || data?.productName) {
-    bodyLines.push(`Sản phẩm: ${[data.productCode, data.productName].filter(Boolean).join(" - ")}`);
+  const relatedSections = normalizeList(data?.relatedSectionNames);
+  if (relatedSections.length > 0) {
+    bodyLines.push(`Phòng ban: ${relatedSections.join(", ")}`);
   }
 
-  if (data?.processName) {
-    bodyLines.push(`Công đoạn: ${data.processName}`);
-  }
-
-  if (data?.sectionName) {
-    bodyLines.push(`Phòng ban: ${data.sectionName}`);
+  const relatedProcesses = normalizeList(data?.relatedProcessNames);
+  if (relatedProcesses.length > 0) {
+    bodyLines.push(`Công đoạn: ${relatedProcesses.join(", ")}`);
   }
 
   const body =
@@ -54,7 +60,7 @@ const OrderCheckinNotificationRenderer: NotificationRenderer<
       notification.body || ""
     );
 
-  const href = data?.href || "/check-code";
+  const href = data?.href || (data?.orderId ? `/order/${data.orderId}` : "/order");
 
   const handleClick = () => {
     if (href) ctx.onAction?.(href);
@@ -72,6 +78,12 @@ const OrderCheckinNotificationRenderer: NotificationRenderer<
     />
   );
 };
+
+registerNotificationRenderer(
+  "order:new",
+  OrderCheckinNotificationRenderer,
+  <ChecklistIcon color="primary" />
+);
 
 registerNotificationRenderer(
   "order:checkin",

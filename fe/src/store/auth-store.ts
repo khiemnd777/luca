@@ -15,6 +15,7 @@ import { fetchMyDepartment } from "@core/network/my-department.api";
 import type { MyDepartmentDto } from "@core/network/my-department.dto";
 import { env } from "@core/config/env";
 import { notifyLogin, notifyLogout } from "@core/network/auth-session";
+import { unlinkCurrentPushSubscriptionOnLogout } from "@root/core/notification/push-notification.manager";
 
 type AuthState = {
   user: MeModel | null;
@@ -98,6 +99,7 @@ export const useAuthStore = create<AuthState>()(
 
       async logout() {
         try {
+          await unlinkCurrentPushSubscriptionOnLogout().catch(() => undefined);
           await apiLogout();
         } finally {
           notifyLogout("user_logout");
