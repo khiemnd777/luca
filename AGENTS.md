@@ -786,6 +786,7 @@ You MUST NOT complete the task until all applicable validations pass:
 - permission/auth safety
 - cache and data consistency
 - routing and module registration integrity
+- if the task changes any `ts`, `tsx`, `js`, or `jsx` file, you MUST run the nearest relevant ESLint check before completion; if no narrower scoped command exists, run the repository-standard ESLint command for the owning app, and if ESLint cannot be run or does not pass, the task is INCOMPLETE
 
 A task is considered INCOMPLETE if validation is skipped.
 
