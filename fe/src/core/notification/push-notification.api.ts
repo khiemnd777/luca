@@ -9,8 +9,18 @@ import type {
 const basePath = `${env.apiBasePath}/notification`;
 
 export async function getPushPublicConfig(): Promise<PushPublicConfig> {
-  const { data } = await apiClient.get<PushPublicConfig>(`${basePath}/push-config`);
-  return data;
+  const { data } = await apiClient.get<{
+    enabled?: boolean;
+    public_key?: string;
+    publicKey?: string;
+    subject?: string;
+  }>(`${basePath}/push-config`);
+
+  return {
+    enabled: Boolean(data?.enabled),
+    publicKey: data?.publicKey ?? data?.public_key ?? "",
+    subject: data?.subject ?? "",
+  };
 }
 
 export async function listPushSubscriptions(): Promise<PushSubscriptionRecord[]> {
