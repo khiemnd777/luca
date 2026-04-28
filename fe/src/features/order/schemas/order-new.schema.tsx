@@ -3,7 +3,6 @@ import type { CustomRenderCtx, FieldDef } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { registerFormDialog } from "@core/form/form-dialog.registry";
 import { registerForm } from "@core/form/form-registry";
-import { reloadTable } from "@core/table/table-reload";
 import { create, getOrReserveOrderCode, id, prepareForRemakeByOrderID, search, update } from "@features/order/api/order.api";
 import type { OrderUpsertModel } from "@features/order/model/order.model";
 import { list as listPromotions } from "@features/promotion/api/promotion-admin.api";
@@ -18,6 +17,7 @@ import {
   applyCreatedOrderToPrescriptionScope,
 } from "../components/order-prescription-files-section.component";
 import { syncDeferredPrescriptionFiles } from "../utils/order-prescription-file.sync";
+import { refreshOrderResults } from "../utils/order-refresh.utils";
 
 export function buildNewOrderSchema(): FormSchema {
   let previousClinicId: string | number | null = null;
@@ -666,7 +666,7 @@ export function buildNewOrderSchema(): FormSchema {
     },
 
     async afterSaved(_, _ctx) {
-      reloadTable("orders");
+      refreshOrderResults();
     },
 
     hooks: {

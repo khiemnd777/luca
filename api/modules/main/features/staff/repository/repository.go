@@ -29,7 +29,7 @@ import (
 type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, input model.StaffDTO) (*model.StaffDTO, error)
-	AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error)
+	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
 	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error)
 	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) (int, error)
 	ChangePassword(ctx context.Context, id int, newPassword string) error
@@ -174,6 +174,10 @@ func (r *staffRepo) Create(ctx context.Context, deptID int, input model.StaffDTO
 	staffEnt, err := staffQ.Save(ctx)
 
 	if err != nil {
+		return nil, err
+	}
+
+	if err = ensureDepartmentMembershipInTx(ctx, tx, userEnt.ID, deptID); err != nil {
 		return nil, err
 	}
 
@@ -398,22 +402,40 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 	return dto, nil
 }
 
-func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error) {
-	const updateQuery = `UPDATE staffs SET department_id = $2 WHERE user_staff = $1`
-	result, err := r.deps.DB.ExecContext(ctx, updateQuery, staffID, departmentID)
+func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
+	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	affected, err := result.RowsAffected()
+	staffEnt, err := tx.Staff.Query().
+		Where(staff.HasUserWith(user.IDEQ(userID))).
+		Only(ctx)
 	if err != nil {
+		_ = tx.Rollback()
+		if generated.IsNotFound(err) {
+			return nil, fmt.Errorf("staff not found")
+		}
 		return nil, err
 	}
-	if affected == 0 {
-		return nil, fmt.Errorf("staff not found")
+
+	if _, err = tx.Staff.UpdateOneID(staffEnt.ID).
+		SetDepartmentID(departmentID).
+		Save(ctx); err != nil {
+		_ = tx.Rollback()
+		return nil, err
 	}
 
-	return r.GetByID(ctx, staffID)
+	if err = ensureDepartmentMembershipInTx(ctx, tx, userID, departmentID); err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+
+	return r.GetByID(ctx, userID)
 }
 
 func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error) {

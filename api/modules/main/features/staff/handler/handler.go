@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"errors"
+
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -118,12 +120,12 @@ func (h *StaffHandler) GetByID(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, _ := utils.GetParamAsInt(c, "id")
-	if id <= 0 {
+	userID, _ := utils.GetParamAsInt(c, "id")
+	if userID <= 0 {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
 
-	dto, err := h.svc.GetByID(c.UserContext(), id)
+	dto, err := h.svc.GetByID(c.UserContext(), userID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
@@ -203,6 +205,9 @@ func (h *StaffHandler) Create(c *fiber.Ctx) error {
 
 	dto, err := h.svc.Create(c.UserContext(), deptID, payload)
 	if err != nil {
+		if errors.Is(err, service.ErrConflict("")) {
+			return client_error.ResponseError(c, fiber.StatusConflict, err, err.Error())
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.Status(fiber.StatusCreated).JSON(dto)
@@ -212,8 +217,8 @@ func (h *StaffHandler) Update(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.update"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, _ := utils.GetParamAsInt(c, "id")
-	if id <= 0 {
+	userID, _ := utils.GetParamAsInt(c, "id")
+	if userID <= 0 {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
 
@@ -221,7 +226,7 @@ func (h *StaffHandler) Update(c *fiber.Ctx) error {
 	if err := c.BodyParser(&payload); err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "invalid body")
 	}
-	payload.ID = id
+	payload.ID = userID
 
 	deptID, err := getRouteDepartmentID(c)
 	if err != nil || deptID <= 0 {
@@ -240,8 +245,8 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 
-	id, _ := utils.GetParamAsInt(c, "id")
-	if id <= 0 {
+	userID, _ := utils.GetParamAsInt(c, "id")
+	if userID <= 0 {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
 
@@ -257,7 +262,7 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "department_id is required")
 	}
 
-	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), id, payload.DepartmentID)
+	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), userID, payload.DepartmentID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

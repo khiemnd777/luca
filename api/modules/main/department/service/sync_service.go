@@ -911,6 +911,8 @@ func (s *departmentSyncer) applySections(ctx context.Context, snapshot *syncSnap
 			Description:  src.Description,
 			Active:       src.Active,
 			Color:        src.Color,
+			LeaderID:     src.LeaderID,
+			LeaderName:   src.LeaderName,
 			CustomFields: src.CustomFields,
 		}
 		for _, processName := range src.ProcessNames {

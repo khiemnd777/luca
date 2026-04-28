@@ -61,6 +61,8 @@ type DepartmentSyncSectionRecord struct {
 	Description  string
 	Active       bool
 	Color        *string
+	LeaderID     *int
+	LeaderName   *string
 	CustomFields map[string]any
 	ProcessNames []string
 }
@@ -307,6 +309,8 @@ func (r *departmentSyncRepo) ListSections(ctx context.Context, deptID int) ([]De
 			COALESCE(s.description, ''),
 			s.active,
 			s.color,
+			s.leader_id,
+			s.leader_name,
 			COALESCE(s.custom_fields, '{}'::jsonb) AS custom_fields,
 			COALESCE((
 				SELECT json_agg(sp.process_name ORDER BY COALESCE(sp.display_order, 0), sp.id)
@@ -335,6 +339,8 @@ func (r *departmentSyncRepo) ListSections(ctx context.Context, deptID int) ([]De
 			&rec.Description,
 			&rec.Active,
 			&rec.Color,
+			&rec.LeaderID,
+			&rec.LeaderName,
 			&customFieldsRaw,
 			&processNamesRaw,
 		); err != nil {

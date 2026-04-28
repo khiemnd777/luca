@@ -1,4 +1,4 @@
-import type { FieldDef, FormContext } from "@core/form/types";
+import type { FieldDef } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { mapper } from "@core/mapper/auto-mapper";
 import { registerFormDialog } from "@core/form/form-dialog.registry";
@@ -42,20 +42,20 @@ export function buildSectionSchema(): FormSchema {
         mode: "whole",
         def: [
           {
-            name: "leaderId",
-            async searchPage(keyword: string, page: number, limit: number, ctx?: FormContext) {
+            name: "leader_id",
+            label: "Leader",
+            async searchPage(keyword: string, page: number, limit: number) {
               const searched = await search("section_leader", {
                 keyword,
                 page,
                 limit,
                 orderBy: "name",
-                extendWhere:  [`r.role_name=staff`, `ss.section_id=${ctx?.values.id}`],
               });
               return searched.items;
             },
           },
           {
-            name: "processIds",
+            name: "process_ids",
             hydrateOrderField: "display_order",
           }
         ]
@@ -94,9 +94,9 @@ export function buildSectionSchema(): FormSchema {
           : `Cập nhật bộ phận "${values?.name ?? ""}" thất bại, xin thử lại!`,
     },
 
-    async initialResolver(data: any) {
-      if (data) {
-        return await id(data.id);
+    async initialResolver(data?: unknown) {
+      if (data && typeof data === "object" && "id" in data) {
+        return await id(Number(data.id));
       }
       return {};
     },

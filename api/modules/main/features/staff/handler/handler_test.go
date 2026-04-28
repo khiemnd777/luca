@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/modules/main/config"
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
+	"github.com/khiemnd777/noah_api/modules/main/features/staff/service"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	dbutils "github.com/khiemnd777/noah_api/shared/db/utils"
 	"github.com/khiemnd777/noah_api/shared/module"
@@ -17,17 +19,18 @@ import (
 
 type staffServiceStub struct {
 	listDeptID int
+	createErr  error
 }
 
 func (s *staffServiceStub) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
-	return nil, nil
+	return nil, s.createErr
 }
 
 func (s *staffServiceStub) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	return nil, nil
 }
 
-func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error) {
+func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
 	return nil, nil
 }
 
@@ -104,5 +107,30 @@ func TestListUsesDepartmentIDFromRouteParam(t *testing.T) {
 	}
 	if svc.listDeptID != 5 {
 		t.Fatalf("expected handler to use route dept_id=5, got %d", svc.listDeptID)
+	}
+}
+
+func TestCreateMapsConflictToHTTP409(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{createErr: service.ErrConflict("phone already exists")}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.create"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff", h.Create)
+
+	req := httptest.NewRequest(http.MethodPost, "/1/staff", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
 	}
 }

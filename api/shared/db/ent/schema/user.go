@@ -4,8 +4,10 @@ import (
 	"time"
 
 	"entgo.io/ent"
+	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 type User struct {
@@ -17,7 +19,7 @@ func (User) Fields() []ent.Field {
 		field.String("email").Optional().Unique(),
 		field.String("password").Sensitive(),
 		field.String("name").Default(""),
-		field.String("phone").Optional().Unique(),
+		field.String("phone").Optional(),
 		field.Bool("active").Default(true),
 		field.Time("deleted_at").
 			Optional().
@@ -33,6 +35,15 @@ func (User) Fields() []ent.Field {
 		field.Time("updated_at").
 			Default(time.Now).
 			UpdateDefault(time.Now),
+	}
+}
+
+func (User) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("phone").
+			Unique().
+			StorageKey("users_phone_active_key").
+			Annotations(entsql.IndexWhere("deleted_at IS NULL")),
 	}
 }
 

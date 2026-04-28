@@ -22,7 +22,7 @@ import (
 type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
-	AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error)
+	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
 	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error
 	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error
 	ChangePassword(ctx context.Context, id int, newPassword string) error
@@ -41,6 +41,15 @@ type staffService struct {
 	repo  repository.StaffRepository
 	deps  *module.ModuleDeps[config.ModuleConfig]
 	cfMgr *customfields.Manager
+}
+
+type ErrConflict string
+
+func (e ErrConflict) Error() string { return string(e) }
+
+func (e ErrConflict) Is(target error) bool {
+	_, ok := target.(ErrConflict)
+	return ok
 }
 
 func NewStaffService(repo repository.StaffRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffService {
@@ -81,6 +90,10 @@ func kStaffSectionList(staffID int) string {
 
 func kUserRoleList(staffID int) string {
 	return fmt.Sprintf("rbac:roles:user:%d:*", staffID)
+}
+
+func kUserDepartment(userID int) string {
+	return fmt.Sprintf("user:%d:dept", userID)
 }
 
 func kDepartmentByID(id int) string {
@@ -128,6 +141,16 @@ func kStaffSearchWithRoleName(roleName string, q dbutils.SearchQuery) string {
 }
 
 func (s *staffService) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
+	if input.Phone != "" {
+		exists, err := s.repo.CheckPhoneExists(ctx, -1, input.Phone)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrConflict("phone already exists")
+		}
+	}
+
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
 		return nil, err
@@ -163,14 +186,14 @@ func (s *staffService) Update(ctx context.Context, deptID int, input model.Staff
 	return dto, nil
 }
 
-func (s *staffService) AssignStaffToDepartment(ctx context.Context, staffID int, departmentID int) (*model.StaffDTO, error) {
-	dto, err := s.repo.AssignStaffToDepartment(ctx, staffID, departmentID)
+func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
+	dto, err := s.repo.AssignStaffToDepartment(ctx, userID, departmentID)
 	if err != nil {
 		return nil, err
 	}
 
 	cache.InvalidateKeys(kStaffAll()...)
-	cache.InvalidateKeys(kStaffByID(staffID), kStaffSectionList(staffID), kUserRoleList(staffID), kSectionStaffAll(staffID))
+	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID), kUserDepartment(userID))
 
 	if dto != nil {
 		s.upsertSearch(ctx, departmentID, dto)
@@ -209,6 +232,7 @@ func (s *staffService) invalidateAdminAssignmentCaches(adminID int, staffID int)
 	rbac.InvalidateUserPermissionSet(adminID)
 	cache.InvalidateKeys(
 		fmt.Sprintf("user:%d:perms", adminID),
+		kUserDepartment(adminID),
 		fmt.Sprintf("department:first_of_user:%d", adminID),
 		fmt.Sprintf("staff:id:%d", staffID),
 		fmt.Sprintf("section:staff:%d:*", staffID),

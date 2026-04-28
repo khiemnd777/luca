@@ -18,6 +18,7 @@ import {
   applyCreatedOrderToPrescriptionScope,
 } from "../components/order-prescription-files-section.component";
 import { syncDeferredPrescriptionFiles } from "../utils/order-prescription-file.sync";
+import { refreshOrderResults } from "../utils/order-refresh.utils";
 
 export function buildRemakeOrderSchema(): FormSchema {
   let previousClinicId: string | number | null = null;
@@ -602,6 +603,7 @@ export function buildRemakeOrderSchema(): FormSchema {
     },
 
     async afterSaved(result, _ctx) {
+      refreshOrderResults();
       navigate(`/order/${result.latestOrderItem.orderId}/historical/${result.latestOrderItem.id}`);
     },
 

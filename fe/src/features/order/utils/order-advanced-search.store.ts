@@ -23,6 +23,7 @@ type OrderAdvancedSearchState = {
   setDraftFilter: <K extends keyof OrderAdvancedSearchFilters>(key: K, value: OrderAdvancedSearchFilters[K]) => void;
   applyFilters: () => void;
   resetFilters: () => void;
+  refreshResults: () => void;
 };
 
 export const useOrderAdvancedSearchStore = create<OrderAdvancedSearchState>((set) => ({
@@ -52,6 +53,10 @@ export const useOrderAdvancedSearchStore = create<OrderAdvancedSearchState>((set
     set((state) => ({
       draftFilters: defaultFilters(),
       appliedFilters: defaultFilters(),
+      refreshToken: state.refreshToken + 1,
+    })),
+  refreshResults: () =>
+    set((state) => ({
       refreshToken: state.refreshToken + 1,
     })),
 }));

@@ -1,6 +1,8 @@
 package registrar
 
 import (
+	"fmt"
+
 	policy "github.com/khiemnd777/noah_api/modules/main/features/__relation/policy"
 	"github.com/khiemnd777/noah_api/shared/logger"
 )
@@ -31,10 +33,14 @@ func init() {
 		ExtraJoins: func() string {
 			return `
 				JOIN staffs s ON s.user_staff = u.id
-				JOIN staff_sections ss ON ss.staff_id = s.id 
-				JOIN user_roles ur ON ur.user_id = u.id
-				JOIN roles r ON r.id = ur.role_id
 			`
+		},
+		ExtraWhere: func(params policy.ExtraWhereParams, args *[]any) string {
+			if params.DepartmentID <= 0 {
+				return ""
+			}
+			*args = append(*args, params.DepartmentID)
+			return fmt.Sprintf("s.department_id = $%d", len(*args))
 		},
 	})
 }
