@@ -22,6 +22,7 @@ export type RouteNode = {
   priority?: number;
   roles?: string[];
   requireAll?: boolean;
+  requireLogin?: boolean;
   permissions?: Perm[];
   hidden?: boolean;
   children?: RouteNode[];         // thay cho lồng subItems/menu
@@ -30,6 +31,7 @@ export type RouteNode = {
 
 export type RouteConfig = {
   path: string;
+  requireLogin?: boolean;
   permissions?: Perm[];
   element: ReactNode | LazyExoticComponent<() => JSX.Element>;
   meta: import("@core/module/route-meta").RouteMeta;

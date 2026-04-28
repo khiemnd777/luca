@@ -38,6 +38,7 @@ function useAppRouter() {
       return {
         element: (
           <RequireAuth
+            requireLogin={r.requireLogin}
             permissions={r.permissions}
           />
         ),

@@ -4,10 +4,22 @@ import OneColumnPage from "@root/core/pages/one-column-page";
 import ChecklistIcon from '@mui/icons-material/Checklist';
 import RepeatOnIcon from '@mui/icons-material/RepeatOn';
 import EventRepeatIcon from '@mui/icons-material/EventRepeat';
+import OrderDeliveryQRPage from "@features/order/pages/order-delivery-qr-page";
 
 const mod: ModuleDescriptor = {
   id: "order",
   routes: [
+    {
+      key: "order-delivery-qr",
+      hidden: true,
+      requireLogin: false,
+      label: "Xác nhận giao hàng",
+      title: "Xác nhận giao hàng",
+      path: "/delivery/qr/:token",
+      element: <OrderDeliveryQRPage />,
+      icon: <ChecklistIcon />,
+      priority: 100,
+    },
     {
       key: "order",
       permissions: ["order.view"],
