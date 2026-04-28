@@ -90,6 +90,14 @@ export function OrderProcessCheckCodeWidget() {
 
   const isCheckout = Boolean(currentTarget?.id);
   const header = "Hiện tại";
+  const currentFormKey = [
+    currentTarget?.orderId ?? 0,
+    currentTarget?.orderItemId ?? 0,
+    currentTarget?.productId ?? 0,
+    currentTarget?.processId ?? 0,
+    currentTarget?.id ?? 0,
+    isCheckout ? "check-out" : "check-in",
+  ].join(":");
 
   const title = React.useMemo(() => {
     const codeTitle = currentTarget?.orderItemCode;
@@ -178,6 +186,7 @@ export function OrderProcessCheckCodeWidget() {
                   </Stack>
                 ) : (
                   <AutoForm
+                    key={currentFormKey}
                     name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
                     ref={frmProcessCheckInOrOutRef}
                     initial={currentTarget ?? {}}

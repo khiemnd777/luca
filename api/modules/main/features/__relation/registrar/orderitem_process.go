@@ -34,7 +34,7 @@ func init() {
 		NormFields:   []string{"p.product_code_norm", "p.product_name_norm", "p.process_name_norm", "p.section_name_norm"},
 		RefFields:    []string{"id", "product_id", "product_code", "product_name", "process_name", "section_name", "color"},
 		SelectFields: []string{"p.id", "p.product_id", "p.product_code", "p.product_name", "p.process_name", "p.section_name", "p.color"},
-		Permissions:  []string{"order.search"},
+		Permissions:  []string{"order.search", "order.development"},
 		CachePrefix:  "order:process",
 	})
 }

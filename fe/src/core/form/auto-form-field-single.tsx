@@ -888,6 +888,7 @@ export const AutoFormFieldSingle = React.memo(function AutoFormFieldSingle({
         validateOn={f.validateOn}
         onValidate={f.onValidate}
         refreshKey={f.refreshKey}
+        autoLoadAllOnMount={f.autoLoadAllOnMount}
         pageLimit={f.pageLimit}
         ctx={ctx}
       />

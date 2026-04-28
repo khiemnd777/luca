@@ -486,6 +486,12 @@ function SearchSingleFieldInner<T>(
     (o: T) => (props.getInputLabel ? props.getInputLabel(o) : getOptionLabel(o, options)),
     [props.getInputLabel, getOptionLabel, options]
   );
+  const selectedOptionValue = value ? getOptionValue(value) : selectedId;
+  const visibleOptions = React.useMemo(() => {
+    if (selectedOptionValue == null) return options;
+    const selectedKey = String(selectedOptionValue);
+    return options.filter((option) => String(getOptionValue(option)) !== selectedKey);
+  }, [getOptionValue, options, selectedOptionValue]);
 
   return (
     <FormControl fullWidth={fullWidth} disabled={disabled} error={!!mergedError}>
@@ -493,7 +499,7 @@ function SearchSingleFieldInner<T>(
         <Stack direction="row" spacing={1} alignItems="center">
           <Autocomplete
             sx={{ flex: 1 }}
-            options={options}
+            options={visibleOptions}
             loading={loading || loadingMore}
             value={value}
             filterOptions={(x) => x}

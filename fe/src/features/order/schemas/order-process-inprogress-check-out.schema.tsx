@@ -74,6 +74,7 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       kind: "searchsingle",
       label: "Công đoạn hiện tại",
       name: "processId",
+      altName: "processName",
       getOptionLabel: (d: any) => buildProcessNameLabel(d),
       async hydrateById(idValue: number | string) {
         if (!idValue) return null;
@@ -85,6 +86,7 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       kind: "searchsingle",
       label: "Kỹ thuật viên",
       name: "assignedId",
+      altName: "assignedName",
       getOptionLabel: (d: any) => d?.name ?? "",
       async hydrateById(idValue: number | string) {
         if (!idValue) return null;

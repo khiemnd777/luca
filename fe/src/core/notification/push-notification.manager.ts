@@ -10,6 +10,8 @@ import type {
 } from "./push-notification.types";
 
 const SERVICE_WORKER_URL = "/push-sw.js";
+const LOGOUT_PUSH_CLEANUP_TIMEOUT_MS = 1500;
+const LOGOUT_SERVICE_WORKER_READY_TIMEOUT_MS = 1000;
 
 type CurrentSubscriptionSyncResult = {
   synced: boolean;
@@ -73,8 +75,27 @@ async function registerServiceWorker(): Promise<ServiceWorkerRegistration> {
   });
 }
 
-async function getCurrentPushSubscription(registration?: ServiceWorkerRegistration): Promise<PushSubscription | null> {
-  const reg = registration ?? (await navigator.serviceWorker.ready);
+function withTimeout<T, F>(promise: Promise<T>, timeoutMs: number, fallback: F): Promise<T | F> {
+  return new Promise((resolve) => {
+    const timer = window.setTimeout(() => resolve(fallback), timeoutMs);
+
+    promise
+      .then((value) => resolve(value))
+      .catch(() => resolve(fallback))
+      .finally(() => window.clearTimeout(timer));
+  });
+}
+
+async function getCurrentPushSubscription(
+  registration?: ServiceWorkerRegistration,
+  options?: { readyTimeoutMs?: number },
+): Promise<PushSubscription | null> {
+  const reg = registration ?? (
+    options?.readyTimeoutMs
+      ? await withTimeout(navigator.serviceWorker.ready, options.readyTimeoutMs, null)
+      : await navigator.serviceWorker.ready
+  );
+  if (!reg) return null;
   return reg.pushManager.getSubscription();
 }
 
@@ -154,12 +175,14 @@ export async function syncCurrentPushSubscription(): Promise<CurrentSubscription
   return { synced: true, record };
 }
 
-export async function unlinkCurrentPushSubscriptionOnLogout(): Promise<void> {
+async function unlinkCurrentPushSubscriptionOnLogoutCore(): Promise<void> {
   if (!supportsPushNotifications()) {
     return;
   }
 
-  const subscription = await getCurrentPushSubscription().catch(() => null);
+  const subscription = await getCurrentPushSubscription(undefined, {
+    readyTimeoutMs: LOGOUT_SERVICE_WORKER_READY_TIMEOUT_MS,
+  }).catch(() => null);
   if (!subscription) {
     return;
   }
@@ -169,6 +192,14 @@ export async function unlinkCurrentPushSubscriptionOnLogout(): Promise<void> {
   const matched = records.filter((item) => item.endpoint === currentEndpoint);
 
   await Promise.allSettled(matched.map((item) => deletePushSubscription(item.id)));
+}
+
+export async function unlinkCurrentPushSubscriptionOnLogout(): Promise<void> {
+  await withTimeout(
+    unlinkCurrentPushSubscriptionOnLogoutCore(),
+    LOGOUT_PUSH_CLEANUP_TIMEOUT_MS,
+    undefined,
+  );
 }
 
 export async function disablePushSubscription(record: PushSubscriptionRecord): Promise<void> {

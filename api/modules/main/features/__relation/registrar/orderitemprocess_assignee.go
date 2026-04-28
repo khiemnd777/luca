@@ -57,7 +57,10 @@ func init() {
 		},
 		ExtraWhere: func(params policy.ExtraWhereParams, args *[]any) string {
 			*args = append(*args, "technician")
-			return fmt.Sprintf("r.role_name = $%d", len(*args))
+			roleArg := len(*args)
+			*args = append(*args, params.DepartmentID)
+			departmentArg := len(*args)
+			return fmt.Sprintf("r.role_name = $%d AND s.department_id = $%d", roleArg, departmentArg)
 		},
 	})
 }
