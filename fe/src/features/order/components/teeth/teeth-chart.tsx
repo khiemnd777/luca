@@ -1,10 +1,22 @@
 import { Button } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ToothSprite } from "./tooth-sprite";
-import type { ToothCode } from "./tooth-sprite-map";
-
-export const upperToothCodes: ToothCode[] = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
-export const lowerToothCodes: ToothCode[] = [48, 47, 46, 45, 44, 43, 42, 41, 31, 32, 33, 34, 35, 36, 37, 38];
+import { TOOTH_SPRITES, type ToothCode } from "./tooth-sprite-map";
+import {
+  addBridgeToothSegments,
+  addSingleToothSegment,
+  createBridgeSegments,
+  expandToothSelectionSegment,
+  expandToothSelectionSegments,
+  formatToothPositionSegments,
+  getToothSelectionKind,
+  lowerToothCodes,
+  removeToothCodesFromSegments,
+  replaceToothSelectionInAffectedJaws,
+  type ToothSelectionKind,
+  type ToothSelectionSegment,
+  upperToothCodes,
+} from "../../utils/tooth-position.utils";
 
 function rectsIntersect(a: DOMRect, b: DOMRect) {
   return !(
@@ -14,6 +26,12 @@ function rectsIntersect(a: DOMRect, b: DOMRect) {
     a.top > b.bottom
   );
 }
+
+function isModifierDrag(e: React.MouseEvent) {
+  return e.shiftKey || e.metaKey || e.ctrlKey;
+}
+
+type IndicatorPosition = "top" | "bottom";
 
 export function TeethChart({
   spriteUrl,
@@ -25,15 +43,17 @@ export function TeethChart({
   spriteUrl: string;
   scale?: number;
   showLabels?: boolean;
-  onChange?: (selected: ToothCode[]) => void;
-  value?: ToothCode[];
+  onChange?: (selected: ToothSelectionSegment[]) => void;
+  value?: ToothSelectionSegment[];
 }) {
   const toothRefs = useRef<Map<ToothCode, HTMLDivElement>>(new Map());
 
-  const [selected, setSelected] = useState<Set<ToothCode>>(new Set());
+  const [segments, setSegments] = useState<ToothSelectionSegment[]>([]);
   const [dragRect, setDragRect] = useState<DOMRect | null>(null);
   const startPoint = useRef<{ x: number; y: number } | null>(null);
   const dragSelectedRef = useRef<Set<ToothCode>>(new Set());
+  const dragBaseSegmentsRef = useRef<ToothSelectionSegment[]>([]);
+  const isModifierDragRef = useRef(false);
   const valueKeyRef = useRef<string | null>(null);
   const hasMouseDown = useRef(false);
 
@@ -41,23 +61,27 @@ export function TeethChart({
   const mouseDownTarget = useRef<EventTarget | null>(null);
 
   const scaleFn = (v: number) => v * scale;
+  const columnGap = scaleFn(14);
+  const indicatorSlotHeight = 24 * scale / .35;
+  const labelSlotHeight = showLabels ? 26 * scale / .35 : 0;
+  const upperSpriteSlotHeight = getMaxSpriteHeight(upperToothCodes) * scale;
+  const lowerSpriteSlotHeight = getMaxSpriteHeight(lowerToothCodes) * scale;
+  const selected = new Set(expandToothSelectionSegments(segments));
 
   const handleSelectAll = (codes: ToothCode[]) => {
-    const next = new Set<ToothCode>(selected);
-    codes.forEach((code) => next.add(code));
-    setSelected(next);
-    onChange?.([...next]);
+    const next = addBridgeToothSegments(segments, codes);
+    setSegments(next);
+    onChange?.(next);
   };
 
   const handleClearSelection = (codes: ToothCode[]) => {
-    const next = new Set<ToothCode>(selected);
-    codes.forEach((code) => next.delete(code));
-    setSelected(next);
-    onChange?.([...next]);
+    const next = removeToothCodesFromSegments(segments, codes);
+    setSegments(next);
+    onChange?.(next);
   };
 
-  const isAllSelected = (codes: ToothCode[]) =>
-    codes.every((code) => selected.has(code));
+  const hasAnySelected = (codes: ToothCode[]) =>
+    codes.some((code) => selected.has(code));
 
   const stopChartMouseEvent = (e: React.MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
@@ -66,7 +90,7 @@ export function TeethChart({
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        setSelected(new Set());
+        setSegments([]);
         onChange?.([]);
       }
     };
@@ -75,12 +99,11 @@ export function TeethChart({
   }, [onChange]);
 
   useEffect(() => {
-    if (!value) return;
-    const next = new Set<ToothCode>(value);
-    const key = [...next].sort((a, b) => a - b).join(",");
+    const next = value ?? [];
+    const key = formatToothPositionSegments(next);
     if (key === valueKeyRef.current) return;
     valueKeyRef.current = key;
-    setSelected(next);
+    setSegments(next);
   }, [value]);
 
   const beginDrag = (e: React.MouseEvent) => {
@@ -93,6 +116,8 @@ export function TeethChart({
     startPoint.current = { x: e.clientX, y: e.clientY };
     setDragRect(null);
     dragSelectedRef.current = new Set();
+    dragBaseSegmentsRef.current = segments;
+    isModifierDragRef.current = isModifierDrag(e);
   };
 
   const onDrag = (e: React.MouseEvent) => {
@@ -106,6 +131,9 @@ export function TeethChart({
     }
 
     if (!isDragging.current) return;
+    if (isModifierDrag(e)) {
+      isModifierDragRef.current = true;
+    }
 
     const rect = new DOMRect(
       Math.min(startPoint.current.x, e.clientX),
@@ -123,7 +151,11 @@ export function TeethChart({
       }
     });
 
-    setSelected(next);
+    const dragCodes = [...next];
+    const preview = isModifierDragRef.current
+      ? addBridgeToothSegments(dragBaseSegmentsRef.current, dragCodes)
+      : replaceToothSelectionInAffectedJaws(dragBaseSegmentsRef.current, createBridgeSegments(dragCodes));
+    setSegments(preview);
     dragSelectedRef.current = next;
   };
 
@@ -132,6 +164,8 @@ export function TeethChart({
     setDragRect(null);
     isDragging.current = false;
     hasMouseDown.current = false;
+    dragBaseSegmentsRef.current = [];
+    isModifierDragRef.current = false;
   };
 
   const endDrag = (e: React.MouseEvent) => {
@@ -142,10 +176,13 @@ export function TeethChart({
 
     // ---- CASE 1: drag multi-select ----
     if (isDragging.current) {
-      const final = dragSelectedRef.current;
+      const dragCodes = [...dragSelectedRef.current];
+      const final = isModifierDragRef.current || isModifierDrag(e)
+        ? addBridgeToothSegments(dragBaseSegmentsRef.current, dragCodes)
+        : replaceToothSelectionInAffectedJaws(dragBaseSegmentsRef.current, createBridgeSegments(dragCodes));
 
-      setSelected(new Set(final));
-      onChange?.([...final]);
+      setSegments(final);
+      onChange?.(final);
 
       cleanupDrag();
       return;
@@ -162,8 +199,6 @@ export function TeethChart({
 
     // ---- CASE 2: click outside ----
     if (!clickedCode) {
-      setSelected(new Set());
-      onChange?.([]);
       cleanupDrag();
       return;
     }
@@ -173,30 +208,29 @@ export function TeethChart({
 
     // ---- CASE 3: Shift + click (additive) ----
     if (isShift) {
-      const next = new Set(selected);
-      next.add(clickedCode);
-      setSelected(next);
-      onChange?.([...next]);
+      const next = addSingleToothSegment(segments, clickedCode);
+      setSegments(next);
+      onChange?.(next);
       cleanupDrag();
       return;
     }
 
     // ---- CASE 4: Ctrl / Cmd + click (toggle) ----
     if (isToggle) {
-      const next = new Set(selected);
-      if (next.has(clickedCode)) next.delete(clickedCode);
-      else next.add(clickedCode);
+      const next = selected.has(clickedCode)
+        ? removeToothCodesFromSegments(segments, [clickedCode])
+        : addSingleToothSegment(segments, clickedCode);
 
-      setSelected(next);
-      onChange?.([...next]);
+      setSegments(next);
+      onChange?.(next);
       cleanupDrag();
       return;
     }
 
     // ---- CASE 5: plain click (single select) ----
-    const next = new Set<ToothCode>([clickedCode]);
-    setSelected(next);
-    onChange?.([clickedCode]);
+    const next = replaceToothSelectionInAffectedJaws(segments, [{ kind: "single", code: clickedCode }]);
+    setSegments(next);
+    onChange?.(next);
     cleanupDrag();
   };
 
@@ -204,9 +238,15 @@ export function TeethChart({
   const ToothColumn = ({
     code,
     labelPosition,
+    indicatorPosition,
+    rowCodes,
+    spriteSlotHeight,
   }: {
     code: ToothCode;
     labelPosition: "top" | "bottom";
+    indicatorPosition: IndicatorPosition;
+    rowCodes: ToothCode[];
+    spriteSlotHeight: number;
   }) => (
     <div
       style={{
@@ -215,25 +255,67 @@ export function TeethChart({
         flexDirection: "column",
         alignItems: "center",
         gap: scaleFn(6),
+        position: "relative",
       }}
     >
-      {showLabels && labelPosition === "top" && (
-        <Label code={code} selected={selected.has(code)} scale={scale} />
+      {indicatorPosition === "top" && (
+        <IndicatorSlot height={indicatorSlotHeight}>
+          <SelectionIndicator
+            code={code}
+            rowCodes={rowCodes}
+            segments={segments}
+            position="top"
+            columnGap={columnGap}
+            height={indicatorSlotHeight}
+            scale={scale}
+          />
+        </IndicatorSlot>
       )}
 
-      <ToothSprite
-        ref={(el) => {
-          if (el) toothRefs.current.set(code, el);
-          else toothRefs.current.delete(code);
+      {showLabels && labelPosition === "top" && (
+        <LabelSlot height={labelSlotHeight}>
+          <Label code={code} selectionKind={getToothSelectionKind(segments, code)} scale={scale} />
+        </LabelSlot>
+      )}
+
+      <div
+        style={{
+          height: spriteSlotHeight,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
         }}
-        code={code}
-        spriteUrl={spriteUrl}
-        scale={scale}
-        selected={selected.has(code)}
-      />
+      >
+        <ToothSprite
+          ref={(el) => {
+            if (el) toothRefs.current.set(code, el);
+            else toothRefs.current.delete(code);
+          }}
+          code={code}
+          spriteUrl={spriteUrl}
+          scale={scale}
+          selectionKind={getToothSelectionKind(segments, code)}
+        />
+      </div>
 
       {showLabels && labelPosition === "bottom" && (
-        <Label code={code} selected={selected.has(code)} scale={scale} />
+        <LabelSlot height={labelSlotHeight}>
+          <Label code={code} selectionKind={getToothSelectionKind(segments, code)} scale={scale} />
+        </LabelSlot>
+      )}
+
+      {indicatorPosition === "bottom" && (
+        <IndicatorSlot height={indicatorSlotHeight}>
+          <SelectionIndicator
+            code={code}
+            rowCodes={rowCodes}
+            segments={segments}
+            position="bottom"
+            columnGap={columnGap}
+            height={indicatorSlotHeight}
+            scale={scale}
+          />
+        </IndicatorSlot>
       )}
     </div>
   );
@@ -264,7 +346,14 @@ export function TeethChart({
         }}
       >
         {upperToothCodes.map((code) => (
-          <ToothColumn key={code} code={code} labelPosition="bottom" />
+          <ToothColumn
+            key={code}
+            code={code}
+            labelPosition="bottom"
+            indicatorPosition="top"
+            rowCodes={upperToothCodes}
+            spriteSlotHeight={upperSpriteSlotHeight}
+          />
         ))}
       </div>
 
@@ -272,6 +361,7 @@ export function TeethChart({
         style={{
           display: "flex",
           justifyContent: "center",
+          gap: scaleFn(8),
           marginTop: scaleFn(8),
         }}
       >
@@ -280,14 +370,22 @@ export function TeethChart({
           variant="outlined"
           onMouseDown={stopChartMouseEvent}
           onMouseUp={stopChartMouseEvent}
-          onClick={() =>
-            isAllSelected(upperToothCodes)
-              ? handleClearSelection(upperToothCodes)
-              : handleSelectAll(upperToothCodes)
-          }
+          onClick={() => handleSelectAll(upperToothCodes)}
         >
-          {isAllSelected(upperToothCodes) ? "Xóa" : "Toàn bộ"}
+          Toàn bộ
         </Button>
+        {hasAnySelected(upperToothCodes) && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onMouseDown={stopChartMouseEvent}
+            onMouseUp={stopChartMouseEvent}
+            onClick={() => handleClearSelection(upperToothCodes)}
+          >
+            Xóa hết
+          </Button>
+        )}
       </div>
 
       {/* spacer */}
@@ -303,7 +401,14 @@ export function TeethChart({
         }}
       >
         {lowerToothCodes.map((code) => (
-          <ToothColumn key={code} code={code} labelPosition="top" />
+          <ToothColumn
+            key={code}
+            code={code}
+            labelPosition="top"
+            indicatorPosition="bottom"
+            rowCodes={lowerToothCodes}
+            spriteSlotHeight={lowerSpriteSlotHeight}
+          />
         ))}
       </div>
 
@@ -311,6 +416,7 @@ export function TeethChart({
         style={{
           display: "flex",
           justifyContent: "center",
+          gap: scaleFn(8),
           marginTop: scaleFn(8),
         }}
       >
@@ -319,14 +425,22 @@ export function TeethChart({
           variant="outlined"
           onMouseDown={stopChartMouseEvent}
           onMouseUp={stopChartMouseEvent}
-          onClick={() =>
-            isAllSelected(lowerToothCodes)
-              ? handleClearSelection(lowerToothCodes)
-              : handleSelectAll(lowerToothCodes)
-          }
+          onClick={() => handleSelectAll(lowerToothCodes)}
         >
-          {isAllSelected(lowerToothCodes) ? "Xóa" : "Toàn bộ"}
+          Toàn bộ
         </Button>
+        {hasAnySelected(lowerToothCodes) && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="error"
+            onMouseDown={stopChartMouseEvent}
+            onMouseUp={stopChartMouseEvent}
+            onClick={() => handleClearSelection(lowerToothCodes)}
+          >
+            Xóa hết
+          </Button>
+        )}
       </div>
 
       {/* Selection box */}
@@ -349,13 +463,192 @@ export function TeethChart({
   );
 }
 
-function Label({
+function SelectionIndicator({
   code,
-  selected,
+  rowCodes,
+  segments,
+  position,
+  columnGap,
+  height,
   scale,
 }: {
   code: ToothCode;
-  selected: boolean;
+  rowCodes: ToothCode[];
+  segments: ToothSelectionSegment[];
+  position: IndicatorPosition;
+  columnGap: number;
+  height: number;
+  scale: number;
+}) {
+  const indicator = getSelectionIndicator(segments, rowCodes, code);
+  const bridgeColor = "#1976d2";
+  const singleColor = "#9c27b0";
+
+  if (!indicator) {
+    return null;
+  }
+
+  if (indicator.kind === "single") {
+    const triangleSize = 10 * scale / .35;
+    return (
+      <div
+        style={{
+          height,
+          width: "100%",
+          display: "flex",
+          alignItems: position === "top" ? "flex-end" : "flex-start",
+          justifyContent: "center",
+        }}
+      >
+        <div
+          style={{
+            width: 0,
+            height: 0,
+            borderLeft: `${triangleSize / 2}px solid transparent`,
+            borderRight: `${triangleSize / 2}px solid transparent`,
+            borderTop: position === "top" ? `${triangleSize}px solid ${singleColor}` : undefined,
+            borderBottom: position === "bottom" ? `${triangleSize}px solid ${singleColor}` : undefined,
+          }}
+        />
+      </div>
+    );
+  }
+
+  const lineHeight = 3;
+  const capHeight = 16 * scale / .35;
+  const extendsLeft = !indicator.starts;
+  const extendsRight = !indicator.ends;
+
+  return (
+    <div
+      style={{
+        height,
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: extendsLeft ? -columnGap / 2 : 0,
+          right: extendsRight ? -columnGap / 2 : 0,
+          [position === "top" ? "bottom" : "top"]: capHeight / 2,
+          height: lineHeight,
+          background: bridgeColor,
+          borderRadius: lineHeight,
+        }}
+      />
+      {indicator.starts && (
+        <BridgeCap color={bridgeColor} height={capHeight} side="left" position={position} />
+      )}
+      {indicator.ends && (
+        <BridgeCap color={bridgeColor} height={capHeight} side="right" position={position} />
+      )}
+    </div>
+  );
+}
+
+function IndicatorSlot({
+  height,
+  children,
+}: {
+  height: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        height,
+        width: "100%",
+        position: "relative",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function LabelSlot({
+  height,
+  children,
+}: {
+  height: number;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        height,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function BridgeCap({
+  color,
+  height,
+  side,
+  position,
+}: {
+  color: string;
+  height: number;
+  side: "left" | "right";
+  position: IndicatorPosition;
+}) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        [side]: 0,
+        [position === "top" ? "bottom" : "top"]: 0,
+        width: 3,
+        height,
+        background: color,
+        borderRadius: 3,
+      }}
+    />
+  );
+}
+
+function getSelectionIndicator(
+  segments: ToothSelectionSegment[],
+  rowCodes: ToothCode[],
+  code: ToothCode
+):
+  | { kind: "bridge"; starts: boolean; ends: boolean }
+  | { kind: "single" }
+  | null {
+  for (const segment of segments) {
+    if (segment.kind !== "bridge") continue;
+
+    const bridgeCodes = new Set(expandToothSelectionSegment(segment));
+    if (!bridgeCodes.has(code)) continue;
+
+    const rowIndex = rowCodes.indexOf(code);
+    const previousCode = rowCodes[rowIndex - 1];
+    const nextCode = rowCodes[rowIndex + 1];
+    return {
+      kind: "bridge",
+      starts: !previousCode || !bridgeCodes.has(previousCode),
+      ends: !nextCode || !bridgeCodes.has(nextCode),
+    };
+  }
+
+  return getToothSelectionKind(segments, code) === "single" ? { kind: "single" } : null;
+}
+
+function Label({
+  code,
+  selectionKind,
+  scale,
+}: {
+  code: ToothCode;
+  selectionKind: ToothSelectionKind | null;
   scale: number;
 }) {
   return (
@@ -364,10 +657,14 @@ function Label({
         fontSize: 12 * scale / .325,
         fontWeight: 600,
         lineHeight: 2,
-        color: selected ? "#1976d2" : "inherit",
+        color: selectionKind === "bridge" ? "#1976d2" : selectionKind === "single" ? "#9c27b0" : "inherit",
       }}
     >
       {code}
     </div>
   );
+}
+
+function getMaxSpriteHeight(codes: ToothCode[]) {
+  return Math.max(...codes.map((code) => TOOTH_SPRITES[code].h));
 }

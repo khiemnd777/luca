@@ -1,17 +1,23 @@
 import React, { forwardRef } from "react";
 import { SPRITE_W, SPRITE_H, TOOTH_SPRITES, type ToothCode } from "./tooth-sprite-map";
+import type { ToothSelectionKind } from "../../utils/tooth-position.utils";
 
 type Props = {
   code: ToothCode;
   spriteUrl: string;
   scale?: number;
   className?: string;
-  selected?: boolean;
+  selectionKind?: ToothSelectionKind | null;
 };
 
 export const ToothSprite = forwardRef<HTMLDivElement, Props>(
-  ({ code, spriteUrl, scale = 1, className, selected }, ref) => {
+  ({ code, spriteUrl, scale = 1, className, selectionKind }, ref) => {
     const r = TOOTH_SPRITES[code];
+    const selectionColor = selectionKind === "bridge"
+      ? "#1976d2"
+      : selectionKind === "single"
+        ? "#9c27b0"
+        : undefined;
 
     const style: React.CSSProperties = {
       width: r.w * scale,
@@ -20,7 +26,7 @@ export const ToothSprite = forwardRef<HTMLDivElement, Props>(
       backgroundRepeat: "no-repeat",
       backgroundSize: `${SPRITE_W * scale}px ${SPRITE_H * scale}px`,
       backgroundPosition: `${-r.x * scale}px ${-r.y * scale}px`,
-      boxShadow: selected ? "0 0 0 2px #1976d2" : undefined,
+      boxShadow: selectionColor ? `0 0 0 2px ${selectionColor}` : undefined,
       borderRadius: 4,
     };
 
