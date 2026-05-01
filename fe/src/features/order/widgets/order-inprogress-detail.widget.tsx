@@ -49,7 +49,7 @@ export function OrderInProgressDetailWidget() {
 
       <Spacer />
 
-      <OrderInProgress />
+      <OrderInProgress showPrescriptionFiles />
     </>
   );
 }

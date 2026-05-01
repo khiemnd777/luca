@@ -1,9 +1,11 @@
 import * as React from "react";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import UploadFileOutlinedIcon from "@mui/icons-material/UploadFileOutlined";
 import {
   Button,
   CircularProgress,
+  IconButton,
   Link,
   Paper,
   Box,
@@ -36,6 +38,7 @@ import {
 import { hydratePrescriptionFiles } from "../utils/order-prescription-file.sync";
 import { OrderFileCameraDialog } from "./order-file-camera-dialog.component";
 import { OrderPrescriptionFileViewer } from "./order-prescription-file-viewer.component";
+import { formatDateTime } from "@root/shared/utils/datetime.utils";
 
 const fileAccept = ".jpg,.jpeg,.png,.webp,.pdf,.docx,image/jpeg,image/png,image/webp,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -45,6 +48,7 @@ type DeferredSectionProps = {
   orderId?: number | null;
   sourceOrderId?: number | null;
   canMutate?: boolean;
+  showStatus?: boolean;
   setOrderValues: (patch: Record<string, unknown>) => void;
 };
 
@@ -54,6 +58,7 @@ type ImmediateSectionProps = {
   orderId?: number | null;
   sourceOrderId?: number | null;
   canMutate?: boolean;
+  showStatus?: boolean;
 };
 
 type OrderPrescriptionFilesSectionProps = DeferredSectionProps | ImmediateSectionProps;
@@ -104,13 +109,30 @@ function uploadStateLabel(uploadState: "success" | "pending" | "error") {
   }
 }
 
+function captureDateLabel(value?: string | null) {
+  return formatDateTime(value) || "—";
+}
+
 function openExternalFile(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
 type FilePreviewCellProps =
-  | { kind: "persisted"; orderId: number; file: OrderPrescriptionFileModel; onOpen?: () => void }
-  | { kind: "local"; file: LocalPrescriptionQueueItem; onOpen?: () => void };
+  | {
+      kind: "persisted";
+      orderId: number;
+      file: OrderPrescriptionFileModel;
+      onOpen?: () => void;
+      width?: number | string;
+      height?: number | string;
+    }
+  | {
+      kind: "local";
+      file: LocalPrescriptionQueueItem;
+      onOpen?: () => void;
+      width?: number | string;
+      height?: number | string;
+    };
 
 function FilePreviewCell(props: FilePreviewCellProps) {
   const [localUrl, setLocalUrl] = React.useState<string | null>(null);
@@ -134,6 +156,8 @@ function FilePreviewCell(props: FilePreviewCellProps) {
   }, [props]);
 
   const src = props.kind === "persisted" ? displayUrl : localUrl;
+  const width = props.width ?? 72;
+  const height = props.height ?? 72;
 
   if (!src) {
     return null;
@@ -150,7 +174,11 @@ function FilePreviewCell(props: FilePreviewCellProps) {
         border: 0,
         background: "transparent",
         display: "block",
+        width,
+        height,
         lineHeight: 0,
+        overflow: "hidden",
+        borderRadius: 1,
         cursor: props.onOpen ? "pointer" : "default",
       }}
     >
@@ -159,10 +187,10 @@ function FilePreviewCell(props: FilePreviewCellProps) {
         src={src}
         alt={props.file.fileName}
         sx={{
-          width: 72,
-          height: 72,
-          borderRadius: 1,
+          width: "100%",
+          height: "100%",
           objectFit: "cover",
+          objectPosition: "center",
           border: (theme) => `1px solid ${theme.palette.divider}`,
           display: "block",
         }}
@@ -171,8 +199,145 @@ function FilePreviewCell(props: FilePreviewCellProps) {
   );
 }
 
+type MobilePrescriptionFileCardProps =
+  | {
+      kind: "persisted";
+      orderId: number;
+      file: OrderPrescriptionFileModel;
+      canMutate?: boolean;
+      showStatus?: boolean;
+      onOpen: () => void;
+      onDelete?: () => void;
+    }
+  | {
+      kind: "local";
+      file: LocalPrescriptionQueueItem;
+      canMutate?: boolean;
+      showStatus?: boolean;
+      onOpen: () => void;
+      onDelete?: () => void;
+    };
+
+function MobilePrescriptionFileCard(props: MobilePrescriptionFileCardProps) {
+  const { file, canMutate, showStatus = true, onOpen, onDelete } = props;
+  const format = props.kind === "local" ? file.format : file.format || toFormatLabel(file.fileName);
+  const isImage = isPreviewableImage(file.mimeType);
+  const status = props.kind === "local" ? uploadStateLabel(file.uploadState) : uploadStateLabel("success");
+  const captureDate = props.kind === "local" ? "Chưa upload" : captureDateLabel(file.createdAt);
+
+  return (
+    <Paper variant="outlined" sx={{ overflow: "hidden", borderRadius: 2 }}>
+      <Box
+        component="div"
+        sx={{
+          width: "100%",
+          p: 0,
+          m: 0,
+          border: 0,
+          backgroundColor: "grey.50",
+          display: "block",
+          cursor: "pointer",
+          lineHeight: 0,
+        }}
+      >
+        {isImage ? (
+          props.kind === "persisted" ? (
+            <FilePreviewCell
+              kind="persisted"
+              orderId={props.orderId}
+              file={file}
+              onOpen={onOpen}
+              width="100%"
+              height={180}
+            />
+          ) : (
+            <FilePreviewCell
+              kind="local"
+              file={file}
+              onOpen={onOpen}
+              width="100%"
+              height={180}
+            />
+          )
+        ) : (
+          <Stack
+            component="button"
+            type="button"
+            onClick={onOpen}
+            alignItems="center"
+            justifyContent="center"
+            sx={{
+              width: "100%",
+              p: 0,
+              m: 0,
+              backgroundColor: "transparent",
+              minHeight: 156,
+              cursor: "pointer",
+              borderBottom: "1px solid",
+              borderTop: 0,
+              borderLeft: 0,
+              borderRight: 0,
+              borderColor: "divider",
+            }}
+          >
+            <Typography variant="h6" color="text.secondary">
+              {format || "FILE"}
+            </Typography>
+          </Stack>
+        )}
+      </Box>
+
+      <Stack spacing={0.75} sx={{ p: 1.25 }}>
+        <Stack direction="row" spacing={1} alignItems="flex-start">
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            onClick={onOpen}
+            sx={{
+              minWidth: 0,
+              flex: 1,
+              textAlign: "left",
+              fontWeight: 600,
+              overflowWrap: "anywhere",
+            }}
+          >
+            Ngày chụp: {captureDate}
+          </Link>
+
+          {canMutate ? (
+            <IconButton
+              size="small"
+              color="error"
+              aria-label="Xóa file"
+              onClick={onDelete}
+              sx={{ mt: -0.5 }}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          ) : null}
+        </Stack>
+
+        <Stack direction="row" spacing={1} alignItems="center" justifyContent="space-between">
+          <Typography variant="caption" color="text.secondary">
+            {format || "Không rõ định dạng"}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {formatSize(file.sizeBytes)}
+          </Typography>
+          {showStatus ? (
+            <Typography variant="caption" color="text.secondary">
+              {status}
+            </Typography>
+          ) : null}
+        </Stack>
+      </Stack>
+    </Paper>
+  );
+}
+
 export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSectionProps) {
-  const { scopeKey, orderId, canMutate = true } = props;
+  const { scopeKey, orderId, canMutate = true, showStatus = true } = props;
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const [cameraOpen, setCameraOpen] = React.useState(false);
   const [confirmingDelete, setConfirmingDelete] = React.useState<{
@@ -246,6 +411,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
 
   const queuedFiles = scope?.queuedFiles ?? [];
   const loading = (scope?.loading ?? false) || sourceLoading;
+  const emptyStateColSpan = 4 + (canMutate ? 1 : 0) + (showStatus ? 1 : 0);
 
   const visiblePersisted = React.useMemo(() => {
     const persistedFiles = scope?.persistedFiles ?? [];
@@ -351,7 +517,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 2, mt: 2 }}>
+    <Paper variant="outlined" sx={{ p: { xs: 1.5, sm: 2 }, mt: 2 }}>
       <Stack spacing={2}>
         <Stack
           direction={{ xs: "column", md: "row" }}
@@ -406,22 +572,69 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
           </Stack>
         ) : null}
 
-        <Table size="small">
+        <Stack spacing={1.5} sx={{ display: { xs: "flex", sm: "none" } }}>
+          {visiblePersisted.map((file) => (
+            <MobilePrescriptionFileCard
+              key={`mobile:persisted:${file.id}`}
+              kind="persisted"
+              orderId={orderId ?? 0}
+              file={file}
+              canMutate={canMutate}
+              showStatus={showStatus}
+              onOpen={() => openPersistedViewer(file)}
+              onDelete={() => setConfirmingDelete({ kind: "persisted", fileId: file.id })}
+            />
+          ))}
+
+          {sourceFiles.map((file) => (
+            props.sourceOrderId ? (
+              <MobilePrescriptionFileCard
+                key={`mobile:source:${file.id}`}
+                kind="persisted"
+                orderId={props.sourceOrderId}
+                file={file}
+                canMutate={false}
+                showStatus={showStatus}
+                onOpen={() => openSourceViewer(file)}
+              />
+            ) : null
+          ))}
+
+          {queuedFiles.map((file) => (
+            <MobilePrescriptionFileCard
+              key={`mobile:queued:${file.localId}`}
+              kind="local"
+              file={file}
+              canMutate={canMutate}
+              showStatus={showStatus}
+              onOpen={() => openLocalViewer(file)}
+              onDelete={() => setConfirmingDelete({ kind: "local", localId: file.localId })}
+            />
+          ))}
+
+          {!loading && visiblePersisted.length === 0 && sourceFiles.length === 0 && queuedFiles.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              Chưa có file phiếu chỉ định.
+            </Typography>
+          ) : null}
+        </Stack>
+
+        <Table size="small" sx={{ display: { xs: "none", sm: "table" } }}>
           <TableHead>
             <TableRow>
-              <TableCell width={56}>Xóa</TableCell>
+              {canMutate ? <TableCell width={56}>Xóa</TableCell> : null}
               <TableCell width={104}>Hình ảnh</TableCell>
-              <TableCell>Tên file</TableCell>
+              <TableCell>Ngày chụp</TableCell>
               <TableCell width={120}>Định dạng</TableCell>
               <TableCell width={140}>Dung lượng</TableCell>
-              <TableCell width={140}>Trạng thái</TableCell>
+              {showStatus ? <TableCell width={140}>Trạng thái</TableCell> : null}
             </TableRow>
           </TableHead>
           <TableBody>
             {visiblePersisted.map((file) => (
               <TableRow key={`persisted:${file.id}`}>
-                <TableCell>
-                  {canMutate ? (
+                {canMutate ? (
+                  <TableCell>
                     <Button
                       variant="text"
                       color="error"
@@ -429,8 +642,8 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     >
                       ❌
                     </Button>
-                  ) : null}
-                </TableCell>
+                  </TableCell>
+                ) : null}
                 <TableCell>
                   {isPreviewableImage(file.mimeType) ? (
                     <FilePreviewCell
@@ -441,25 +654,16 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     />
                   ) : null}
                 </TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    type="button"
-                    underline="hover"
-                    onClick={() => openPersistedViewer(file)}
-                  >
-                    {file.fileName}
-                  </Link>
-                </TableCell>
+                <TableCell>{captureDateLabel(file.createdAt)}</TableCell>
                 <TableCell>{file.format || toFormatLabel(file.fileName)}</TableCell>
                 <TableCell>{formatSize(file.sizeBytes)}</TableCell>
-                <TableCell>{uploadStateLabel("success")}</TableCell>
+                {showStatus ? <TableCell>{uploadStateLabel("success")}</TableCell> : null}
               </TableRow>
             ))}
 
             {sourceFiles.map((file) => (
               <TableRow key={`source:${file.id}`}>
-                <TableCell />
+                {canMutate ? <TableCell /> : null}
                 <TableCell>
                   {isPreviewableImage(file.mimeType) && props.sourceOrderId ? (
                     <FilePreviewCell
@@ -470,26 +674,17 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     />
                   ) : null}
                 </TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    type="button"
-                    underline="hover"
-                    onClick={() => openSourceViewer(file)}
-                  >
-                    {file.fileName}
-                  </Link>
-                </TableCell>
+                <TableCell>{captureDateLabel(file.createdAt)}</TableCell>
                 <TableCell>{file.format || toFormatLabel(file.fileName)}</TableCell>
                 <TableCell>{formatSize(file.sizeBytes)}</TableCell>
-                <TableCell>{uploadStateLabel("success")}</TableCell>
+                {showStatus ? <TableCell>{uploadStateLabel("success")}</TableCell> : null}
               </TableRow>
             ))}
 
             {queuedFiles.map((file) => (
               <TableRow key={`queued:${file.localId}`}>
-                <TableCell>
-                  {canMutate ? (
+                {canMutate ? (
+                  <TableCell>
                     <Button
                       variant="text"
                       color="error"
@@ -497,32 +692,23 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
                     >
                       ❌
                     </Button>
-                  ) : null}
-                </TableCell>
+                  </TableCell>
+                ) : null}
                 <TableCell>
                   {isPreviewableImage(file.mimeType) ? (
                     <FilePreviewCell kind="local" file={file} onOpen={() => openLocalViewer(file)} />
                   ) : null}
                 </TableCell>
-                <TableCell>
-                  <Link
-                    component="button"
-                    type="button"
-                    underline="hover"
-                    onClick={() => openLocalViewer(file)}
-                  >
-                    {file.fileName}
-                  </Link>
-                </TableCell>
+                <TableCell>Chưa upload</TableCell>
                 <TableCell>{file.format}</TableCell>
                 <TableCell>{formatSize(file.sizeBytes)}</TableCell>
-                <TableCell>{uploadStateLabel(file.uploadState)}</TableCell>
+                {showStatus ? <TableCell>{uploadStateLabel(file.uploadState)}</TableCell> : null}
               </TableRow>
             ))}
 
             {!loading && visiblePersisted.length === 0 && sourceFiles.length === 0 && queuedFiles.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6}>
+                <TableCell colSpan={emptyStateColSpan}>
                   <Typography variant="body2" color="text.secondary">
                     Chưa có file phiếu chỉ định.
                   </Typography>
@@ -558,6 +744,7 @@ export function OrderPrescriptionFilesSection(props: OrderPrescriptionFilesSecti
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function applyCreatedOrderToPrescriptionScope(scopeKey: string, order: Record<string, unknown>) {
   const controller = getPrescriptionScopeController(scopeKey);
   controller?.setOrderValues(order);
