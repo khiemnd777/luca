@@ -15,6 +15,7 @@ import type { OrderItemProcessInProgressProcessModel } from "../model/order-item
 import type { OrderModel } from "../model/order.model";
 import { Spacer } from "@root/shared/components/ui/spacer";
 import { buildInProgressProductTabLabel } from "../utils/order.utils";
+import { OrderPrescriptionFilesSection } from "./order-prescription-files-section.component";
 
 type ProductInProgressGroup = {
   key: string;
@@ -22,7 +23,11 @@ type ProductInProgressGroup = {
   items: OrderItemProcessInProgressProcessModel[];
 };
 
-export function OrderInProgress() {
+type OrderInProgressProps = {
+  showPrescriptionFiles?: boolean;
+};
+
+export function OrderInProgress({ showPrescriptionFiles = false }: OrderInProgressProps) {
   const { orderId, orderItemId } = useParams();
   const parsedOrderId = orderId ? Number(orderId) : null;
   const parsedOrderItemId = orderItemId ? Number(orderItemId) : null;
@@ -88,9 +93,15 @@ export function OrderInProgress() {
       groupedInProgresses.map((group) => ({
         label: group.label,
         value: group.key,
-        content: <ProductInProgressPanel group={group} />,
+        content: (
+          <ProductInProgressPanel
+            group={group}
+            orderId={parsedOrderId}
+            showPrescriptionFiles={showPrescriptionFiles}
+          />
+        ),
       })),
-    [groupedInProgresses]
+    [groupedInProgresses, parsedOrderId, showPrescriptionFiles]
   );
 
   return (
@@ -114,7 +125,15 @@ export function OrderInProgress() {
   );
 }
 
-function ProductInProgressPanel({ group }: { group: ProductInProgressGroup }) {
+function ProductInProgressPanel({
+  group,
+  orderId,
+  showPrescriptionFiles,
+}: {
+  group: ProductInProgressGroup;
+  orderId: number | null;
+  showPrescriptionFiles: boolean;
+}) {
   const frmCurrentRef = React.useRef<AutoFormRef>(null);
   const latestData = group.items[0];
   const previousData = group.items.slice(1);
@@ -184,6 +203,20 @@ function ProductInProgressPanel({ group }: { group: ProductInProgressGroup }) {
           )}
         </Stack>
       </SectionCard>
+
+      {showPrescriptionFiles ? (
+        <>
+          <Spacer />
+
+          <OrderPrescriptionFilesSection
+            mode="immediate"
+            scopeKey={`order-inprogress:${orderId ?? "new"}:prescription-files`}
+            orderId={orderId}
+            canMutate={false}
+            showStatus={false}
+          />
+        </>
+      ) : null}
     </>
   );
 }

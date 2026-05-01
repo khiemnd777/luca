@@ -1,6 +1,6 @@
 import SpriteUrl from "./teeth-layout.png";
 import { TeethChart } from "./teeth-chart";
-import type { ToothCode } from "./tooth-sprite-map";
+import type { ToothSelectionSegment } from "../../utils/tooth-position.utils";
 
 export default function TeethLayout({
   spriteUrl,
@@ -10,8 +10,8 @@ export default function TeethLayout({
 }: {
   spriteUrl?: string;
   scale?: number;
-  onChange?: (selected: ToothCode[]) => void;
-  value?: ToothCode[];
+  onChange?: (selected: ToothSelectionSegment[]) => void;
+  value?: ToothSelectionSegment[];
 }) {
   spriteUrl = spriteUrl || SpriteUrl;
   scale = scale || 0.35;

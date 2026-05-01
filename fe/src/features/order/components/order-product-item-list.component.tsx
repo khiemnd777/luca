@@ -3,8 +3,7 @@ import { useAsyncDebounce } from "@core/hooks/use-async/use-async-debounce";
 import type { FormContext } from "@core/form/types";
 import { calculateTotalPrice } from "@features/order/api/order-item.api";
 import type { OrderItemProductModel } from "@features/order/model/order-item-product.model";
-import { lowerToothCodes, upperToothCodes } from "@features/order/components/teeth/teeth-chart";
-import { TOOTH_SPRITES } from "@features/order/components/teeth/tooth-sprite-map";
+import { formatToothPositionsByJaw } from "@features/order/utils/tooth-position.utils";
 import { prefixCurrency } from "@root/shared/utils/currency.utils";
 import { formatCodeNameLabel } from "@shared/utils/code-name-label.utils";
 import { Stack, Typography } from "@mui/material";
@@ -14,7 +13,7 @@ export type OrderProductItemListProps = {
   value?: OrderItemProductModel[] | null;
   name?: string;
   ctx?: FormContext | null;
-  values?: Record<string, any>;
+  values?: Record<string, unknown>;
   onChange?: (items: OrderItemProductModel[]) => void;
   onAdd?: (
     item: OrderItemProductModel,
@@ -26,17 +25,17 @@ export type OrderProductItemListProps = {
     items: OrderItemProductModel[],
     ctx?: FormContext | null
   ) => void;
-  createItem?: (values: Record<string, any>) => OrderItemProductModel;
+  createItem?: (values: Record<string, unknown>) => OrderItemProductModel;
   addLabel?: string;
 };
 
-function defaultFactory(values: Record<string, any>): OrderItemProductModel {
+function defaultFactory(values: Record<string, unknown>): OrderItemProductModel {
   return {
     id: Date.now(),
     productCode: "",
     productId: null,
-    orderItemId: values.orderItemId ?? values.id ?? null,
-    orderId: values.orderId ?? null,
+    orderItemId: toOptionalNumber(values.orderItemId ?? values.id),
+    orderId: toOptionalNumber(values.orderId),
     quantity: 1,
     retailPrice: 0,
     note: null,
@@ -46,6 +45,11 @@ function defaultFactory(values: Record<string, any>): OrderItemProductModel {
 
 function toNumber(value?: number | null) {
   return value == null ? 0 : Number(value) || 0;
+}
+
+function toOptionalNumber(value: unknown) {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 function formatCurrency(value?: number | null) {
@@ -73,80 +77,14 @@ function normalizeItem(item: OrderItemProductModel) {
   };
 }
 
-const validToothCodes = new Set<number>(
-  Object.keys(TOOTH_SPRITES).map((code) => Number(code))
-);
-
-function parseToothPositions(value?: string | null): number[] {
-  if (!value) return [];
-  const result = new Set<number>();
-
-  value.split(",").forEach((rawToken) => {
-    const token = rawToken.trim();
-    if (!token) return;
-
-    const [startStr, endStr, extra] = token.split("-").map((part) => part.trim());
-    if (extra) return;
-
-    const start = Number(startStr);
-    const end = endStr ? Number(endStr) : start;
-    if (!Number.isFinite(start) || !Number.isFinite(end)) return;
-
-    const rangeStart = Math.min(start, end);
-    const rangeEnd = Math.max(start, end);
-
-    for (let code = rangeStart; code <= rangeEnd; code += 1) {
-      if (validToothCodes.has(code)) {
-        result.add(code);
-      }
-    }
-  });
-
-  return Array.from(result).sort((a, b) => a - b);
-}
-
-function formatToothRanges(nums: number[]) {
-  if (!nums.length) return "";
-
-  const ranges: string[] = [];
-  let start = nums[0];
-  let prev = nums[0];
-
-  for (let i = 1; i < nums.length; i += 1) {
-    const current = nums[i];
-    if (current === prev + 1) {
-      prev = current;
-      continue;
-    }
-
-    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
-    start = current;
-    prev = current;
-  }
-
-  ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
-  return ranges.join(",");
-}
-
-function formatTeethByJaw(value?: string | null) {
-  const positions = parseToothPositions(value);
-  const upperSet = new Set<number>(upperToothCodes);
-  const lowerSet = new Set<number>(lowerToothCodes);
-
-  return {
-    upper: formatToothRanges(positions.filter((code) => upperSet.has(code))),
-    lower: formatToothRanges(positions.filter((code) => lowerSet.has(code))),
-  };
-}
-
 function renderTeethPosition(value?: string | null) {
-  const byJaw = formatTeethByJaw(value);
+  const byJaw = formatToothPositionsByJaw(value);
   if (!byJaw.upper && !byJaw.lower) return "—";
 
   return (
     <Stack spacing={0.25}>
-      {byJaw.upper && <Typography variant="body2">HT: {byJaw.upper}</Typography>}
-      {byJaw.lower && <Typography variant="body2">HD: {byJaw.lower}</Typography>}
+      {byJaw.upper && <Typography variant="body2">Răng trên: {byJaw.upper}</Typography>}
+      {byJaw.lower && <Typography variant="body2">Răng dưới: {byJaw.lower}</Typography>}
     </Stack>
   );
 }
@@ -162,13 +100,14 @@ export function OrderProductItemList({
   createItem,
   addLabel = "Thêm sản phẩm",
 }: OrderProductItemListProps) {
+  const ctxValues = ctx?.values;
   const items = React.useMemo(() => {
     if (Array.isArray(value)) return value;
-    if (name && ctx && Array.isArray((ctx.values as any)?.[name])) {
-      return (ctx.values as any)[name] as OrderItemProductModel[];
+    if (name && ctxValues && Array.isArray(ctxValues[name])) {
+      return ctxValues[name] as OrderItemProductModel[];
     }
     return [];
-  }, [value, name, ctx, ctx?.values]);
+  }, [value, name, ctxValues]);
   const lastTotalRef = React.useRef<number | null>(null);
 
   const { prices, quantities, signature } = React.useMemo(() => {
