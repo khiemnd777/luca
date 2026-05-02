@@ -35,7 +35,7 @@ export function createDepartmentDetailStaffTableSchema(
       accessor: (row) => {
         const chips = row.roleNames?.filter((roleName) => roleName.trim().toLowerCase() !== "admin") ?? [];
         if (isDepartmentCorporateAdmin(row, corporateAdministratorId)) {
-          return [{ text: "Corporate Admin", color: "#1976d2" }, ...chips];
+          return [{ text: "Quản trị chi nhánh", color: "#1976d2" }, ...chips];
         }
         return chips;
       },
@@ -65,7 +65,7 @@ export function createDepartmentDetailStaffTableSchema(
     rowActions: [
       {
         key: "assign-corporate-admin",
-        label: "Assign Corporate Admin",
+        label: "Gán Quản trị chi nhánh",
         icon: createElement(AdminPanelSettingsOutlinedIcon, { fontSize: "small" }),
         permissions: ["department.update"],
         visible: (row) => !isDepartmentCorporateAdmin(row, corporateAdministratorId),
@@ -77,7 +77,7 @@ export function createDepartmentDetailStaffTableSchema(
       },
       {
         key: "unassign-corporate-admin",
-        label: "Bỏ Corporate Admin",
+        label: "Bỏ Quản trị chi nhánh",
         icon: createElement(PersonRemoveAlt1OutlinedIcon, { fontSize: "small" }),
         permissions: ["department.update"],
         visible: (row) => isDepartmentCorporateAdmin(row, corporateAdministratorId),

@@ -39,7 +39,7 @@ func EnsureBaseRolesAndPermissions(dbCfg config.DatabaseConfig) error {
 	roles := []roleSeed{
 		{RoleName: "user", DisplayName: "User", Brief: "A normal user"},
 		{RoleName: "admin", DisplayName: "Administrator", Brief: "Administrator"},
-		{RoleName: "corporate_admin", DisplayName: "Corporate Administrator", Brief: "Corporate department administrator"},
+		{RoleName: "corporate_admin", DisplayName: "Quản trị chi nhánh", Brief: "Corporate department administrator"},
 		{RoleName: "guest", DisplayName: "Guest", Brief: "Guest user with limited access"},
 	}
 

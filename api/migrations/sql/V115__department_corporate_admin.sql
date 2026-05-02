@@ -2,10 +2,10 @@ ALTER TABLE departments
   ADD COLUMN IF NOT EXISTS corporate_administrator_id INT;
 
 INSERT INTO roles (role_name, display_name, brief)
-VALUES ('corporate_admin', 'Corporate Administrator', 'Corporate department administrator')
+VALUES ('corporate_admin', 'Quản trị chi nhánh', 'Corporate department administrator')
 ON CONFLICT (role_name)
 DO UPDATE SET
-  display_name = COALESCE(roles.display_name, EXCLUDED.display_name),
+  display_name = EXCLUDED.display_name,
   brief = COALESCE(roles.brief, EXCLUDED.brief);
 
 DO $$
