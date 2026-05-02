@@ -136,11 +136,16 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
           <Typography variant="subtitle2" fontWeight={700}>Bottleneck</Typography>
           {bottlenecks.slice(0, 5).map((item) => (
             <Stack key={item.key} spacing={0.5}>
-              <Stack direction="row" justifyContent="space-between">
+              <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
                 <Typography variant="body2">{item.label}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  {item.activeCount} việc · risk {item.topRiskScore}
-                </Typography>
+                <Stack direction="row" spacing={0.75} flexShrink={0}>
+                  <Chip size="small" variant="outlined" label={`${item.activeCount} việc`} />
+                  <Chip
+                    size="small"
+                    label={`risk ${item.topRiskScore}%`}
+                    color={item.topRiskScore >= 80 ? "error" : item.topRiskScore >= 50 ? "warning" : "primary"}
+                  />
+                </Stack>
               </Stack>
               <LinearProgress
                 variant="determinate"
