@@ -30,8 +30,8 @@ type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
-	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error)
-	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) (int, error)
+	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error)
+	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) (int, error)
 	ChangePassword(ctx context.Context, id int, newPassword string) error
 	GetByID(ctx context.Context, id int) (*model.StaffDTO, error)
 	CheckPhoneExists(ctx context.Context, userID int, phone string) (bool, error)
@@ -50,9 +50,9 @@ type staffRepo struct {
 	cfMgr *customfields.Manager
 }
 
-type AdminAssignmentResult struct {
-	PreviousAdminID *int
-	CurrentAdminID  int
+type CorporateAdminAssignmentResult struct {
+	PreviousCorporateAdminID *int
+	CurrentCorporateAdminID  int
 }
 
 func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
@@ -438,8 +438,8 @@ func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, userID int, dep
 	return r.GetByID(ctx, userID)
 }
 
-func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) (*AdminAssignmentResult, error) {
-	adminID, err := r.getDepartmentStaffUserID(ctx, staffID, departmentID)
+func (r *staffRepo) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error) {
+	corporateAdminID, err := r.getDepartmentStaffUserID(ctx, userID, departmentID)
 	if err != nil {
 		return nil, err
 	}
@@ -466,32 +466,32 @@ func (r *staffRepo) AssignAdminToDepartment(ctx context.Context, staffID int, de
 		return nil, err
 	}
 
-	previousAdminID := deptEnt.AdministratorID
+	previousCorporateAdminID := deptEnt.CorporateAdministratorID
 
 	if _, err = tx.Department.UpdateOneID(departmentID).
-		SetAdministratorID(adminID).
+		SetCorporateAdministratorID(corporateAdminID).
 		Save(ctx); err != nil {
 		return nil, err
 	}
 
-	if err = SyncDepartmentAdminInTx(ctx, tx, adminID, departmentID); err != nil {
+	if err = SyncDepartmentCorporateAdminInTx(ctx, tx, corporateAdminID, departmentID); err != nil {
 		return nil, err
 	}
 
-	if previousAdminID != nil && *previousAdminID > 0 && *previousAdminID != adminID {
-		if err = removeAdminRoleIfUnusedInTx(ctx, tx, *previousAdminID, departmentID); err != nil {
+	if previousCorporateAdminID != nil && *previousCorporateAdminID > 0 && *previousCorporateAdminID != corporateAdminID {
+		if err = removeCorporateAdminRoleIfUnusedInTx(ctx, tx, *previousCorporateAdminID, departmentID); err != nil {
 			return nil, err
 		}
 	}
 
-	return &AdminAssignmentResult{
-		PreviousAdminID: previousAdminID,
-		CurrentAdminID:  adminID,
+	return &CorporateAdminAssignmentResult{
+		PreviousCorporateAdminID: previousCorporateAdminID,
+		CurrentCorporateAdminID:  corporateAdminID,
 	}, nil
 }
 
-func (r *staffRepo) UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) (int, error) {
-	adminID, err := r.getDepartmentStaffUserID(ctx, staffID, departmentID)
+func (r *staffRepo) UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) (int, error) {
+	corporateAdminID, err := r.getDepartmentStaffUserID(ctx, userID, departmentID)
 	if err != nil {
 		return 0, err
 	}
@@ -511,33 +511,33 @@ func (r *staffRepo) UnassignAdminFromDepartment(ctx context.Context, staffID int
 	deptEnt, err := tx.Department.Query().
 		Where(
 			department.IDEQ(departmentID),
-			department.AdministratorIDEQ(adminID),
+			department.CorporateAdministratorIDEQ(corporateAdminID),
 		).
 		Only(ctx)
 	if err != nil {
 		if generated.IsNotFound(err) {
-			return 0, fmt.Errorf("staff is not the department admin")
+			return 0, fmt.Errorf("staff is not the department corporate admin")
 		}
 		return 0, err
 	}
 
 	if err = tx.Department.UpdateOneID(deptEnt.ID).
-		ClearAdministratorID().
+		ClearCorporateAdministratorID().
 		Exec(ctx); err != nil {
 		return 0, err
 	}
 
-	if err = removeAdminRoleIfUnusedInTx(ctx, tx, adminID, departmentID); err != nil {
+	if err = removeCorporateAdminRoleIfUnusedInTx(ctx, tx, corporateAdminID, departmentID); err != nil {
 		return 0, err
 	}
 
-	return adminID, nil
+	return corporateAdminID, nil
 }
 
-func (r *staffRepo) getDepartmentStaffUserID(ctx context.Context, staffIdentifier int, departmentID int) (int, error) {
+func (r *staffRepo) getDepartmentStaffUserID(ctx context.Context, userID int, departmentID int) (int, error) {
 	userEnt, err := r.db.User.Query().
 		Where(
-			user.IDEQ(staffIdentifier),
+			user.IDEQ(userID),
 			user.DeletedAtIsNil(),
 			user.HasStaffWith(staff.DepartmentIDEQ(departmentID)),
 		).
@@ -550,23 +550,7 @@ func (r *staffRepo) getDepartmentStaffUserID(ctx context.Context, staffIdentifie
 		return userEnt.ID, nil
 	}
 
-	staffEnt, err := r.db.Staff.Query().
-		Where(
-			staff.IDEQ(staffIdentifier),
-			staff.DepartmentIDEQ(departmentID),
-		).
-		WithUser().
-		Only(ctx)
-	if err != nil {
-		if generated.IsNotFound(err) {
-			return 0, fmt.Errorf("staff not found")
-		}
-		return 0, err
-	}
-	if staffEnt.Edges.User == nil || staffEnt.Edges.User.DeletedAt != nil {
-		return 0, fmt.Errorf("user not found")
-	}
-	return staffEnt.Edges.User.ID, nil
+	return 0, fmt.Errorf("staff not found")
 }
 
 func (r *staffRepo) ChangePassword(ctx context.Context, id int, newPassword string) error {

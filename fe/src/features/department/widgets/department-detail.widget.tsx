@@ -25,7 +25,7 @@ import { DashboardProvider } from "@features/dashboard/context/dashboard-context
 
 const DEPARTMENT_DETAIL_STAFFS_TABLE = "department-detail-staffs";
 
-function DeparmentDetailWidget() {
+export function DeparmentDetailWidget() {
   const { departmentId } = useParams();
   const formRef = React.useRef<AutoFormRef>(null);
   const [syncOpen, setSyncOpen] = React.useState(false);
@@ -38,8 +38,8 @@ function DeparmentDetailWidget() {
     return await getById(resolvedDepartmentId);
   }, [resolvedDepartmentId]);
   const staffTableSchema = React.useMemo(
-    () => createDepartmentDetailStaffTableSchema(resolvedDepartmentId, detail?.administratorId),
-    [detail?.administratorId, resolvedDepartmentId]
+    () => createDepartmentDetailStaffTableSchema(resolvedDepartmentId, detail?.corporateAdministratorId),
+    [detail?.corporateAdministratorId, resolvedDepartmentId]
   );
 
   React.useEffect(() => {

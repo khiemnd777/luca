@@ -139,7 +139,7 @@ func kAssignedInProgressList(assignedID int64, q table.TableQuery) string {
 	return fmt.Sprintf("order:assigned:%d:inprogresses:l%d:p%d:o%s:d%s", assignedID, q.Limit, q.Page, orderBy, q.Direction)
 }
 
-func (s *orderItemProcessService) getDepartmentAdminID(ctx context.Context, deptID int) (*int, error) {
+func (s *orderItemProcessService) getDepartmentCorporateAdminID(ctx context.Context, deptID int) (*int, error) {
 	if deptID <= 0 {
 		return nil, nil
 	}
@@ -147,7 +147,7 @@ func (s *orderItemProcessService) getDepartmentAdminID(ctx context.Context, dept
 	dept, err := s.deps.Ent.(*generated.Client).Department.
 		Query().
 		Where(department.IDEQ(deptID)).
-		Select(department.FieldAdministratorID).
+		Select(department.FieldCorporateAdministratorID).
 		Only(ctx)
 	if err != nil {
 		if generated.IsNotFound(err) {
@@ -155,11 +155,11 @@ func (s *orderItemProcessService) getDepartmentAdminID(ctx context.Context, dept
 		}
 		return nil, err
 	}
-	if dept.AdministratorID == nil || *dept.AdministratorID <= 0 {
+	if dept.CorporateAdministratorID == nil || *dept.CorporateAdministratorID <= 0 {
 		return nil, nil
 	}
 
-	return dept.AdministratorID, nil
+	return dept.CorporateAdministratorID, nil
 }
 
 func (s *orderItemProcessService) GetRawProcessesByProductID(ctx context.Context, productID int) ([]*model.ProcessDTO, error) {
@@ -356,33 +356,33 @@ func (s *orderItemProcessService) CheckInOrOut(
 		)
 	}
 	if shouldNotifyDepartmentAdmin {
-		adminID, adminErr := s.getDepartmentAdminID(ctx, deptID)
-		if adminErr != nil {
+		corporateAdminID, corporateAdminErr := s.getDepartmentCorporateAdminID(ctx, deptID)
+		if corporateAdminErr != nil {
 			logger.Warn(
-				"order_checkout_final_notification_admin_lookup_failed",
+				"order_checkout_final_notification_corporate_admin_lookup_failed",
 				"dept_id", deptID,
 				"order_id", dto.OrderID,
 				"order_item_id", dto.OrderItemID,
 				"process_id", dto.ProcessID,
-				"error", adminErr.Error(),
+				"error", corporateAdminErr.Error(),
 			)
-		} else if adminID != nil {
-			notification.Notify(*adminID, userID, notification.TypeOrderProcessCompleted, map[string]any{
-				"department_id":    deptID,
-				"admin_id":         adminID,
-				"order_id":         dto.OrderID,
-				"order_item_id":    dto.OrderItemID,
-				"order_item_code":  dto.OrderItemCode,
-				"product_id":       dto.ProductID,
-				"product_code":     dto.ProductCode,
-				"product_name":     dto.ProductName,
-				"section_name":     dto.SectionName,
-				"process_name":     dto.ProcessName,
-				"is_final_process": true,
+		} else if corporateAdminID != nil {
+			notification.Notify(*corporateAdminID, userID, notification.TypeOrderProcessCompleted, map[string]any{
+				"department_id":      deptID,
+				"corporate_admin_id": corporateAdminID,
+				"order_id":           dto.OrderID,
+				"order_item_id":      dto.OrderItemID,
+				"order_item_code":    dto.OrderItemCode,
+				"product_id":         dto.ProductID,
+				"product_code":       dto.ProductCode,
+				"product_name":       dto.ProductName,
+				"section_name":       dto.SectionName,
+				"process_name":       dto.ProcessName,
+				"is_final_process":   true,
 			})
 		} else {
 			logger.Warn(
-				"order_checkout_final_notification_skipped_missing_department_admin",
+				"order_checkout_final_notification_skipped_missing_department_corporate_admin",
 				"dept_id", deptID,
 				"order_id", dto.OrderID,
 				"order_item_id", dto.OrderItemID,

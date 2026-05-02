@@ -1,7 +1,7 @@
 export interface DeparmentModel {
   id?: number;
   slug?: string | null;
-  administratorId?: number | null;
+  corporateAdministratorId?: number | null;
   active?: boolean;
   name: string;
   logo?: string | null;

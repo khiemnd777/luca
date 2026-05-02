@@ -18,8 +18,12 @@ import (
 )
 
 type staffServiceStub struct {
-	listDeptID int
-	createErr  error
+	listDeptID                         int
+	createErr                          error
+	assignedCorporateAdminUserID       int
+	unassignedCorporateAdminUserID     int
+	assignedCorporateAdminDepartment   int
+	unassignedCorporateAdminDepartment int
 }
 
 func (s *staffServiceStub) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
@@ -34,11 +38,15 @@ func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, userID i
 	return nil, nil
 }
 
-func (s *staffServiceStub) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error {
+func (s *staffServiceStub) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error {
+	s.assignedCorporateAdminUserID = userID
+	s.assignedCorporateAdminDepartment = departmentID
 	return nil
 }
 
-func (s *staffServiceStub) UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error {
+func (s *staffServiceStub) UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) error {
+	s.unassignedCorporateAdminUserID = userID
+	s.unassignedCorporateAdminDepartment = departmentID
 	return nil
 }
 
@@ -132,5 +140,67 @@ func TestCreateMapsConflictToHTTP409(t *testing.T) {
 	}
 	if res.StatusCode != fiber.StatusConflict {
 		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
+	}
+}
+
+func TestAssignCorporateAdminRouteUsesUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"department.update"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff/:id/assign-corporate-admin-department", h.AssignCorporateAdminToDepartment)
+
+	req := httptest.NewRequest(http.MethodPost, "/7/staff/42/assign-corporate-admin-department", bytes.NewBufferString(`{"department_id":7}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.assignedCorporateAdminUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.assignedCorporateAdminUserID)
+	}
+	if svc.assignedCorporateAdminDepartment != 7 {
+		t.Fatalf("expected department id 7, got %d", svc.assignedCorporateAdminDepartment)
+	}
+}
+
+func TestUnassignCorporateAdminRouteUsesUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"department.update"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff/:id/unassign-corporate-admin-department", h.UnassignCorporateAdminFromDepartment)
+
+	req := httptest.NewRequest(http.MethodPost, "/7/staff/42/unassign-corporate-admin-department", bytes.NewBufferString(`{"department_id":7}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.unassignedCorporateAdminUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.unassignedCorporateAdminUserID)
+	}
+	if svc.unassignedCorporateAdminDepartment != 7 {
+		t.Fatalf("expected department id 7, got %d", svc.unassignedCorporateAdminDepartment)
 	}
 }

@@ -1,3 +1,12 @@
+DO $$
+BEGIN
+IF EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'departments'
+    AND column_name = 'administrator_id'
+) THEN
 INSERT INTO staffs (user_staff, department_id, section_names, custom_fields, created_at, updated_at)
 SELECT
   d.administrator_id,
@@ -42,3 +51,5 @@ WHERE d.deleted = FALSE
     WHERE dm.user_id = d.administrator_id
       AND dm.department_id = d.id
   );
+END IF;
+END $$;

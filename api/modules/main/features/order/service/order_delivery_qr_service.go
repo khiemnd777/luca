@@ -305,8 +305,8 @@ func (s *orderDeliveryQRService) ConfirmDeliveredByQRSession(
 			logger.Warn("delivery_confirm_post_action_failed", "order_id", session.OrderID, "department_id", *orderEnt.DepartmentID, "error", err.Error())
 			return nil
 		}
-		if dept.AdministratorID != nil && *dept.AdministratorID > 0 {
-			auditUserID = *dept.AdministratorID
+		if dept.CorporateAdministratorID != nil && *dept.CorporateAdministratorID > 0 {
+			auditUserID = *dept.CorporateAdministratorID
 		}
 	}
 
@@ -334,10 +334,10 @@ func (s *orderDeliveryQRService) ConfirmDeliveredByQRSession(
 		},
 	})
 
-	adminID := 0
+	corporateAdminID := 0
 	var deptID any
-	if dept != nil && dept.AdministratorID != nil {
-		adminID = *dept.AdministratorID
+	if dept != nil && dept.CorporateAdministratorID != nil {
+		corporateAdminID = *dept.CorporateAdministratorID
 	}
 	if dept != nil {
 		deptID = dept.ID
@@ -347,24 +347,24 @@ func (s *orderDeliveryQRService) ConfirmDeliveredByQRSession(
 		"order_id", session.OrderID,
 		"department_exists", dept != nil,
 		"department_id", deptID,
-		"department_admin_exists", dept != nil && dept.AdministratorID != nil,
-		"department_admin_id", adminID,
+		"department_corporate_admin_exists", dept != nil && dept.CorporateAdministratorID != nil,
+		"department_corporate_admin_id", corporateAdminID,
 		"audit_user_id", auditUserID,
 	)
-	if dept != nil && dept.AdministratorID != nil {
+	if dept != nil && dept.CorporateAdministratorID != nil {
 		logger.Debug("delivery_confirm_notification_sent",
 			"session_id", sessionID,
 			"order_id", session.OrderID,
 			"department_id", dept.ID,
-			"department_admin_id", *dept.AdministratorID,
+			"department_corporate_admin_id", *dept.CorporateAdministratorID,
 		)
-		notification.Notify(*dept.AdministratorID, auditUserID, "order:delivery:completed", map[string]any{
-			"department_id":   dept.ID,
-			"admin_id":        dept.AdministratorID,
-			"order_id":        latestOrderItemEnt.OrderID,
-			"order_item_id":   latestOrderItemEnt.ID,
-			"order_code":      latestOrderItemEnt.CodeOriginal,
-			"order_item_code": latestOrderItemEnt.Code,
+		notification.Notify(*dept.CorporateAdministratorID, auditUserID, "order:delivery:completed", map[string]any{
+			"department_id":      dept.ID,
+			"corporate_admin_id": dept.CorporateAdministratorID,
+			"order_id":           latestOrderItemEnt.OrderID,
+			"order_item_id":      latestOrderItemEnt.ID,
+			"order_code":         latestOrderItemEnt.CodeOriginal,
+			"order_item_code":    latestOrderItemEnt.Code,
 		})
 	}
 

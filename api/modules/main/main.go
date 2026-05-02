@@ -45,7 +45,7 @@ func main() {
 			router := app.Group(utils.GetModuleRoute(deps.Config.Server.Route), middleware.RequireAuth())
 
 			router.Use("/:dept_id<int>/*",
-				middleware.RequireDepartmentMember("dept_id"),
+				middleware.RequireDepartmentMember("dept_id", deps.Ent.(*generated.Client)),
 			)
 			deliveryQRHandler.RegisterRoutes(router)
 

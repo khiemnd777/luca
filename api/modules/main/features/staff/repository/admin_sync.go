@@ -12,31 +12,31 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/user"
 )
 
-func SyncDepartmentAdminInTx(ctx context.Context, tx *generated.Tx, adminID, departmentID int) error {
-	if adminID <= 0 {
-		return fmt.Errorf("invalid admin id")
+func SyncDepartmentCorporateAdminInTx(ctx context.Context, tx *generated.Tx, corporateAdminID, departmentID int) error {
+	if corporateAdminID <= 0 {
+		return fmt.Errorf("invalid corporate admin id")
 	}
 	if departmentID <= 0 {
 		return fmt.Errorf("invalid department id")
 	}
 
-	if err := ensureAdminRoleInTx(ctx, tx, adminID); err != nil {
+	if err := ensureCorporateAdminRoleInTx(ctx, tx, corporateAdminID); err != nil {
 		return err
 	}
 
-	if err := ensureDepartmentMembershipInTx(ctx, tx, adminID, departmentID); err != nil {
+	if err := ensureDepartmentMembershipInTx(ctx, tx, corporateAdminID, departmentID); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func ensureAdminRoleInTx(ctx context.Context, tx *generated.Tx, userID int) error {
+func ensureCorporateAdminRoleInTx(ctx context.Context, tx *generated.Tx, userID int) error {
 	exists, err := tx.User.Query().
 		Where(
 			user.IDEQ(userID),
 			user.DeletedAtIsNil(),
-			user.HasRolesWith(role.RoleNameEQ("admin")),
+			user.HasRolesWith(role.RoleNameEQ("corporate_admin")),
 		).
 		Exist(ctx)
 	if err != nil {
@@ -46,34 +46,34 @@ func ensureAdminRoleInTx(ctx context.Context, tx *generated.Tx, userID int) erro
 		return nil
 	}
 
-	adminRole, err := tx.Role.Query().
-		Where(role.RoleNameEQ("admin")).
+	corporateAdminRole, err := tx.Role.Query().
+		Where(role.RoleNameEQ("corporate_admin")).
 		Only(ctx)
 	if err != nil {
 		return err
 	}
 
 	return tx.User.UpdateOneID(userID).
-		AddRoleIDs(adminRole.ID).
+		AddRoleIDs(corporateAdminRole.ID).
 		Exec(ctx)
 }
 
-func removeAdminRoleIfUnusedInTx(ctx context.Context, tx *generated.Tx, userID int, excludedDepartmentID int) error {
-	hasOtherAdminDepartment, err := tx.Department.Query().
+func removeCorporateAdminRoleIfUnusedInTx(ctx context.Context, tx *generated.Tx, userID int, excludedDepartmentID int) error {
+	hasOtherCorporateAdminDepartment, err := tx.Department.Query().
 		Where(
-			department.AdministratorIDEQ(userID),
+			department.CorporateAdministratorIDEQ(userID),
 			department.IDNEQ(excludedDepartmentID),
 		).
 		Exist(ctx)
 	if err != nil {
 		return err
 	}
-	if hasOtherAdminDepartment {
+	if hasOtherCorporateAdminDepartment {
 		return nil
 	}
 
-	adminRole, err := tx.Role.Query().
-		Where(role.RoleNameEQ("admin")).
+	corporateAdminRole, err := tx.Role.Query().
+		Where(role.RoleNameEQ("corporate_admin")).
 		Only(ctx)
 	if err != nil {
 		if generated.IsNotFound(err) {
@@ -83,7 +83,7 @@ func removeAdminRoleIfUnusedInTx(ctx context.Context, tx *generated.Tx, userID i
 	}
 
 	return tx.User.UpdateOneID(userID).
-		RemoveRoleIDs(adminRole.ID).
+		RemoveRoleIDs(corporateAdminRole.ID).
 		Exec(ctx)
 }
 
