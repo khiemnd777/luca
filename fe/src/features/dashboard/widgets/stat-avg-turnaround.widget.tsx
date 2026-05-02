@@ -18,7 +18,7 @@ export function AvgTurnaroundStatWidget({ range }: Props) {
 
   return (
     <StatCard
-      title="TB. Xong Một Ca"
+      title="TB. Xong Một Đơn"
       value={data?.value ?? "––"}
       delta={data?.delta}
       caption={data?.caption}

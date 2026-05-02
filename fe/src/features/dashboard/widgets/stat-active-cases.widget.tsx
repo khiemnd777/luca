@@ -18,7 +18,7 @@ export function ActiveCasesStatWidget({ range }: Props) {
 
   return (
     <StatCard
-      title="Ca Đang Làm"
+      title="Đơn Đang Làm"
       value={data?.value ?? "––"}
       delta={data?.delta}
       tone="success"
