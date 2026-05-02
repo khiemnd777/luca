@@ -5,7 +5,10 @@ import {
   mapPackagedDto,
   resolveSubmitValues,
 } from "../../../src/core/form/submit-contract";
-import { buildDepartmentWirePayload } from "../../../src/features/department/utils/department-phone.utils";
+import {
+  buildDepartmentMutationWirePayload,
+  buildDepartmentWirePayload,
+} from "../../../src/features/department/utils/department-phone.utils";
 
 describe("AutoForm packaging", () => {
   test("packages flat values when no metadata is present", () => {
@@ -64,6 +67,20 @@ describe("AutoForm packaging", () => {
     expect(buildDepartmentWirePayload({ phone_number2: "0987" })).toMatchObject({
       phone_number_2: "0987",
     });
+  });
+
+  test("department wire payload uses corporate administrator contract key", () => {
+    expect(buildDepartmentWirePayload({ corporateAdministratorId: 42 })).toMatchObject({
+      corporate_administrator_id: 42,
+    });
+
+    expect(buildDepartmentWirePayload({ corporateAdministratorId: 42 })).not.toHaveProperty("administrator_id");
+  });
+
+  test("department create/update mutation payload does not own corporate administrator assignment", () => {
+    expect(buildDepartmentMutationWirePayload({ corporateAdministratorId: 42 })).not.toHaveProperty(
+      "corporate_administrator_id",
+    );
   });
 });
 

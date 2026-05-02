@@ -161,15 +161,19 @@ func GuardAllPermissions(c *fiber.Ctx, dbEnt *generated.Client, permValues ...st
 }
 
 func getPerms(c *fiber.Ctx, dbEnt *generated.Client) (map[string]struct{}, error) {
-	if set, ok := utils.GetPermSetFromClaims(c); ok {
-		return set, nil
-	}
-
 	uid, ok := utils.GetUserIDInt(c)
 
 	if !ok || uid <= 0 {
 		return nil, c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
+
+	if dbEnt == nil {
+		if set, ok := utils.GetPermSetFromClaims(c); ok {
+			return set, nil
+		}
+		return nil, c.Status(http.StatusForbidden).JSON(fiber.Map{"error": "Forbidden: missing permission source"})
+	}
+
 	ctx := c.UserContext()
 
 	permSetPtr, err := cache.Get(userPermSetKey(uid), cache.TTLLong, func() (*map[string]struct{}, error) {

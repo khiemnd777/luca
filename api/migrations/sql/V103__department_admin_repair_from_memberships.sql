@@ -1,3 +1,12 @@
+DO $$
+BEGIN
+IF EXISTS (
+  SELECT 1
+  FROM information_schema.columns
+  WHERE table_schema = 'public'
+    AND table_name = 'departments'
+    AND column_name = 'administrator_id'
+) THEN
 WITH department_admin_candidates AS (
   SELECT
     dm.department_id,
@@ -15,7 +24,7 @@ WITH department_admin_candidates AS (
     ON ur.user_id = dm.user_id
   JOIN roles r
     ON r.id = ur.role_id
-   AND r.role_name = 'admin'
+   AND r.role_name = 'corporate_admin'
 )
 UPDATE departments d
 SET administrator_id = c.user_id,
@@ -71,3 +80,5 @@ WHERE d.deleted = FALSE
     WHERE dm.user_id = d.administrator_id
       AND dm.department_id = d.id
   );
+END IF;
+END $$;

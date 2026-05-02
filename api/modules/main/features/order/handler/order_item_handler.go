@@ -70,7 +70,7 @@ func (h *OrderItemHandler) GetLatestOrderItemIDByOrderID(c *fiber.Ctx) error {
 }
 
 func (h *OrderItemHandler) GetOrderIDAndOrderItemIDByCode(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view", "order.development"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 

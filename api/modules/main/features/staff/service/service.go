@@ -23,8 +23,8 @@ type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
-	AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error
-	UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error
+	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error
+	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) error
 	ChangePassword(ctx context.Context, id int, newPassword string) error
 	GetByID(ctx context.Context, id int) (*model.StaffDTO, error)
 	CheckPhoneExists(ctx context.Context, userID int, phone string) (bool, error)
@@ -202,47 +202,47 @@ func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, 
 	return dto, nil
 }
 
-func (s *staffService) AssignAdminToDepartment(ctx context.Context, staffID int, departmentID int) error {
-	result, err := s.repo.AssignAdminToDepartment(ctx, staffID, departmentID)
+func (s *staffService) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error {
+	result, err := s.repo.AssignCorporateAdminToDepartment(ctx, userID, departmentID)
 	if err != nil {
 		return err
 	}
 
-	s.invalidateAdminAssignmentCaches(result.CurrentAdminID, staffID)
-	if result.PreviousAdminID != nil && *result.PreviousAdminID > 0 && *result.PreviousAdminID != result.CurrentAdminID {
-		s.invalidateAdminAssignmentCaches(*result.PreviousAdminID, *result.PreviousAdminID)
+	s.invalidateCorporateAdminAssignmentCaches(result.CurrentCorporateAdminID, userID)
+	if result.PreviousCorporateAdminID != nil && *result.PreviousCorporateAdminID > 0 && *result.PreviousCorporateAdminID != result.CurrentCorporateAdminID {
+		s.invalidateCorporateAdminAssignmentCaches(*result.PreviousCorporateAdminID, *result.PreviousCorporateAdminID)
 	}
-	s.invalidateDepartmentAdminCaches(departmentID)
+	s.invalidateDepartmentCorporateAdminCaches(departmentID)
 	return nil
 }
 
-func (s *staffService) UnassignAdminFromDepartment(ctx context.Context, staffID int, departmentID int) error {
-	adminID, err := s.repo.UnassignAdminFromDepartment(ctx, staffID, departmentID)
+func (s *staffService) UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) error {
+	corporateAdminID, err := s.repo.UnassignCorporateAdminFromDepartment(ctx, userID, departmentID)
 	if err != nil {
 		return err
 	}
 
-	s.invalidateAdminAssignmentCaches(adminID, staffID)
-	s.invalidateDepartmentAdminCaches(departmentID)
+	s.invalidateCorporateAdminAssignmentCaches(corporateAdminID, userID)
+	s.invalidateDepartmentCorporateAdminCaches(departmentID)
 	return nil
 }
 
-func (s *staffService) invalidateAdminAssignmentCaches(adminID int, staffID int) {
-	rbac.InvalidateUserRoleSet(adminID)
-	rbac.InvalidateUserPermissionSet(adminID)
+func (s *staffService) invalidateCorporateAdminAssignmentCaches(corporateAdminID int, userID int) {
+	rbac.InvalidateUserRoleSet(corporateAdminID)
+	rbac.InvalidateUserPermissionSet(corporateAdminID)
 	cache.InvalidateKeys(
-		fmt.Sprintf("user:%d:perms", adminID),
-		kUserDepartment(adminID),
-		fmt.Sprintf("department:first_of_user:%d", adminID),
-		fmt.Sprintf("staff:id:%d", staffID),
-		fmt.Sprintf("section:staff:%d:*", staffID),
+		fmt.Sprintf("user:%d:perms", corporateAdminID),
+		kUserDepartment(corporateAdminID),
+		fmt.Sprintf("department:first_of_user:%d", corporateAdminID),
+		fmt.Sprintf("staff:id:%d", userID),
+		fmt.Sprintf("section:staff:%d:*", userID),
 		kStaffListAll(),
 		kStaffSearchAll(),
 		kStaffSectionAll(),
 	)
 }
 
-func (s *staffService) invalidateDepartmentAdminCaches(departmentID int) {
+func (s *staffService) invalidateDepartmentCorporateAdminCaches(departmentID int) {
 	if departmentID <= 0 {
 		return
 	}

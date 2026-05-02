@@ -151,7 +151,7 @@ function ProductInProgressPanel({
         title={currentSectionTitle}
         extra={
           isLatestCompleted ? null : (
-            <IfPermission permissions={["order.update"]}>
+            <IfPermission permissions={["order.update", "order.development"]}>
               <SafeButton
                 variant="contained"
                 onClick={() => frmCurrentRef.current?.submit()}

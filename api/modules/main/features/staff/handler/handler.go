@@ -41,8 +41,8 @@ func (h *StaffHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterPost(router, "/:dept_id<int>/staff", h.Create)
 	app.RouterPost(router, "/:dept_id<int>/staff/change-password", h.ChangePassword)
 	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/assign-department", h.AssignStaffToDepartment)
-	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/assign-admin-department", h.AssignAdminToDepartment)
-	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/unassign-admin-department", h.UnassignAdminFromDepartment)
+	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/assign-corporate-admin-department", h.AssignCorporateAdminToDepartment)
+	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/unassign-corporate-admin-department", h.UnassignCorporateAdminFromDepartment)
 	app.RouterPut(router, "/:dept_id<int>/staff/:id<int>", h.Update)
 	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/exists-phone", h.ExistsPhone)
 	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/exists-email", h.ExistsEmail)
@@ -270,8 +270,8 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(dto)
 }
 
-func (h *StaffHandler) AssignAdminToDepartment(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.update"); err != nil {
+func (h *StaffHandler) AssignCorporateAdminToDepartment(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 
@@ -292,15 +292,15 @@ func (h *StaffHandler) AssignAdminToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "department_id is required")
 	}
 
-	if err := h.svc.AssignAdminToDepartment(c.UserContext(), id, payload.DepartmentID); err != nil {
+	if err := h.svc.AssignCorporateAdminToDepartment(c.UserContext(), id, payload.DepartmentID); err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 
 	return c.SendStatus(fiber.StatusOK)
 }
 
-func (h *StaffHandler) UnassignAdminFromDepartment(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.update"); err != nil {
+func (h *StaffHandler) UnassignCorporateAdminFromDepartment(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 
@@ -321,7 +321,7 @@ func (h *StaffHandler) UnassignAdminFromDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "department_id is required")
 	}
 
-	if err := h.svc.UnassignAdminFromDepartment(c.UserContext(), id, payload.DepartmentID); err != nil {
+	if err := h.svc.UnassignCorporateAdminFromDepartment(c.UserContext(), id, payload.DepartmentID); err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 

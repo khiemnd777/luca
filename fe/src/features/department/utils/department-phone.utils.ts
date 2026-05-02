@@ -103,9 +103,15 @@ export function buildDepartmentWirePayload(input: Record<string, unknown>): Reco
       input.parent_id as number | null | undefined,
       input.parentId as number | null | undefined,
     ),
-    administrator_id: pickValue(
-      input.administrator_id as number | null | undefined,
-      input.administratorId as number | null | undefined,
+    corporate_administrator_id: pickValue(
+      input.corporate_administrator_id as number | null | undefined,
+      input.corporateAdministratorId as number | null | undefined,
     ),
   };
+}
+
+export function buildDepartmentMutationWirePayload(input: Record<string, unknown>): Record<string, unknown> {
+  const payload = buildDepartmentWirePayload(input);
+  delete payload.corporate_administrator_id;
+  return payload;
 }

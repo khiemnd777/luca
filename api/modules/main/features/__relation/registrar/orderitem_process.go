@@ -12,7 +12,7 @@ func init() {
 		RefIDCol:  "id",
 		RefFields: []string{"id", "product_id", "product_code", "product_name", "process_name", "section_name", "color"},
 
-		Permissions: []string{"order.view"},
+		Permissions: []string{"order.view", "order.development"},
 		CachePrefix: "order:process",
 	})
 

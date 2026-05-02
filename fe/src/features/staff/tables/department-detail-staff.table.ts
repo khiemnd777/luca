@@ -8,19 +8,19 @@ import { createBackNavigationState } from "@core/navigation/back-navigation";
 import { navigate } from "@root/core/navigation/navigate";
 import type { StaffModel } from "@features/staff/model/staff.model";
 import {
-  assignAdminToDepartment,
+  assignCorporateAdminToDepartment,
   tableByDepartment,
-  unassignAdminFromDepartment,
+  unassignCorporateAdminFromDepartment,
   unlinkFromDepartment,
 } from "@features/staff/api/staff.api";
 
-function isDepartmentAdmin(row: StaffModel, administratorId?: number | null): boolean {
-  return !!administratorId && row.id === administratorId;
+function isDepartmentCorporateAdmin(row: StaffModel, corporateAdministratorId?: number | null): boolean {
+  return !!corporateAdministratorId && row.id === corporateAdministratorId;
 }
 
 export function createDepartmentDetailStaffTableSchema(
   departmentId: number,
-  administratorId?: number | null,
+  corporateAdministratorId?: number | null,
 ) {
   const columns: ColumnDef<StaffModel>[] = [
     { key: "avatar", header: "Avatar", type: "image", shape: "circle", width: 80 },
@@ -34,8 +34,8 @@ export function createDepartmentDetailStaffTableSchema(
       width: 180,
       accessor: (row) => {
         const chips = row.roleNames?.filter((roleName) => roleName.trim().toLowerCase() !== "admin") ?? [];
-        if (isDepartmentAdmin(row, administratorId)) {
-          return [{ text: "Admin", color: "#1976d2" }, ...chips];
+        if (isDepartmentCorporateAdmin(row, corporateAdministratorId)) {
+          return [{ text: "Quản trị chi nhánh", color: "#1976d2" }, ...chips];
         }
         return chips;
       },
@@ -64,27 +64,27 @@ export function createDepartmentDetailStaffTableSchema(
     },
     rowActions: [
       {
-        key: "assign-admin",
-        label: "Assign Admin",
+        key: "assign-corporate-admin",
+        label: "Gán Quản trị chi nhánh",
         icon: createElement(AdminPanelSettingsOutlinedIcon, { fontSize: "small" }),
-        permissions: ["department.*"],
-        visible: (row) => !isDepartmentAdmin(row, administratorId),
+        permissions: ["department.update"],
+        visible: (row) => !isDepartmentCorporateAdmin(row, corporateAdministratorId),
         onClick: async (row) => {
           if (!departmentId) return;
-          await assignAdminToDepartment(row.id, departmentId);
+          await assignCorporateAdminToDepartment(row.id, departmentId);
           reloadTable("department-detail-staffs");
         },
       },
       {
-        key: "unassign-admin",
-        label: "Bỏ Assign Admin",
+        key: "unassign-corporate-admin",
+        label: "Bỏ Quản trị chi nhánh",
         icon: createElement(PersonRemoveAlt1OutlinedIcon, { fontSize: "small" }),
-        permissions: ["department.*"],
-        visible: (row) => isDepartmentAdmin(row, administratorId),
+        permissions: ["department.update"],
+        visible: (row) => isDepartmentCorporateAdmin(row, corporateAdministratorId),
         color: "warning",
         onClick: async (row) => {
           if (!departmentId) return;
-          await unassignAdminFromDepartment(row.id, departmentId);
+          await unassignCorporateAdminFromDepartment(row.id, departmentId);
           reloadTable("department-detail-staffs");
         },
       },

@@ -51,14 +51,14 @@ func (r *departmentRepo) Create(ctx context.Context, input model.DepartmentDTO) 
 			SetNillableEmail(input.Email).
 			SetNillableTax(input.Tax).
 			SetNillableParentID(input.ParentID).
-			SetNillableAdministratorID(input.AdministratorID).
+			SetNillableCorporateAdministratorID(input.CorporateAdministratorID).
 			Save(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
-			if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+		if entity.CorporateAdministratorID != nil && *entity.CorporateAdministratorID > 0 {
+			if err := staffrepo.SyncDepartmentCorporateAdminInTx(ctx, tx, *entity.CorporateAdministratorID, entity.ID); err != nil {
 				return nil, err
 			}
 		}
@@ -81,14 +81,14 @@ func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) 
 			SetNillableEmail(input.Email).
 			SetNillableTax(input.Tax).
 			SetNillableParentID(input.ParentID).
-			SetNillableAdministratorID(input.AdministratorID).
+			SetNillableCorporateAdministratorID(input.CorporateAdministratorID).
 			Save(ctx)
 		if err != nil {
 			return nil, err
 		}
 
-		if entity.AdministratorID != nil && *entity.AdministratorID > 0 {
-			if err := staffrepo.SyncDepartmentAdminInTx(ctx, tx, *entity.AdministratorID, entity.ID); err != nil {
+		if entity.CorporateAdministratorID != nil && *entity.CorporateAdministratorID > 0 {
+			if err := staffrepo.SyncDepartmentCorporateAdminInTx(ctx, tx, *entity.CorporateAdministratorID, entity.ID); err != nil {
 				return nil, err
 			}
 		}

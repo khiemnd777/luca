@@ -68,7 +68,7 @@ func (Department) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		field.Int("administrator_id").
+		field.Int("corporate_administrator_id").
 			Optional().
 			Nillable(),
 

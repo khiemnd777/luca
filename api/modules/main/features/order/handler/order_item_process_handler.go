@@ -87,7 +87,7 @@ func (h *OrderItemProcessHandler) GetInProgressesByProcessID(c *fiber.Ctx) error
 }
 
 func (h *OrderItemProcessHandler) GetInProgressesByOrderItemID(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view", "order.development"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 
@@ -104,7 +104,7 @@ func (h *OrderItemProcessHandler) GetInProgressesByOrderItemID(c *fiber.Ctx) err
 }
 
 func (h *OrderItemProcessHandler) GetCheckoutLatest(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view", "order.development"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 

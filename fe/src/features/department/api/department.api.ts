@@ -9,7 +9,7 @@ import type {
   DepartmentSyncApplyResultModel,
   DepartmentSyncPreviewModel,
 } from "@features/department/model/department-sync.model";
-import { buildDepartmentWirePayload } from "@features/department/utils/department-phone.utils";
+import { buildDepartmentMutationWirePayload } from "@features/department/utils/department-phone.utils";
 
 function deptPath(deptId?: number): string {
   const { departmentApiPath } = useAuthStore.getState();
@@ -20,47 +20,47 @@ function deptPath(deptId?: number): string {
 
 export async function list(tableOpts: FetchTableOpts): Promise<ListResult<DeparmentModel>> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.getTable<any[]>(departmentApiPath(), tableOpts);
-  const result = mapper.map<any[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
+  const { data } = await apiClient.getTable<unknown[]>(departmentApiPath(), tableOpts);
+  const result = mapper.map<unknown[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
   return result;
 }
 
 export async function getById(deptId?: number): Promise<DeparmentModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.get<any>(`${departmentApiPath()}/child/${deptId}`);
-  return mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
+  const { data } = await apiClient.get<unknown>(`${departmentApiPath()}/child/${deptId}`);
+  return mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");
 }
 
 export async function childrenList(tableOpts: FetchTableOpts & { deptId?: number }): Promise<ListResult<DeparmentModel>> {
-  const { data } = await apiClient.getTable<any[]>(`${deptPath(tableOpts.deptId)}/children`, tableOpts);
-  const result = mapper.map<any[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
+  const { data } = await apiClient.getTable<unknown[]>(`${deptPath(tableOpts.deptId)}/children`, tableOpts);
+  const result = mapper.map<unknown[], ListResult<DeparmentModel>>("Department", data, "dto_to_model");
   return result;
 }
 
 export async function search(opts: SearchOpts): Promise<SearchResult<DeparmentModel>> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.search<any[]>(`${departmentApiPath()}/search`, opts);
-  const result = mapper.map<any[], SearchResult<DeparmentModel>>("Department", data, "dto_to_model");
+  const { data } = await apiClient.search<unknown[]>(`${departmentApiPath()}/search`, opts);
+  const result = mapper.map<unknown[], SearchResult<DeparmentModel>>("Department", data, "dto_to_model");
   return result;
 }
 
 export async function create(deptId: number, model: DeparmentModel): Promise<DeparmentModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.post<any>(
+  const { data } = await apiClient.post<unknown>(
     `${departmentApiPath()}/child/${deptId}`,
-    buildDepartmentWirePayload(model as unknown as Record<string, unknown>),
+    buildDepartmentMutationWirePayload(model as unknown as Record<string, unknown>),
   );
-  const result = mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
+  const result = mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");
   return result;
 }
 
 export async function update(deptId: number, model: DeparmentModel): Promise<DeparmentModel> {
   const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.put<any>(
+  const { data } = await apiClient.put<unknown>(
     `${departmentApiPath()}/child/${deptId}`,
-    buildDepartmentWirePayload(model as unknown as Record<string, unknown>),
+    buildDepartmentMutationWirePayload(model as unknown as Record<string, unknown>),
   );
-  const result = mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
+  const result = mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");
   return result;
 }
 
@@ -71,8 +71,8 @@ export async function unlink(deptId: number): Promise<{ success: boolean }> {
 }
 
 export async function myFirstDepartment(): Promise<DeparmentModel> {
-  const { data } = await apiClient.get<any>(`${deptPath().replace(/\/\d+$/, "")}/me`);
-  return mapper.map<any, DeparmentModel>("Department", data, "dto_to_model");
+  const { data } = await apiClient.get<unknown>(`${deptPath().replace(/\/\d+$/, "")}/me`);
+  return mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");
 }
 
 export async function previewSyncFromParent(deptId: number): Promise<DepartmentSyncPreviewModel> {

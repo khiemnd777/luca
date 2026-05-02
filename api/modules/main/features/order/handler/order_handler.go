@@ -589,7 +589,7 @@ func parseIntListFromQuery(c *fiber.Ctx, key string) []int {
 }
 
 func (h *OrderHandler) GetByOrderIDAndOrderItemID(c *fiber.Ctx) error {
-	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view"); err != nil {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.view", "order.development"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 	orderID, _ := utils.GetParamAsInt(c, "order_id")
