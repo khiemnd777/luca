@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { OrderItemModel, OrderItemUpsertModel } from "./order-item.model";
 
 export interface DeliveryProofModel {
@@ -36,6 +37,13 @@ export interface OrderModel {
   quantity?: number;
   totalPrice?: number;
   deliveryDate?: string | null;
+  eta?: string | null;
+  deliveryAt?: string | null;
+  remainingMinutes?: number | null;
+  lateByMinutes?: number | null;
+  riskScore?: number;
+  riskBucket?: string | null;
+  predictedLate?: boolean;
   imageUrl?: string | null;
   proofImageUrl?: string | null;
   deliveryProofs?: DeliveryProofModel[] | null;

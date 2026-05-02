@@ -10,7 +10,11 @@ import type { OrderAdvancedSearchFilters } from "@features/order/model/order-adv
 import { hasAdvancedSearchFilters } from "@features/order/utils/order-advanced-search.store";
 import { openFormDialog } from "@core/form/form-dialog.service";
 import EventRepeatIcon from "@mui/icons-material/EventRepeat";
-import { createElement } from "react";
+import { createElement, useEffect } from "react";
+import { useDebounce } from "@root/core/hooks/use-debounce";
+import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
+import { registerWS } from "@root/core/network/websocket/ws-widgets";
+import { OrderRiskChip } from "@features/order/components/order-risk-chip.component";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -28,6 +32,13 @@ const columns: ColumnDef<OrderModel>[] = [
     sortable: true,
   },
   { key: "codeLatest", header: "Mã đơn", sortable: true, labelField: true },
+  {
+    key: "riskBucket",
+    header: "Due/Risk",
+    width: 130,
+    render: (row) => createElement(OrderRiskChip, { row }),
+    sortable: false,
+  },
   // { key: "code", header: "Mã gốc", sortable: true, },
   {
     key: "remakeCount",
@@ -99,3 +110,23 @@ registerTable("orders", () => {
     },
   });
 });
+
+function OrdersWSWidget() {
+  const { lastMessage } = useWebSocket();
+  const reloadOrders = useDebounce(() => reloadTable("orders"), 1500);
+
+  useEffect(() => {
+    if (
+      lastMessage?.type === "order:changed"
+      || lastMessage?.type === "order:newest"
+      || lastMessage?.type === "order:inprogress"
+      || lastMessage?.type === "dashboard:production_planning"
+    ) {
+      reloadOrders();
+    }
+  }, [lastMessage, reloadOrders]);
+
+  return null;
+}
+
+registerWS(createElement(OrdersWSWidget));

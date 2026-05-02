@@ -219,11 +219,20 @@ type MobilePrescriptionFileCardProps =
     };
 
 function MobilePrescriptionFileCard(props: MobilePrescriptionFileCardProps) {
-  const { file, canMutate, showStatus = true, onOpen, onDelete } = props;
-  const format = props.kind === "local" ? file.format : file.format || toFormatLabel(file.fileName);
-  const isImage = isPreviewableImage(file.mimeType);
-  const status = props.kind === "local" ? uploadStateLabel(file.uploadState) : uploadStateLabel("success");
-  const captureDate = props.kind === "local" ? "Chưa upload" : captureDateLabel(file.createdAt);
+  const { canMutate, showStatus = true, onOpen, onDelete } = props;
+  const format =
+    props.kind === "local"
+      ? props.file.format
+      : props.file.format || toFormatLabel(props.file.fileName);
+  const isImage = isPreviewableImage(props.file.mimeType);
+  const status =
+    props.kind === "local"
+      ? uploadStateLabel(props.file.uploadState)
+      : uploadStateLabel("success");
+  const captureDate =
+    props.kind === "local"
+      ? "Chưa upload"
+      : captureDateLabel(props.file.createdAt);
 
   return (
     <Paper variant="outlined" sx={{ overflow: "hidden", borderRadius: 2 }}>
@@ -245,7 +254,7 @@ function MobilePrescriptionFileCard(props: MobilePrescriptionFileCardProps) {
             <FilePreviewCell
               kind="persisted"
               orderId={props.orderId}
-              file={file}
+              file={props.file}
               onOpen={onOpen}
               width="100%"
               height={180}
@@ -253,7 +262,7 @@ function MobilePrescriptionFileCard(props: MobilePrescriptionFileCardProps) {
           ) : (
             <FilePreviewCell
               kind="local"
-              file={file}
+              file={props.file}
               onOpen={onOpen}
               width="100%"
               height={180}
@@ -323,7 +332,7 @@ function MobilePrescriptionFileCard(props: MobilePrescriptionFileCardProps) {
             {format || "Không rõ định dạng"}
           </Typography>
           <Typography variant="caption" color="text.secondary">
-            {formatSize(file.sizeBytes)}
+            {formatSize(props.file.sizeBytes)}
           </Typography>
           {showStatus ? (
             <Typography variant="caption" color="text.secondary">

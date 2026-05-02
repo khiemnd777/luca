@@ -22,6 +22,7 @@ export function DepartmentDashboardDialog({
         <DashboardProvider
           departmentId={departmentId}
           cacheNamespace={`department-${departmentId ?? "unknown"}`}
+          showProductionPlanning={false}
         >
           <DashboardOverview />
         </DashboardProvider>

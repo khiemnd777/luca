@@ -8,6 +8,7 @@ import { navigate } from "@core/navigation/navigate";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import { getLatestOrderItemIdByOrderId, unlink } from "@features/order/api/order-item.api";
+import { OrderRiskChip } from "@features/order/components/order-risk-chip.component";
 import type { OrderItemHistoricalModel } from "@features/order/model/order-item.model";
 import type { OrderModel } from "@features/order/model/order.model";
 import { formatDateTime } from "@root/shared/utils/datetime.utils";
@@ -345,6 +346,13 @@ export function createGroupedOrderTableSchema({
       width: 280,
       stickyLeft: true,
       render: (row) => renderCodeCell(row, onToggleExpand),
+    },
+    {
+      key: "riskBucket",
+      header: "Due/Risk",
+      width: 130,
+      render: (row) => createElement(OrderRiskChip, { row: getRowOrderSource(row) }),
+      sortable: false,
     },
     {
       key: "remakeCount",

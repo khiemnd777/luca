@@ -6,15 +6,22 @@ import (
 
 type OrderDTO struct {
 	// General
-	ID              int64          `json:"id,omitempty"`
-	DepartmentID    *int           `json:"department_id,omitempty"`
-	Code            *string        `json:"code,omitempty"`
-	PromotionCodeID *int           `json:"promotion_code_id,omitempty"`
-	PromotionCode   *string        `json:"promotion_code,omitempty"`
-	CustomFields    map[string]any `json:"custom_fields,omitempty"`
-	CreatedAt       time.Time      `json:"created_at,omitempty"`
-	UpdatedAt       time.Time      `json:"updated_at,omitempty"`
-	DeliveryDate    *time.Time     `json:"delivery_date,omitempty"`
+	ID               int64          `json:"id,omitempty"`
+	DepartmentID     *int           `json:"department_id,omitempty"`
+	Code             *string        `json:"code,omitempty"`
+	PromotionCodeID  *int           `json:"promotion_code_id,omitempty"`
+	PromotionCode    *string        `json:"promotion_code,omitempty"`
+	CustomFields     map[string]any `json:"custom_fields,omitempty"`
+	CreatedAt        time.Time      `json:"created_at,omitempty"`
+	UpdatedAt        time.Time      `json:"updated_at,omitempty"`
+	DeliveryDate     *time.Time     `json:"delivery_date,omitempty"`
+	ETA              *time.Time     `json:"eta,omitempty"`
+	DeliveryAt       *time.Time     `json:"delivery_at,omitempty"`
+	RemainingMinutes *int           `json:"remaining_minutes,omitempty"`
+	LateByMinutes    *int           `json:"late_by_minutes,omitempty"`
+	RiskScore        int            `json:"risk_score,omitempty"`
+	RiskBucket       string         `json:"risk_bucket,omitempty"`
+	PredictedLate    bool           `json:"predicted_late,omitempty"`
 	// Customer
 	// deprecated
 	CustomerID *int64 `json:"customer_id,omitempty"`

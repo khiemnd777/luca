@@ -18,6 +18,8 @@ import { historical } from "@features/order/api/order-item.api";
 import type { OrderItemHistoricalModel } from "@features/order/model/order-item.model";
 import type { FetchTableOpts } from "@core/table/table.types";
 import { hasAdvancedSearchFilters } from "@features/order/utils/order-advanced-search.store";
+import { useDebounce } from "@root/core/hooks/use-debounce";
+import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import {
   createGroupedOrderTableSchema,
   type GroupedOrderHistoricalDetail,
@@ -26,14 +28,21 @@ import {
 
 type OrderTableMode = "normal" | "grouping";
 
-function OrderListWidget() {
+export function OrderListWidget() {
   const appliedFilters = useOrderAdvancedSearchStore((state) => state.appliedFilters);
   const refreshToken = useOrderAdvancedSearchStore((state) => state.refreshToken);
   const [mode, setMode] = React.useState<OrderTableMode>("grouping");
   const [collapsedIds, setCollapsedIds] = React.useState<Set<number>>(new Set());
   const [historicalState, setHistoricalState] = React.useState<Record<number, GroupedOrderHistoricalState>>({});
+  const [groupedRefreshToken, setGroupedRefreshToken] = React.useState(0);
   const historicalStateRef = React.useRef(historicalState);
   const historicalRequestsRef = React.useRef(new Map<number, Promise<GroupedOrderHistoricalState>>());
+  const { lastMessage } = useWebSocket();
+  const reloadGroupedOrders = useDebounce(() => {
+    setHistoricalState({});
+    historicalRequestsRef.current.clear();
+    setGroupedRefreshToken((value) => value + 1);
+  }, 1500);
 
   React.useEffect(() => {
     historicalStateRef.current = historicalState;
@@ -44,6 +53,17 @@ function OrderListWidget() {
     setHistoricalState({});
     historicalRequestsRef.current.clear();
   }, [refreshToken, appliedFilters]);
+
+  React.useEffect(() => {
+    if (
+      lastMessage?.type === "order:changed"
+      || lastMessage?.type === "order:newest"
+      || lastMessage?.type === "order:inprogress"
+      || lastMessage?.type === "dashboard:production_planning"
+    ) {
+      reloadGroupedOrders();
+    }
+  }, [lastMessage, reloadGroupedOrders]);
 
   const fetchOrders = React.useCallback(
     async (opts: FetchTableOpts) => {
@@ -186,7 +206,7 @@ function OrderListWidget() {
         <AutoTable key={`normal-${refreshToken}`} name="orders" params={{ advancedSearchFilters: appliedFilters }} />
       ) : (
         <AutoTable
-          key={`grouping-${refreshToken}`}
+          key={`grouping-${refreshToken}-${groupedRefreshToken}`}
           schema={groupedSchema}
         />
       )}
