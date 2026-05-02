@@ -7,6 +7,7 @@ type DashboardContextValue = {
   range: SalesReportRange;
   setRange: (range: SalesReportRange) => void;
   cacheNamespace: string;
+  showProductionPlanning: boolean;
 };
 
 const DashboardContext = React.createContext<DashboardContextValue | null>(null);
@@ -15,6 +16,7 @@ type DashboardProviderProps = React.PropsWithChildren<{
   departmentId?: number | null;
   cacheNamespace?: string;
   initialRange?: SalesReportRange;
+  showProductionPlanning?: boolean;
 }>;
 
 export function DashboardProvider({
@@ -22,6 +24,7 @@ export function DashboardProvider({
   departmentId,
   cacheNamespace = "home",
   initialRange = "7d",
+  showProductionPlanning = true,
 }: DashboardProviderProps) {
   const [range, setRange] = React.useState<SalesReportRange>(initialRange);
 
@@ -31,8 +34,9 @@ export function DashboardProvider({
       range,
       setRange,
       cacheNamespace,
+      showProductionPlanning,
     }),
-    [cacheNamespace, departmentId, range],
+    [cacheNamespace, departmentId, range, showProductionPlanning],
   );
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;

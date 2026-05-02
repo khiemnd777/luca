@@ -102,6 +102,7 @@ func (s *orderItemService) Delete(ctx context.Context, deptID int, orderID, orde
 		"order:search:*",
 		"order:advanced-report:summary:*",
 		"order:advanced-report:breakdown:*",
+		fmt.Sprintf("dashboard:production-planning:dpt%d:*", deptID),
 	)
 
 	pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
@@ -120,6 +121,8 @@ func (s *orderItemService) Delete(ctx context.Context, deptID int, orderID, orde
 	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
 	realtime.BroadcastToDept(deptID, "dashboard:sales_summary", nil)
 	realtime.BroadcastToDept(deptID, "dashboard:sales_daily", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:production_planning", nil)
+	realtime.BroadcastToDept(deptID, "order:changed", nil)
 
 	s.unlinkSearch(orderID)
 

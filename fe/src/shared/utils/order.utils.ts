@@ -211,3 +211,64 @@ export function priorityColor(value?: string | null): string {
   if (!value) return "#9e9e9e";
   return PRIORITY_COLOR_MAP[value] ?? "#9e9e9e";
 }
+
+export function planningRiskLabel(value?: string | null): string {
+  switch (value) {
+    case "overdue":
+      return "Trễ";
+    case "due_2h":
+      return "<= 2h";
+    case "due_4h":
+      return "<= 4h";
+    case "due_6h":
+      return "<= 6h";
+    case "predicted_late":
+      return "Dự báo trễ";
+    case "normal":
+      return "Ổn";
+    default:
+      return "";
+  }
+}
+
+export function planningRiskColor(value?: string | null): string {
+  switch (value) {
+    case "overdue":
+      return "#d32f2f";
+    case "due_2h":
+      return "#c62828";
+    case "due_4h":
+      return "#ef6c00";
+    case "due_6h":
+      return "#f9a825";
+    case "predicted_late":
+      return "#ad1457";
+    case "normal":
+      return "#607d8b";
+    default:
+      return "#9e9e9e";
+  }
+}
+
+export function formatPlanningMinutes(minutes?: number | null): string {
+  if (minutes == null || !Number.isFinite(minutes)) return "––";
+  const abs = Math.abs(minutes);
+  const dayMinutes = 24 * 60;
+  const monthMinutes = 30 * dayMinutes;
+  const yearMinutes = 12 * monthMinutes;
+
+  let value: string;
+  if (abs > yearMinutes) {
+    value = `${Math.max(1, Math.floor(abs / yearMinutes))} năm`;
+  } else if (abs > monthMinutes) {
+    value = `${Math.max(1, Math.floor(abs / monthMinutes))} th`;
+  } else if (abs > dayMinutes) {
+    value = `${Math.max(1, Math.floor(abs / dayMinutes))} ng`;
+  } else {
+    const hours = Math.floor(abs / 60);
+    const mins = abs % 60;
+    value = hours > 0 ? `${hours}h${mins > 0 ? ` ${mins}m` : ""}` : `${mins}m`;
+  }
+
+  return minutes < 0 ? `Trễ ${value}` : `Còn ${value}`;
+}

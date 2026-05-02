@@ -119,7 +119,13 @@ func kOrderAll(deptID int) []string {
 		fmt.Sprintf("order:list:inprogress:dpt%d:*", deptID),
 		fmt.Sprintf("order:list:newest:dpt%d:*", deptID),
 		fmt.Sprintf("order:list:completed:dpt%d:*", deptID),
+		fmt.Sprintf("dashboard:production-planning:dpt%d:*", deptID),
 	}
+}
+
+func broadcastProductionPlanningChanged(deptID int) {
+	broadcastToDeptHook(deptID, "dashboard:production_planning", nil)
+	broadcastToDeptHook(deptID, "order:changed", nil)
 }
 
 func kOrderListAll(deptID int) string {
@@ -295,6 +301,7 @@ func (s *orderService) Create(ctx context.Context, deptID int, userID int, input
 	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
 	broadcastToDeptHook(deptID, "dashboard:sales_summary", nil)
 	broadcastToDeptHook(deptID, "dashboard:sales_daily", nil)
+	broadcastProductionPlanningChanged(deptID)
 
 	logger.Debug("[order_created]", "order_id", dto.ID, "created_by", userID)
 
@@ -490,6 +497,7 @@ func (s *orderService) Update(ctx context.Context, deptID, userID int, input *mo
 	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
 	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
 	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
+	broadcastProductionPlanningChanged(deptID)
 
 	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
@@ -530,6 +538,7 @@ func (s *orderService) UpdateStatus(ctx context.Context, deptID, userID int, ord
 	broadcastToDeptHook(deptID, "dashboard:statuses", nil)
 	broadcastToDeptHook(deptID, "dashboard:due_today", nil)
 	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
+	broadcastProductionPlanningChanged(deptID)
 
 	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
@@ -565,6 +574,7 @@ func (s *orderService) UpdateDeliveryStatus(ctx context.Context, deptID, userID 
 
 	// Later: broadcast to delivery dashboard only
 	// realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	broadcastProductionPlanningChanged(deptID)
 
 	publishAsyncHook("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,
@@ -745,7 +755,9 @@ func (s *orderService) List(ctx context.Context, deptID int, q table.TableQuery)
 		var zero boxed
 		return zero, err
 	}
-	return *ptr, nil
+	res := *ptr
+	res.Items = enrichOrderPlanningRisk(res.Items, time.Now())
+	return res, nil
 }
 
 func (s *orderService) ListByPromotionCodeID(ctx context.Context, deptID int, promotionCodeID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
@@ -763,7 +775,9 @@ func (s *orderService) ListByPromotionCodeID(ctx context.Context, deptID int, pr
 		var zero boxed
 		return zero, err
 	}
-	return *ptr, nil
+	res := *ptr
+	res.Items = enrichOrderPlanningRisk(res.Items, time.Now())
+	return res, nil
 }
 
 func (s *orderService) GetOrdersBySectionID(ctx context.Context, sectionID int, q table.TableQuery) (table.TableListResult[model.OrderDTO], error) {
@@ -781,7 +795,9 @@ func (s *orderService) GetOrdersBySectionID(ctx context.Context, sectionID int, 
 		var zero boxed
 		return zero, err
 	}
-	return *ptr, nil
+	res := *ptr
+	res.Items = enrichOrderPlanningRisk(res.Items, time.Now())
+	return res, nil
 }
 
 func (s *orderService) Delete(ctx context.Context, deptID int, id int64) error {
@@ -809,6 +825,7 @@ func (s *orderService) Delete(ctx context.Context, deptID int, id int64) error {
 	broadcastToDeptHook(deptID, "dashboard:active_today", nil)
 	broadcastToDeptHook(deptID, "dashboard:sales_summary", nil)
 	broadcastToDeptHook(deptID, "dashboard:sales_daily", nil)
+	broadcastProductionPlanningChanged(deptID)
 
 	s.unlinkSearch(id)
 	return nil
@@ -829,12 +846,19 @@ func (s *orderService) Search(ctx context.Context, deptID int, q dbutils.SearchQ
 		var zero boxed
 		return zero, err
 	}
-	return *ptr, nil
+	res := *ptr
+	res.Items = enrichOrderPlanningRisk(res.Items, time.Now())
+	return res, nil
 }
 
 func (s *orderService) AdvancedSearch(ctx context.Context, deptID int, query model.OrderAdvancedSearchQuery, canViewDepartment bool) (table.TableListResult[model.OrderDTO], error) {
 	normalized := s.normalizeAdvancedSearchQuery(deptID, query, canViewDepartment)
-	return s.repo.AdvancedSearch(ctx, normalized)
+	res, err := s.repo.AdvancedSearch(ctx, normalized)
+	if err != nil {
+		return res, err
+	}
+	res.Items = enrichOrderPlanningRisk(res.Items, time.Now())
+	return res, nil
 }
 
 func (s *orderService) AdvancedSearchReportSummary(ctx context.Context, deptID int, filter model.OrderAdvancedSearchFilter, canViewDepartment bool) (*model.OrderAdvancedSearchReportSummaryDTO, error) {
@@ -977,6 +1001,56 @@ func serializeAdvancedSearchFilter(filter model.OrderAdvancedSearchFilter) strin
 	}
 
 	return strings.Join(parts, "|")
+}
+
+func enrichOrderPlanningRisk(items []*model.OrderDTO, now time.Time) []*model.OrderDTO {
+	out := make([]*model.OrderDTO, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			out = append(out, nil)
+			continue
+		}
+		copyItem := *item
+		applyOrderPlanningRisk(&copyItem, now)
+		out = append(out, &copyItem)
+	}
+	return out
+}
+
+func applyOrderPlanningRisk(item *model.OrderDTO, now time.Time) {
+	if item == nil {
+		return
+	}
+	item.RiskBucket = model.PlanningRiskBucketNormal
+	item.DeliveryAt = item.DeliveryDate
+	item.ETA = item.DeliveryDate
+	if item.DeliveryDate == nil {
+		return
+	}
+	remaining := int(item.DeliveryDate.Sub(now).Minutes())
+	item.RemainingMinutes = &remaining
+	if remaining < 0 {
+		lateBy := -remaining
+		item.LateByMinutes = &lateBy
+		item.PredictedLate = true
+		item.RiskBucket = model.PlanningRiskBucketOverdue
+		item.RiskScore = 100
+		return
+	}
+	switch {
+	case remaining <= 120:
+		item.RiskBucket = model.PlanningRiskBucketDue2h
+		item.RiskScore = 90
+	case remaining <= 240:
+		item.RiskBucket = model.PlanningRiskBucketDue4h
+		item.RiskScore = 70
+	case remaining <= 360:
+		item.RiskBucket = model.PlanningRiskBucketDue6h
+		item.RiskScore = 50
+	default:
+		item.RiskBucket = model.PlanningRiskBucketNormal
+		item.RiskScore = 0
+	}
 }
 
 func serializeIntSlice(values []int) string {

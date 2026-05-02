@@ -27,6 +27,16 @@ import type {
   SalesReportResultDto,
   SalesSummaryModel,
   SalesSummaryDto,
+  ProductionPlanningOverview,
+  ProductionPlanningOverviewDto,
+  ProductionPlanningConfig,
+  ProductionPlanningConfigDto,
+  ProductionPlanningRecommendation,
+  ProductionPlanningRecommendationDto,
+  ProductionPlanningRiskItem,
+  ProductionPlanningRiskItemDto,
+  ProductionPlanningBottleneck,
+  ProductionPlanningBottleneckDto,
 } from "../model/dashboard.model";
 
 export type DashboardStat = {
@@ -105,6 +115,129 @@ function buildScopedKey(
   const namespace = options?.cacheNamespace ?? "home";
   const departmentKey = options?.departmentId ?? "current";
   return [baseKey, namespace, departmentKey, extra].filter(Boolean).join(":");
+}
+
+function normalizePlanningConfig(input?: ProductionPlanningConfig | ProductionPlanningConfigDto | null): ProductionPlanningConfig {
+  const value = input ?? {};
+  const camelConfig = value as ProductionPlanningConfig;
+  const dtoConfig = value as ProductionPlanningConfigDto;
+  const businessHours = camelConfig.businessHours ?? dtoConfig.business_hours ?? {};
+  const camelBusinessHours = businessHours as ProductionPlanningConfig["businessHours"];
+  const dtoBusinessHours = businessHours as ProductionPlanningConfigDto["business_hours"];
+  return {
+    departmentId: camelConfig.departmentId ?? dtoConfig.department_id,
+    enabled: camelConfig.enabled ?? dtoConfig.enabled ?? true,
+    configComplete: camelConfig.configComplete ?? dtoConfig.config_complete ?? false,
+    defaultDurationMin: camelConfig.defaultDurationMin ?? dtoConfig.default_duration_min ?? 0,
+    businessHours: {
+      startHour: camelBusinessHours?.startHour ?? dtoBusinessHours?.start_hour ?? 8,
+      endHour: camelBusinessHours?.endHour ?? dtoBusinessHours?.end_hour ?? 17,
+      workDays: camelBusinessHours?.workDays ?? dtoBusinessHours?.work_days ?? [1, 2, 3, 4, 5, 6],
+    },
+    processDurations: camelConfig.processDurations ?? dtoConfig.process_durations ?? {},
+    sectionCapacity: camelConfig.sectionCapacity ?? dtoConfig.section_capacity ?? {},
+    staffCapacity: camelConfig.staffCapacity ?? dtoConfig.staff_capacity ?? {},
+    disabledSections: camelConfig.disabledSections ?? dtoConfig.disabled_sections ?? [],
+    disabledStaff: camelConfig.disabledStaff ?? dtoConfig.disabled_staff ?? [],
+  };
+}
+
+function planningConfigToDto(input: ProductionPlanningConfig): ProductionPlanningConfigDto {
+  return {
+    department_id: input.departmentId,
+    enabled: input.enabled,
+    config_complete: input.configComplete,
+    default_duration_min: input.defaultDurationMin,
+    business_hours: {
+      start_hour: input.businessHours.startHour,
+      end_hour: input.businessHours.endHour,
+      work_days: input.businessHours.workDays,
+    },
+    process_durations: input.processDurations,
+    section_capacity: input.sectionCapacity,
+    staff_capacity: input.staffCapacity,
+    disabled_sections: input.disabledSections,
+    disabled_staff: input.disabledStaff,
+  };
+}
+
+function normalizeRecommendation(input?: ProductionPlanningRecommendationDto | null): ProductionPlanningRecommendation | null {
+  if (!input?.id) return null;
+  return {
+    id: input.id,
+    type: input.type ?? "assign",
+    status: input.status ?? "pending",
+    reason: input.reason ?? "",
+    orderId: input.order_id ?? 0,
+    orderItemId: input.order_item_id ?? 0,
+    inProgressId: input.in_progress_id ?? 0,
+    assignedUserId: input.assigned_user_id,
+    assignedName: input.assigned_name,
+    targetUserId: input.target_user_id ?? 0,
+    targetName: input.target_name ?? "",
+    expectedRiskDelta: input.expected_risk_delta,
+  };
+}
+
+function normalizeRiskItem(input: ProductionPlanningRiskItemDto): ProductionPlanningRiskItem {
+  return {
+    orderId: input.order_id ?? 0,
+    orderItemId: input.order_item_id ?? 0,
+    inProgressId: input.in_progress_id,
+    orderCode: input.order_code,
+    orderItemCode: input.order_item_code,
+    processName: input.process_name,
+    sectionName: input.section_name,
+    assignedUserId: input.assigned_user_id,
+    assignedName: input.assigned_name,
+    startedAt: input.started_at,
+    eta: input.eta,
+    deliveryAt: input.delivery_at,
+    remainingMinutes: input.remaining_minutes,
+    lateByMinutes: input.late_by_minutes,
+    riskScore: input.risk_score ?? 0,
+    riskBucket: input.risk_bucket ?? "normal",
+    predictedLate: input.predicted_late ?? false,
+    activeAgeMinutes: input.active_age_minutes,
+    remainingWorkMinutes: input.remaining_work_minutes,
+    recommendedAction: normalizeRecommendation(input.recommended_action),
+  };
+}
+
+function normalizeBottleneck(input: ProductionPlanningBottleneckDto): ProductionPlanningBottleneck {
+  return {
+    key: input.key ?? "",
+    type: input.type ?? "",
+    label: input.label ?? "",
+    activeCount: input.active_count ?? 0,
+    overdueCount: input.overdue_count ?? 0,
+    predictedLateCount: input.predicted_late_count ?? 0,
+    loadMinutes: input.load_minutes ?? 0,
+    capacityMultiplier: input.capacity_multiplier ?? 1,
+    nearestDeliveryAt: input.nearest_delivery_at,
+    topRiskScore: input.top_risk_score ?? 0,
+  };
+}
+
+function normalizePlanningOverview(input: ProductionPlanningOverviewDto): ProductionPlanningOverview {
+  return {
+    serverNow: input.server_now ?? new Date().toISOString(),
+    config: normalizePlanningConfig(input.config),
+    summary: {
+      overdue: input.summary?.overdue ?? 0,
+      due2h: input.summary?.due_2h ?? 0,
+      due4h: input.summary?.due_4h ?? 0,
+      due6h: input.summary?.due_6h ?? 0,
+      predictedLate: input.summary?.predicted_late ?? 0,
+      recoverable: input.summary?.recoverable ?? 0,
+      blocked: input.summary?.blocked ?? 0,
+    },
+    riskItems: (input.risk_items ?? []).map(normalizeRiskItem),
+    bottlenecks: (input.bottlenecks ?? []).map(normalizeBottleneck),
+    recommendations: (input.recommendations ?? [])
+      .map(normalizeRecommendation)
+      .filter((item): item is ProductionPlanningRecommendation => Boolean(item)),
+  };
 }
 
 async function getDashboardMetric<TModel, TDto>(
@@ -217,6 +350,57 @@ export async function fetchCaseStatuses(
   );
 
   return (mapped ?? []).map(normalizeCaseStatusItem);
+}
+
+export async function fetchProductionPlanningOverview(
+  departmentId?: number | null,
+): Promise<ProductionPlanningOverview> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<ProductionPlanningOverviewDto>(
+    `${departmentApiPath()}/dashboard/production-planning/overview`,
+    {
+      params: toDepartmentQuery(departmentId),
+    },
+  );
+  return normalizePlanningOverview(data);
+}
+
+export async function fetchProductionPlanningConfig(
+  departmentId?: number | null,
+): Promise<ProductionPlanningConfig> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<ProductionPlanningConfigDto>(
+    `${departmentApiPath()}/dashboard/production-planning/config`,
+    {
+      params: toDepartmentQuery(departmentId),
+    },
+  );
+  return normalizePlanningConfig(data);
+}
+
+export async function saveProductionPlanningConfig(
+  config: ProductionPlanningConfig,
+): Promise<ProductionPlanningConfig> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.put<ProductionPlanningConfigDto>(
+    `${departmentApiPath()}/dashboard/production-planning/config`,
+    planningConfigToDto(config),
+  );
+  return normalizePlanningConfig(data);
+}
+
+export async function applyProductionPlanningRecommendation(
+  recommendationId: string,
+  adminNote?: string,
+): Promise<ProductionPlanningRecommendation | null> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.post<{ recommendation?: ProductionPlanningRecommendationDto }>(
+    `${departmentApiPath()}/dashboard/production-planning/recommendations/${encodeURIComponent(recommendationId)}/apply`,
+    {
+      admin_note: adminNote || undefined,
+    },
+  );
+  return normalizeRecommendation(data.recommendation);
 }
 
 export function fetchAvgTurnaround(
@@ -544,6 +728,17 @@ export function useCaseStatuses(options?: DashboardQueryOptions) {
     {
       key: buildScopedKey("dashboard:case-statuses", options),
       invalidateEvent: "invalidate:dashboard:case-statuses",
+    },
+  );
+}
+
+export function useProductionPlanningOverview(options?: DashboardQueryOptions) {
+  return useAsync<ProductionPlanningOverview>(
+    async () => fetchProductionPlanningOverview(options?.departmentId),
+    [options?.departmentId],
+    {
+      key: buildScopedKey("dashboard:production-planning", options),
+      invalidateEvent: "invalidate:dashboard:production-planning",
     },
   );
 }

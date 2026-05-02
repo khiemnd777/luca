@@ -427,6 +427,8 @@ func (s *orderItemProcessService) CheckInOrOut(
 	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
 	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
 	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:production_planning", nil)
+	realtime.BroadcastToDept(deptID, "order:changed", nil)
 
 	if dto.CompletedAt != nil && dto.NextProcessID != nil {
 		pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
@@ -519,6 +521,9 @@ func (s *orderItemProcessService) Assign(ctx context.Context, deptID, userID int
 
 	cache.InvalidateKeys(keys...)
 	cache.InvalidateKeys(kOrderAll(deptID)...)
+	realtime.BroadcastAll("order:inprogress", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:production_planning", nil)
+	realtime.BroadcastToDept(deptID, "order:changed", nil)
 
 	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
 		UserID:   userID,

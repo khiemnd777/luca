@@ -5,10 +5,20 @@ import { Spacer } from "@shared/components/ui/spacer";
 import { useDashboardContext } from "@features/dashboard/context/dashboard-context";
 
 export function DashboardOverview() {
-  const { range, setRange } = useDashboardContext();
+  const { range, setRange, showProductionPlanning } = useDashboardContext();
 
   return (
     <>
+      {showProductionPlanning && (
+        <>
+          <ResponsiveGrid xs={1} sm={1} md={1} lg={1} xl={1}>
+            <SlotHost name="dashboard:top" />
+          </ResponsiveGrid>
+
+          <Spacer />
+        </>
+      )}
+
       <Box sx={{ display: "flex", justifyContent: "flex-end", mb: 2 }}>
         <ToggleButtonGroup
           value={range}

@@ -32,6 +32,11 @@ import (
 	casestatuseshlr "github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_statuses/handler"
 	casestatusesrepo "github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_statuses/repository"
 	casestatusessvc "github.com/khiemnd777/noah_api/modules/main/features/dashboard/case_statuses/service"
+	planninghlr "github.com/khiemnd777/noah_api/modules/main/features/dashboard/production_planning/handler"
+	planningrepo "github.com/khiemnd777/noah_api/modules/main/features/dashboard/production_planning/repository"
+	planningsvc "github.com/khiemnd777/noah_api/modules/main/features/dashboard/production_planning/service"
+	orderrepo "github.com/khiemnd777/noah_api/modules/main/features/order/repository"
+	ordersvc "github.com/khiemnd777/noah_api/modules/main/features/order/service"
 	"github.com/khiemnd777/noah_api/modules/main/registry"
 	"github.com/khiemnd777/noah_api/shared/cron"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
@@ -97,6 +102,15 @@ func (feature) Register(router fiber.Router, deps *module.ModuleDeps[config.Modu
 	caseStatusesSvc := casestatusessvc.NewCaseStatusesService(caseStatusesRepo, deps)
 	caseStatusesHandler := casestatuseshlr.NewCaseStatusesHandler(caseStatusesSvc, deps)
 	caseStatusesHandler.RegisterRoutes(router)
+
+	// Production Planning
+	orderItemProcessRepo := orderrepo.NewOrderItemProcessRepository(entClient, deps, cfMgr)
+	orderItemProcessInProgressRepo := orderrepo.NewOrderItemProcessInProgressRepository(entClient, orderItemProcessRepo)
+	orderItemProcessSvc := ordersvc.NewOrderItemProcessService(orderItemProcessRepo, orderItemProcessInProgressRepo, deps, cfMgr)
+	planningRepo := planningrepo.NewProductionPlanningRepository(entClient, deps.DB, deps)
+	planningSvc := planningsvc.NewProductionPlanningService(planningRepo, orderItemProcessSvc, deps)
+	planningHandler := planninghlr.NewProductionPlanningHandler(planningSvc, deps)
+	planningHandler.RegisterRoutes(router)
 
 	return nil
 }
