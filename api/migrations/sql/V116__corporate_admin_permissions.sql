@@ -7,6 +7,7 @@ WHERE rp.role_id = r.id
     p.permission_value LIKE 'department.%'
     OR p.permission_value = 'system_log.read'
     OR p.permission_value = 'rbac.manage'
+    OR p.permission_value = 'privilege.metadata'
     OR p.permission_value LIKE 'promotion.%'
   );
 
@@ -18,5 +19,6 @@ WHERE r.role_name = 'corporate_admin'
   AND p.permission_value NOT LIKE 'department.%'
   AND p.permission_value <> 'system_log.read'
   AND p.permission_value <> 'rbac.manage'
+  AND p.permission_value <> 'privilege.metadata'
   AND p.permission_value NOT LIKE 'promotion.%'
 ON CONFLICT DO NOTHING;
