@@ -25,6 +25,10 @@ The frontend auto-loads feature modules from `fe/src/features/**/index.tsx` thro
 | Backend | Zap | v1.27.0 | `api/go.mod`, `api/shared/logger/logger.go` | Structured JSON logging | Active |
 | Backend | `sony/gobreaker` | v1.0.0 | `api/go.mod`, `api/shared/circuitbreaker/cb.go`, `api/shared/app/http_client.go` | Circuit breaker for internal HTTP calls | Active |
 | Backend | `robfig/cron/v3` | v3.0.1 | `api/go.mod`, `api/main.go`, `api/shared/cron/cron_manager.go` | Scheduled jobs | Active |
+| Backend | `webpush-go` | v1.4.0 | `api/go.mod` | Web push support dependency | Active |
+| Backend | Chromedp | v0.14.2 | `api/go.mod`, `api/Dockerfile`, `api/Dockerfile.prod` | Headless Chromium/browser automation dependency | Active |
+| Backend | `disintegration/imaging` | v1.6.2 | `api/go.mod` | Image processing dependency | Active |
+| Backend | Excelize | v2.10.0 | `api/go.mod` | Spreadsheet import/export dependency | Active |
 | Frontend | React | 19.1.1 | `fe/package.json`, `fe/src/main.tsx` | Frontend rendering | Active |
 | Frontend | TypeScript | 5.9.3 | `fe/package.json`, `fe/tsconfig.json` | Typed frontend code | Active |
 | Frontend | Vite | 7.1.7 | `fe/package.json`, `fe/vite.config.ts` | Dev server and build tool | Active |
@@ -39,6 +43,9 @@ The frontend auto-loads feature modules from `fe/src/features/**/index.tsx` thro
 | Frontend | `react-hot-toast` | 2.6.0 | `fe/package.json`, `fe/src/app/app.tsx` | Toast notifications | Active |
 | Frontend | Recharts | 3.7.0 | `fe/package.json`, `fe/src/features/observability_logs/components/system-log-summary-cards.tsx` | Charting in observability UI | Active |
 | Frontend | `@dnd-kit/core` / `@dnd-kit/sortable` | 6.3.1 / 10.0.0 | `fe/package.json`, `fe/src/shared/components/status-board`, `fe/src/core/table/edit-table.tsx` | Drag-and-drop interactions | Active |
+| Frontend | Nano ID | 5.1.6 | `fe/package.json` | Client-side ID generation dependency | Active |
+| Frontend | `react-number-format` | 5.4.4 | `fe/package.json` | Formatted numeric inputs | Active |
+| Frontend | QR code libraries | `react-qr-code` 2.0.18, `react-qrcode-logo` 4.0.0 | `fe/package.json` | QR rendering dependencies | Active |
 | Data | PostgreSQL | `postgres:16-alpine` image | `api/docker-compose.yml`, `api/docker-compose.prod.yml`, `api/shared/db/driver/postgres.go` | Primary relational database | Active |
 | Data | Redis | `redis:7-alpine` image, client v9.12.1 | `api/docker-compose.yml`, `api/go.mod`, `api/config.yaml`, `api/shared/redis/manager.go` | Cache, pub/sub, and status instances | Active |
 | Data | Redis Pub/Sub | Not confirmed separately | `api/shared/pubsub/pubsub.go`, `api/modules/search/service/service.go`, `api/modules/realtime/service/pubsub.go`, `api/modules/auditlog/service/pubsub.go` | Cross-module async messaging | Active |
@@ -47,12 +54,17 @@ The frontend auto-loads feature modules from `fe/src/features/**/index.tsx` thro
 | Data | Filesystem-backed storage | Not confirmed separately | `api/docker-compose.prod.yml`, `api/modules/photo/service/photo_file.go`, `api/shared/storage/local_storage.go` | Local file storage for photo/files | Active |
 | Infra | Docker | Not confirmed separately | `api/Dockerfile`, `api/Dockerfile.prod`, `api/docker/entrypoint.dev.sh`, `api/docker/entrypoint.prod.sh` | Backend containerization | Active |
 | Infra | Docker Compose | Not confirmed separately | `api/docker-compose.yml`, `api/docker-compose.prod.yml`, `api/docker-compose.observability.yml`, `api/Makefile` | Local and production-like orchestration | Active |
+| Infra | GitHub Actions | Not confirmed separately | `.github/workflows/deploy.yml`, `docs/vps-cicd.md` | Active deploy control plane for main branch and manual dispatch | Active |
+| Infra | VPS deploy scripts | Not confirmed separately | `deploy/scripts/provision-and-deploy.sh`, `deploy/scripts/render-production-config.sh`, `deploy/scripts/setup-github-secrets.sh`, `docs/vps-cicd.md` | Source sync, production env rendering, host provisioning, and compose startup | Active |
+| Infra | Frontend production Nginx | `nginx:1.27-alpine` | `fe/Dockerfile.prod`, `fe/docker/nginx.prod.conf` | Serves built frontend assets in production compose | Active |
+| Infra | Host Nginx | Not confirmed separately | `deploy/templates/nginx-site.conf.tmpl`, `deploy/scripts/provision-and-deploy.sh`, `docs/vps-cicd.md` | Host reverse proxy for frontend, API, and WebSocket traffic | Active |
+| Infra | Certbot / Let's Encrypt | Not confirmed separately | `deploy/scripts/provision-and-deploy.sh`, `docs/vps-cicd.md` | TLS certificate issuance and renewal through host Nginx | Active |
 | Infra | Loki | `grafana/loki:2.9.8` | `api/docker-compose.observability.yml`, `api/observability/loki-config.yaml`, `api/modules/observability/repository/loki_repository.go` | Log storage/query backend | Configured |
 | Infra | Promtail | `grafana/promtail:2.9.8` | `api/docker-compose.observability.yml`, `api/observability/promtail-config.yaml` | Log shipping into Loki | Configured |
 | Infra | Grafana | `grafana/grafana:11.1.5` | `api/docker-compose.observability.yml`, `api/observability/grafana/provisioning/datasources/loki.yaml` | Log exploration UI | Configured |
 | Infra | GNU Make | Not confirmed separately | `api/Makefile` | Local ops wrapper for compose, migrations, observability | Active |
-| Infra | Drone CI | Not confirmed | `api/CICD.md` | CI flow documented only | Legacy |
-| Infra | Firebase deployment | Not confirmed | `api/CICD.md` | Deployment flow documented only | Legacy |
+| Infra | Drone CI | Not confirmed | `api/CICD.md` | Legacy CI flow documented only, not the active repo pipeline | Legacy |
+| Infra | Firebase deployment | Not confirmed | `api/CICD.md` | Legacy deployment flow documented only, not the active repo pipeline | Legacy |
 | Tooling | ESLint | 9.36.0 | `fe/package.json`, `fe/eslint.config.js` | Frontend linting | Active |
 | Tooling | `typescript-eslint` | 8.45.0 | `fe/package.json`, `fe/eslint.config.js` | Type-aware lint rules | Active |
 | Tooling | Bun | Not confirmed separately | `fe/package.json`, `fe/bun.lock` | Frontend scaffolding command runner | Configured |
@@ -108,7 +120,7 @@ flowchart LR
 
 - Runtime and boot: `api/main.go` loads env/config, configures logging, initializes the DB client, bootstraps Ent, applies SQL migrations, seeds roles/permissions, initializes Redis, circuit breakers, workers, and crons, then starts the gateway.
 - Composition: `api/gateway/runtime/start.go` generates runtime metadata from `api/modules/*`, starts modules through `api/scripts/module_runner/runner`, and reverse-proxies external module routes through Fiber.
-- Confirmed module set: `attribute`, `auditlog`, `auth`, `folder`, `main`, `metadata`, `notification`, `observability`, `photo`, `profile`, `rbac`, `realtime`, `search`, `token`, and `user`.
+- Runtime module ownership and per-module navigation are tracked in `docs/module-inventory.md`.
 - Auth and permissions: JWT helpers are in `api/shared/utils/jwtutil.go`, request auth middleware is in `api/shared/middleware/auth.go`, and RBAC middleware is in `api/shared/middleware/rbac/rbac.go`.
 - Resilience: `api/shared/app/http_client.go` wraps internal module-to-module HTTP calls with retry logic and `api/shared/circuitbreaker/cb.go`.
 
@@ -134,12 +146,15 @@ flowchart LR
 ## 7. Infrastructure & DevOps
 
 - Backend containers are built from `golang:1.24.1-bookworm` in both `api/Dockerfile` and `api/Dockerfile.prod`.
+- Frontend production containers are built from `oven/bun:1.2.15` and served by `nginx:1.27-alpine` in `fe/Dockerfile.prod`.
 - Compose is the confirmed infrastructure entrypoint for local and production-like environments: `api/docker-compose.yml`, `api/docker-compose.prod.yml`, and `api/docker-compose.observability.yml`.
+- GitHub Actions is the active repo-resident deploy control plane. `.github/workflows/deploy.yml` builds the frontend with Bun, generates Ent code, runs `go test ./...`, installs SSH deploy tools, rsyncs a source snapshot to the VPS, writes `.deploy.env` from GitHub secrets, runs `deploy/scripts/provision-and-deploy.sh`, and optionally sends SMTP deploy notifications.
+- The VPS deploy path renders production env files through `deploy/scripts/render-production-config.sh`, then starts the production stack through `api/docker-compose.prod.yml`.
+- Host Nginx configuration is generated from `deploy/templates/nginx-site.conf.tmpl`; the template reverse-proxies frontend, API, and WebSocket traffic.
+- TLS automation is handled by Certbot / Let's Encrypt in `deploy/scripts/provision-and-deploy.sh`.
 - The optional observability stack provisions Loki, Promtail, and Grafana locally.
 - `api/Makefile` wraps compose startup, observability startup, migrations, and Redis flush operations.
-- No Nginx configuration was found.
-- No repo-resident CI pipeline manifest was found. `api/CICD.md` documents Drone/Firebase flows only.
-- TLS termination/certificate automation was not confirmed.
+- `api/CICD.md` documents Drone/Firebase flows only and is legacy documentation, not the active repo pipeline.
 
 ## 8. Observability & Tooling
 
@@ -212,37 +227,18 @@ flowchart LR
   Modules -->|log queries| Loki
 ```
 
-## 11. Module Mapping
+## 11. Module Ownership
 
-| Module / Area | Stack Usage |
-| --- | --- |
-| `api/gateway` | Fiber gateway, runtime registry generation, module startup, reverse proxy, WebSocket proxy |
-| `api/modules/main` | Core backend module, PostgreSQL via Ent, Redis cache/pubsub integration |
-| `api/modules/auth` | JWT-authenticated Fiber handlers and middleware-backed auth flows |
-| `api/modules/token` | Token lifecycle and cron-based cleanup |
-| `api/modules/rbac` | Role/permission management with shared RBAC middleware |
-| `api/modules/realtime` | WebSocket endpoints plus Redis pub/sub fan-out |
-| `api/modules/search` | Search/event subscribers via Redis pub/sub |
-| `api/modules/auditlog` | Audit persistence and async `log:create` subscriber |
-| `api/modules/observability` | Loki-backed log query API |
-| `api/modules/photo` | Filesystem-backed file handling plus metadata persistence |
-| `fe/src/core` | Registry, network, auth guards, table/form infrastructure, WebSocket provider |
-| `fe/src/features/auth` | Login/account UI using shared auth/network modules |
-| `fe/src/features/staff` | Staff CRUD/search UI using shared tables/forms/network |
-| `fe/src/features/department` | Department management UI |
-| `fe/src/features/rbac` | Role/matrix permission UI |
-| `fe/src/features/metadata` | Metadata collection/import UI |
-| `fe/src/features/notification` | Notification UI |
-| `fe/src/features/observability_logs` | System log UI over backend observability endpoints |
+Detailed module ownership, frontend feature registration, backend main subfeatures, and FE/API navigation hints live in `docs/module-inventory.md`. This file intentionally keeps only stack, runtime, data, infrastructure, and tooling inventory to avoid duplicate module maps.
 
 ## 12. Risks / Inconsistencies
 
 - `fe/src/routes/router.tsx` exists alongside the active router in `fe/src/app/routes.tsx`, which suggests a parallel or stale routing path.
 - The frontend networking layer is duplicated across `fe/src/core/network/axios-client.ts` and `fe/src/core/network/api-client.ts`.
-- `README.md` and `api/README.md` still mention Flyway-style migration history, while runtime migration execution is implemented in `api/shared/bootstrap/sql_migrations.go`.
+- `README.md` still mentions Flyway-style migration history, while runtime migration execution is implemented in `api/shared/bootstrap/sql_migrations.go`.
 - `fe/README.md` references React 18, but `fe/package.json` pins React 19.1.1.
 - MongoDB support is present in code/config, but active deployment evidence was not found.
-- Drone/Firebase deployment is documented in `api/CICD.md`, but no executable pipeline/config manifests were found.
+- Drone/Firebase deployment is documented in `api/CICD.md`, but the active repo pipeline is GitHub Actions + VPS deploy.
 - Observability infrastructure is configured locally, but always-on production deployment was not confirmed.
 
 ## 13. Evidence Appendix
@@ -258,13 +254,20 @@ Primary manifests and config:
 - `api/docker-compose.observability.yml`
 - `api/Makefile`
 - `api/CICD.md`
-- `api/README.md`
 - `api/README_DOCKER.md`
 - `api/OBSERVABILITY_LOCAL.md`
+- `.github/workflows/deploy.yml`
+- `deploy/config/project.env.example`
+- `deploy/scripts/provision-and-deploy.sh`
+- `deploy/scripts/render-production-config.sh`
+- `deploy/scripts/setup-github-secrets.sh`
+- `deploy/templates/nginx-site.conf.tmpl`
+- `docs/vps-cicd.md`
 - `fe/package.json`
 - `fe/tsconfig.json`
 - `fe/eslint.config.js`
 - `fe/vite.config.ts`
+- `fe/Dockerfile.prod`
 - `fe/README.md`
 - `fe/bun.lock`
 
@@ -293,31 +296,7 @@ Backend runtime, data, and shared platform:
 - `api/shared/middleware/rbac/rbac.go`
 - `api/shared/utils/jwtutil.go`
 
-Module evidence:
-
-- `api/modules/attribute/config.yaml`
-- `api/modules/auditlog/config.yaml`
-- `api/modules/auditlog/service/pubsub.go`
-- `api/modules/auth/config.yaml`
-- `api/modules/folder/config.yaml`
-- `api/modules/main/config.yaml`
-- `api/modules/metadata/config.yaml`
-- `api/modules/notification/config.yaml`
-- `api/modules/observability/config.yaml`
-- `api/modules/observability/repository/loki_repository.go`
-- `api/modules/photo/config.yaml`
-- `api/modules/photo/service/photo_file.go`
-- `api/modules/profile/config.yaml`
-- `api/modules/rbac/config.yaml`
-- `api/modules/realtime/config.yaml`
-- `api/modules/realtime/service/pubsub.go`
-- `api/modules/realtime/handler/websocket_handler.go`
-- `api/modules/search/config.yaml`
-- `api/modules/search/service/service.go`
-- `api/modules/token/config.yaml`
-- `api/modules/user/config.yaml`
-
-Frontend runtime and features:
+Frontend runtime:
 
 - `fe/src/main.tsx`
 - `fe/src/app/app.tsx`
@@ -329,13 +308,5 @@ Frontend runtime and features:
 - `fe/src/core/network/api-client.ts`
 - `fe/src/core/network/websocket/ws-client.ts`
 - `fe/src/store/auth-store.ts`
-- `fe/src/features/auth/index.tsx`
-- `fe/src/features/department/index.tsx`
-- `fe/src/features/metadata/index.tsx`
-- `fe/src/features/notification/index.tsx`
-- `fe/src/features/observability_logs/index.tsx`
-- `fe/src/features/observability_logs/components/system-log-summary-cards.tsx`
-- `fe/src/features/rbac/index.tsx`
-- `fe/src/features/search/index.tsx`
-- `fe/src/features/settings/index.tsx`
-- `fe/src/features/staff/index.tsx`
+
+Module and feature ownership evidence is maintained in `docs/module-inventory.md`.

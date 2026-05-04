@@ -516,6 +516,14 @@ Introduce shared abstractions only when:
 
 For non-trivial work, inspect the smallest relevant set of files first.
 
+For any task involving feature/module ownership, architecture, route registration, or FE/API boundary work, read `docs/module-inventory.md` first as a navigation index. Treat it only as a starting point: verify the nearest source files listed there before editing, and prefer current code/config over stale inventory entries if they diverge.
+
+When a change adds, removes, renames, registers, unregisters, or materially relocates a module, feature, route owner, FE/API mapping, or major dependency/infra entry, update the relevant inventory docs in the same task:
+- `docs/module-inventory.md` for module, feature, ownership, registration, or FE/API navigation changes.
+- `docs/tech-stack-inventory.md` for runtime, dependency, infrastructure, CI/CD, deployment, or tooling changes.
+
+If an inventory entry is discovered to be stale while working, either update it within the approved scope or explicitly report the stale entry and ask before expanding scope.
+
 For any work touching staff/user/department identity, read `docs/identity-contract.md` before inspecting implementation files.
 
 Minimum checklists by change type:
