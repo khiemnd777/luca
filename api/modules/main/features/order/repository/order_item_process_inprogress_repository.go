@@ -75,6 +75,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByProcessID(ctx co
 				orderitemprocess.FieldColor,
 			)
 		}).
+		WithDentistReviews(selectInProgressDentistReviews).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -86,7 +87,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByProcessID(ctx co
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, &model.OrderItemProcessInProgressAndProcessDTO{
+		dto := &model.OrderItemProcessInProgressAndProcessDTO{
 			ID:           item.ID,
 			ProductID:    item.ProductID,
 			ProductCode:  item.ProductCode,
@@ -101,7 +102,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByProcessID(ctx co
 			SectionName:  proc.SectionName,
 			SectionID:    proc.SectionID,
 			Color:        proc.Color,
-		})
+		}
+		applyInProgressDentistReviewFields(dto, item)
+		out = append(out, dto)
 	}
 
 	return out, nil
@@ -135,6 +138,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByOrderItemID(ctx 
 				orderitemprocess.FieldColor,
 			)
 		}).
+		WithDentistReviews(selectInProgressDentistReviews).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -146,7 +150,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByOrderItemID(ctx 
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, &model.OrderItemProcessInProgressAndProcessDTO{
+		dto := &model.OrderItemProcessInProgressAndProcessDTO{
 			ID:            item.ID,
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
@@ -164,7 +168,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByOrderItemID(ctx 
 			SectionName:   proc.SectionName,
 			SectionID:     proc.SectionID,
 			Color:         proc.Color,
-		})
+		}
+		applyInProgressDentistReviewFields(dto, item)
+		out = append(out, dto)
 	}
 
 	return out, nil
@@ -182,6 +188,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressByID(ctx context.Con
 				orderitemprocess.FieldColor,
 			)
 		}).
+		WithDentistReviews(selectInProgressDentistReviews).
 		Only(ctx)
 	if err != nil {
 		return nil, err
@@ -192,7 +199,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressByID(ctx context.Con
 		return nil, err
 	}
 
-	return &model.OrderItemProcessInProgressAndProcessDTO{
+	dto := &model.OrderItemProcessInProgressAndProcessDTO{
 		ID:           entity.ID,
 		ProductID:    entity.ProductID,
 		ProductCode:  entity.ProductCode,
@@ -207,7 +214,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressByID(ctx context.Con
 		SectionName:  proc.SectionName,
 		SectionID:    proc.SectionID,
 		Color:        proc.Color,
-	}, nil
+	}
+	applyInProgressDentistReviewFields(dto, entity)
+	return dto, nil
 }
 
 func (r *orderItemProcessInProgressRepository) PrepareCheckInOrOutByCode(ctx context.Context, code string) (*model.OrderItemProcessInProgressDTO, error) {
@@ -1032,6 +1041,7 @@ func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Con
 				orderitemprocess.FieldColor,
 			)
 		}).
+		WithDentistReviews(selectInProgressDentistReviews).
 		First(ctx)
 	if err != nil {
 		if generated.IsNotFound(err) {
@@ -1045,7 +1055,7 @@ func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Con
 		return nil, fmt.Errorf("process edge is missing for in_progress id=%d", entity.ID)
 	}
 
-	return &model.OrderItemProcessInProgressAndProcessDTO{
+	dto := &model.OrderItemProcessInProgressAndProcessDTO{
 		ID:            entity.ID,
 		OrderID:       entity.OrderID,
 		OrderItemID:   entity.OrderItemID,
@@ -1063,7 +1073,9 @@ func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Con
 		SectionName:   proc.SectionName,
 		SectionID:     proc.SectionID,
 		Color:         proc.Color,
-	}, nil
+	}
+	applyInProgressDentistReviewFields(dto, entity)
+	return dto, nil
 }
 
 func (r *orderItemProcessInProgressRepository) latestEntity(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*generated.OrderItemProcessInProgress, error) {
@@ -1654,6 +1666,34 @@ func (r *orderItemProcessInProgressRepository) dentistReviewClient(tx *generated
 	return r.db.OrderItemProcessDentistReview
 }
 
+func selectInProgressDentistReviews(q *generated.OrderItemProcessDentistReviewQuery) {
+	q.Select(
+		orderitemprocessdentistreview.FieldID,
+		orderitemprocessdentistreview.FieldStatus,
+		orderitemprocessdentistreview.FieldRequestNote,
+		orderitemprocessdentistreview.FieldResponseNote,
+		orderitemprocessdentistreview.FieldCreatedAt,
+	).
+		Order(orderitemprocessdentistreview.ByCreatedAt(sql.OrderDesc()))
+}
+
+func applyInProgressDentistReviewFields(dto *model.OrderItemProcessInProgressAndProcessDTO, item *generated.OrderItemProcessInProgress) {
+	if dto == nil || item == nil || len(item.Edges.DentistReviews) == 0 {
+		return
+	}
+
+	review := item.Edges.DentistReviews[0]
+	if review == nil {
+		return
+	}
+
+	dto.RequiresDentistReview = true
+	dto.DentistReviewID = &review.ID
+	dto.DentistReviewStatus = &review.Status
+	dto.DentistReviewRequestNote = &review.RequestNote
+	dto.DentistReviewResponseNote = review.ResponseNote
+}
+
 func mapDentistReview(review *generated.OrderItemProcessDentistReview) *model.OrderItemProcessDentistReviewDTO {
 	if review == nil {
 		return nil
@@ -1739,7 +1779,8 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByAssignedID(
 						orderitemprocess.FieldSectionName,
 						orderitemprocess.FieldColor,
 					)
-				})
+				}).
+				WithDentistReviews(selectInProgressDentistReviews)
 		},
 		nil,
 	)
@@ -1756,7 +1797,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByAssignedID(
 			return zero, err
 		}
 
-		out = append(out, &model.OrderItemProcessInProgressAndProcessDTO{
+		dto := &model.OrderItemProcessInProgressAndProcessDTO{
 			ID:            item.ID,
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
@@ -1774,7 +1815,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByAssignedID(
 			SectionName:   proc.SectionName,
 			SectionID:     proc.SectionID,
 			Color:         proc.Color,
-		})
+		}
+		applyInProgressDentistReviewFields(dto, item)
+		out = append(out, dto)
 	}
 
 	return table.TableListResult[model.OrderItemProcessInProgressAndProcessDTO]{
@@ -1822,6 +1865,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByStaffTimeline(
 				orderitemprocess.FieldColor,
 			)
 		}).
+		WithDentistReviews(selectInProgressDentistReviews).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -1834,7 +1878,7 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByStaffTimeline(
 			return nil, err
 		}
 
-		out = append(out, &model.OrderItemProcessInProgressAndProcessDTO{
+		dto := &model.OrderItemProcessInProgressAndProcessDTO{
 			ID:            item.ID,
 			OrderID:       item.OrderID,
 			OrderItemID:   item.OrderItemID,
@@ -1852,7 +1896,9 @@ func (r *orderItemProcessInProgressRepository) GetInProgressesByStaffTimeline(
 			SectionName:   proc.SectionName,
 			SectionID:     proc.SectionID,
 			Color:         proc.Color,
-		})
+		}
+		applyInProgressDentistReviewFields(dto, item)
+		out = append(out, dto)
 	}
 
 	return out, nil

@@ -126,6 +126,18 @@ function buildMetricChipTone(value: number): InsightMetricTone {
   return "info";
 }
 
+function buildInsightTitle(detail?: OrderModel | null) {
+  const latestCode = detail?.codeLatest?.trim();
+  const originalCode = detail?.code?.trim();
+  const displayCode = latestCode || originalCode;
+
+  if (!displayCode) return "Insight điều hành";
+  if (originalCode && latestCode && originalCode !== latestCode) {
+    return `Insight điều hành - Mã: ${latestCode} - Mã gốc: ${originalCode}`;
+  }
+  return `Insight điều hành - Mã: ${displayCode}`;
+}
+
 function MetricChip({
   label,
   value,
@@ -500,6 +512,7 @@ export function OrderDetailInsight({ detail, loading }: OrderDetailInsightProps)
     : "Chưa có trạng thái giao";
   const insightLoading = Boolean(loading && !detail);
   const syncing = Boolean(loadingProcesses || loadingInProgresses);
+  const insightTitle = React.useMemo(() => buildInsightTitle(detail), [detail]);
 
   return (
     <Stack spacing={2}>
@@ -509,7 +522,7 @@ export function OrderDetailInsight({ detail, loading }: OrderDetailInsightProps)
             <Stack direction="row" alignItems="center" spacing={1}>
               <InsightsOutlinedIcon fontSize="small" />
               <Typography variant="subtitle1" fontWeight={700}>
-                Insight điều hành
+                {insightTitle}
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">

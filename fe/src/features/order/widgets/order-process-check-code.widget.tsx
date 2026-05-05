@@ -269,10 +269,10 @@ function DentistReviewPendingPanel({
     "";
 
   return (
-    <SectionCard title="Chờ nha sĩ check">
+    <SectionCard title="Chờ nha sĩ kiểm tra">
       <Stack spacing={2}>
         <Alert severity="info" variant="outlined">
-          Công đoạn này đang chờ Admin ghi nhận kết quả nha sĩ check trong màn Chi tiết đơn hàng.
+          Công đoạn này đang chờ Admin ghi nhận kết quả nha sĩ kiểm tra trong màn Chi tiết đơn hàng.
         </Alert>
 
         <Stack spacing={1}>
@@ -286,7 +286,7 @@ function DentistReviewPendingPanel({
             }
           />
           <ReviewInfoRow label="Công đoạn hiện tại" value={buildProcessNameLabel(target) || "—"} />
-          <ReviewInfoRow label="Nội dung cần nha sĩ check" value={requestNote || "—"} preserveLineBreaks />
+          <ReviewInfoRow label="Ghi chú cho nha sĩ" value={requestNote || "—"} preserveLineBreaks />
         </Stack>
       </Stack>
     </SectionCard>

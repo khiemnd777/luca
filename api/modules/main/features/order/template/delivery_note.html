@@ -244,6 +244,41 @@
       vertical-align: middle;
     }
 
+    .dentist-review-section {
+      margin-top: 5px;
+      border: 1px solid #111;
+      padding: 3px 4px;
+      page-break-inside: avoid;
+    }
+
+    .dentist-review-title {
+      font-weight: 800;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+      font-size: 8.5px;
+    }
+
+    .dentist-review-item {
+      font-size: 8px;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
+
+    .dentist-review-item + .dentist-review-item {
+      border-top: 1px dashed #999;
+      padding-top: 2px;
+    }
+
+    .dentist-review-meta {
+      font-weight: 700;
+      margin-bottom: 1px;
+    }
+
+    .dentist-review-note {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
     .footer-sign {
       margin-top: 8px;
       display: table;
@@ -380,6 +415,21 @@
         </tr> -->
       </tfoot>
     </table>
+    {{ end }}
+
+    {{ if .DentistReviews }}
+      <div class="dentist-review-section">
+        <div class="dentist-review-title">Mẫu gửi cho nha sĩ</div>
+        {{ range .DentistReviews }}
+          <div class="dentist-review-item">
+            <div class="dentist-review-meta">
+              {{ if .ProductName }}Sản phẩm: {{ .ProductName }}{{ end }}{{ if and .ProductName .ProcessName }} - {{ end }}{{ if .ProcessName }}Công đoạn: {{ .ProcessName }}{{ end }}
+            </div>
+            <div><strong>Ghi chú cho nha sĩ:</strong></div>
+            <div class="dentist-review-note">{{ .RequestNote }}</div>
+          </div>
+        {{ end }}
+      </div>
     {{ end }}
 
     <div class="sections">

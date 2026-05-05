@@ -62,7 +62,7 @@ export function OrderDentistReviewPanel({
 
   if (loading) {
     return (
-      <SectionCard title="Yêu cầu nha sĩ check">
+      <SectionCard title="Yêu cầu nha sĩ kiểm tra">
         <Stack alignItems="center" py={2}>
           <CircularProgress size={22} />
         </Stack>
@@ -75,10 +75,10 @@ export function OrderDentistReviewPanel({
   }
 
   return (
-    <SectionCard title="Yêu cầu nha sĩ check">
+    <SectionCard title="Yêu cầu nha sĩ kiểm tra">
       <Stack spacing={2}>
         <Alert severity="warning" variant="outlined">
-          Case đang chờ Admin ghi nhận kết quả nha sĩ check trước khi tiếp tục gia công.
+          Case đang chờ Admin ghi nhận kết quả nha sĩ kiểm tra trước khi tiếp tục gia công.
         </Alert>
 
         {reviews.map((review, index) => (
@@ -104,7 +104,7 @@ function DentistReviewAdminCard({
 
   const handleResolve = React.useCallback(async () => {
     if (!review.id) {
-      toast.error("Không tìm thấy mã yêu cầu nha sĩ check");
+      toast.error("Không tìm thấy mã yêu cầu nha sĩ kiểm tra");
       return;
     }
 
@@ -126,10 +126,7 @@ function DentistReviewAdminCard({
       <Stack spacing={1}>
         <ReviewInfoRow label="Sản phẩm" value={buildProductNameLabel(review) || "—"} />
         <ReviewInfoRow label="Công đoạn" value={review.processName || "—"} />
-        <ReviewInfoRow label="Nội dung cần nha sĩ check" value={review.requestNote || "—"} preserveLineBreaks />
-        {review.requestedBy ? (
-          <ReviewInfoRow label="Người tạo yêu cầu" value={`User #${review.requestedBy}`} />
-        ) : null}
+        <ReviewInfoRow label="Ghi chú cho nha sĩ" value={review.requestNote || "—"} preserveLineBreaks />
         <ReviewInfoRow label="Thời điểm tạo yêu cầu" value={formatDateTime(review.requestedAt)} />
       </Stack>
 
@@ -141,7 +138,7 @@ function DentistReviewAdminCard({
           onChange={(event) => setResult(event.target.value as OrderItemProcessDentistReviewResult)}
         >
           <FormControlLabel value="approved" control={<Radio size="small" />} label="Duyệt" />
-          <FormControlLabel value="rejected" control={<Radio size="small" />} label="Từ chối, yêu cầu làm lại" />
+          <FormControlLabel value="rejected" control={<Radio size="small" />} label="Làm lại" />
         </RadioGroup>
       </FormControl>
 

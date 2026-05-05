@@ -20,4 +20,10 @@ type OrderItemProcessInProgressAndProcessDTO struct {
 	SectionID     *int       `json:"section_id,omitempty"`
 	SectionName   *string    `json:"section_name,omitempty"`
 	Color         *string    `json:"color,omitempty"`
+
+	RequiresDentistReview     bool    `json:"requires_dentist_review,omitempty"`
+	DentistReviewRequestNote  *string `json:"dentist_review_request_note,omitempty"`
+	DentistReviewID           *int64  `json:"dentist_review_id,omitempty"`
+	DentistReviewStatus       *string `json:"dentist_review_status,omitempty"`
+	DentistReviewResponseNote *string `json:"dentist_review_response_note,omitempty"`
 }
