@@ -40,6 +40,7 @@ import { resolveSubmitButtons } from "./auto-form.helper";
 import { resolveSubmitValues } from "./submit-contract";
 import { emit, off, on } from "../module/event-bus";
 import { getUserFriendlyErrorMessage } from "@core/network/api-error";
+import { cleanupUploadedImageUrls, uploadImageFieldsForSubmit } from "./image-upload-utils";
 
 function mapMetadataFieldTypeToFieldKind(type: string): FieldKind {
   switch (type) {
@@ -1314,17 +1315,27 @@ export const AutoForm = React.forwardRef<AutoFormRef, Props>(
 
       setSaving(true);
 
-      const latestValues = ctxRef.current!.values;
-      const dto = resolveSubmitValues(metadataBlocks, latestValues, schema!.hooks?.mapToDto);
-
-      const ctx = {
-        values: dto,
-        mode,
-        meta: metadataBlocks,
-      };
+      const uploadedUrls: string[] = [];
+      let submitCompleted = false;
 
       try {
+        const latestValues = ctxRef.current!.values;
+        const uploadResult = await uploadImageFieldsForSubmit(finalFields, latestValues, uploadedUrls);
+
+        if (uploadedUrls.length > 0) {
+          setAllValues(uploadResult.values);
+        }
+
+        const dto = resolveSubmitValues(metadataBlocks, uploadResult.values, schema!.hooks?.mapToDto);
+
+        const ctx = {
+          values: dto,
+          mode,
+          meta: metadataBlocks,
+        };
+
         const result = await btn.submit(ctx);
+        submitCompleted = true;
         if (schema!.hooks?.mapFromDto) {
           const uiVals = schema!.hooks.mapFromDto(result);
           if (uiVals && typeof uiVals === "object") setAllValues(uiVals);
@@ -1345,6 +1356,10 @@ export const AutoForm = React.forwardRef<AutoFormRef, Props>(
 
         return true;
       } catch (err: any) {
+        if (!submitCompleted && uploadedUrls.length > 0) {
+          await cleanupUploadedImageUrls(uploadedUrls);
+        }
+
         const friendlyMessage = getUserFriendlyErrorMessage(err);
         const failedToast = renderModeText(
           btn.toasts?.failed ?? schema!.toasts?.failed,
