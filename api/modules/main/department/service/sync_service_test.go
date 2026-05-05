@@ -675,10 +675,23 @@ func (f fakeDepartmentRepo) Update(context.Context, deptmodel.DepartmentDTO) (*d
 	panic("unexpected call to Update")
 }
 
+func (f fakeDepartmentRepo) UpdateChild(context.Context, int, deptmodel.DepartmentDTO) (*deptmodel.DepartmentDTO, error) {
+	panic("unexpected call to UpdateChild")
+}
+
 func (f fakeDepartmentRepo) GetByID(_ context.Context, id int) (*deptmodel.DepartmentDTO, error) {
 	item, ok := f.items[id]
 	if !ok {
 		return nil, errors.New("department not found")
+	}
+	copy := *item
+	return &copy, nil
+}
+
+func (f fakeDepartmentRepo) GetChildByID(_ context.Context, parentDeptID, childDeptID int) (*deptmodel.DepartmentDTO, error) {
+	item, ok := f.items[childDeptID]
+	if !ok || item.ParentID == nil || *item.ParentID != parentDeptID {
+		return nil, errors.New("department child not found")
 	}
 	copy := *item
 	return &copy, nil
@@ -702,6 +715,10 @@ func (f fakeDepartmentRepo) ChildrenList(context.Context, int, table.TableQuery)
 
 func (f fakeDepartmentRepo) Delete(context.Context, int) error {
 	panic("unexpected call to Delete")
+}
+
+func (f fakeDepartmentRepo) DeleteChild(context.Context, int, int) error {
+	panic("unexpected call to DeleteChild")
 }
 
 func (f fakeDepartmentRepo) ExistsMembership(context.Context, int, int) (bool, error) {

@@ -27,6 +27,34 @@ type DepartmentHandler struct {
 func NewDepartmentHandler(svc service.DepartmentService, deps *module.ModuleDeps[config.ModuleConfig]) *DepartmentHandler {
 	return &DepartmentHandler{svc: svc, deps: deps}
 }
+
+func parsePositiveIntParam(c *fiber.Ctx, name string) (int, error) {
+	id, err := strconv.Atoi(c.Params(name))
+	if err != nil || id <= 0 {
+		return 0, err
+	}
+	return id, nil
+}
+
+func parseChildRouteParams(c *fiber.Ctx) (int, int, error) {
+	parentDeptID, err := parsePositiveIntParam(c, "dept_id")
+	if err != nil {
+		return 0, 0, err
+	}
+	childDeptID, err := parsePositiveIntParam(c, "child_dept_id")
+	if err != nil {
+		return 0, 0, err
+	}
+	return parentDeptID, childDeptID, nil
+}
+
+func childScopeResponseError(c *fiber.Ctx, err error) error {
+	if errors.Is(err, service.ErrDepartmentChildNotFound) {
+		return client_error.ResponseError(c, fiber.StatusNotFound, err, "department child not found")
+	}
+	return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+}
+
 func (h *DepartmentHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>", h.List)
 	app.RouterGet(router, "/:dept_id<int>/search", h.Search)
@@ -70,13 +98,13 @@ func (h *DepartmentHandler) GetByID(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, err := strconv.Atoi(c.Params("child_dept_id"))
-	if err != nil || id <= 0 {
+	parentDeptID, childDeptID, err := parseChildRouteParams(c)
+	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
-	res, err := h.svc.GetByID(c.UserContext(), id)
+	res, err := h.svc.GetChildByID(c.UserContext(), parentDeptID, childDeptID)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+		return childScopeResponseError(c, err)
 	}
 	return c.Status(fiber.StatusOK).JSON(res)
 }
@@ -126,10 +154,15 @@ func (h *DepartmentHandler) Create(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.create"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
+	parentDeptID, err := parsePositiveIntParam(c, "dept_id")
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
+	}
 	var in model.DepartmentDTO
 	if err := c.BodyParser(&in); err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
 	}
+	in.ParentID = &parentDeptID
 	if in.Name == "" {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "name is required")
 	}
@@ -145,8 +178,8 @@ func (h *DepartmentHandler) Update(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
 
-	id, err := strconv.Atoi(c.Params("child_dept_id"))
-	if err != nil || id <= 0 {
+	parentDeptID, childDeptID, err := parseChildRouteParams(c)
+	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
 
@@ -154,14 +187,15 @@ func (h *DepartmentHandler) Update(c *fiber.Ctx) error {
 	if err := c.BodyParser(&in); err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
 	}
-	in.ID = id
+	in.ID = childDeptID
+	in.ParentID = &parentDeptID
 	if in.Name == "" {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "name is required")
 	}
 	userID, _ := utils.GetUserIDInt(c)
-	res, err := h.svc.Update(c.UserContext(), in, userID)
+	res, err := h.svc.UpdateChild(c.UserContext(), parentDeptID, in, userID)
 	if err != nil {
-		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+		return childScopeResponseError(c, err)
 	}
 	return c.Status(fiber.StatusOK).JSON(res)
 }
@@ -170,15 +204,15 @@ func (h *DepartmentHandler) Delete(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.delete"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, err := strconv.Atoi(c.Params("child_dept_id"))
-	if err != nil || id <= 0 {
+	parentDeptID, childDeptID, err := parseChildRouteParams(c)
+	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
-	if err := h.svc.Delete(c.UserContext(), id); err != nil {
+	if err := h.svc.DeleteChild(c.UserContext(), parentDeptID, childDeptID); err != nil {
 		if errors.Is(err, service.ErrProtectedDepartmentDelete) {
 			return client_error.ResponseError(c, fiber.StatusBadRequest, err, "department này không được phép xóa")
 		}
-		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+		return childScopeResponseError(c, err)
 	}
 	return c.Status(fiber.StatusOK).JSON(fiber.Map{
 		"success": true,
@@ -189,12 +223,15 @@ func (h *DepartmentHandler) PreviewSyncFromParent(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, err := strconv.Atoi(c.Params("child_dept_id"))
-	if err != nil || id <= 0 {
+	parentDeptID, childDeptID, err := parseChildRouteParams(c)
+	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
-	res, err := h.svc.PreviewSyncFromParent(c.UserContext(), id)
+	res, err := h.svc.PreviewSyncFromParent(c.UserContext(), parentDeptID, childDeptID)
 	if err != nil {
+		if errors.Is(err, service.ErrDepartmentChildNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "department child not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
 	}
 	return c.Status(fiber.StatusOK).JSON(res)
@@ -204,8 +241,8 @@ func (h *DepartmentHandler) ApplySyncFromParent(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.update"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, err := strconv.Atoi(c.Params("child_dept_id"))
-	if err != nil || id <= 0 {
+	parentDeptID, childDeptID, err := parseChildRouteParams(c)
+	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid id")
 	}
 	var in model.DepartmentSyncApplyRequest
@@ -215,8 +252,11 @@ func (h *DepartmentHandler) ApplySyncFromParent(c *fiber.Ctx) error {
 	if strings.TrimSpace(in.PreviewToken) == "" {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "preview token is required")
 	}
-	res, err := h.svc.ApplySyncFromParent(c.UserContext(), id, in.PreviewToken)
+	res, err := h.svc.ApplySyncFromParent(c.UserContext(), parentDeptID, childDeptID, in.PreviewToken)
 	if err != nil {
+		if errors.Is(err, service.ErrDepartmentChildNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "department child not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, err.Error())
 	}
 	return c.Status(fiber.StatusOK).JSON(res)

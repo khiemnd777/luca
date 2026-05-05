@@ -19,19 +19,23 @@ import (
 const protectedRootDepartmentID = 1
 
 var ErrProtectedDepartmentDelete = errors.New("cannot delete protected root department")
+var ErrDepartmentChildNotFound = errors.New("department child not found")
 
 type DepartmentService interface {
 	Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error)
 	Update(ctx context.Context, input model.DepartmentDTO, userID int) (*model.DepartmentDTO, error)
+	UpdateChild(ctx context.Context, parentDeptID int, input model.DepartmentDTO, userID int) (*model.DepartmentDTO, error)
 	GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error)
+	GetChildByID(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentDTO, error)
 	GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error)
 	ChildrenList(ctx context.Context, parentID int, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Delete(ctx context.Context, id int) error
+	DeleteChild(ctx context.Context, parentDeptID, childDeptID int) error
 	GetFirstDepartmentOfUser(ctx context.Context, userID int) (*model.DepartmentDTO, error)
-	PreviewSyncFromParent(ctx context.Context, targetDeptID int) (*model.DepartmentSyncPreviewDTO, error)
-	ApplySyncFromParent(ctx context.Context, targetDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error)
+	PreviewSyncFromParent(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentSyncPreviewDTO, error)
+	ApplySyncFromParent(ctx context.Context, parentDeptID, childDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error)
 }
 
 type departmentService struct {
@@ -46,6 +50,10 @@ func NewDepartmentService(repo repository.DepartmentRepository, deps *module.Mod
 
 func keyDept(id int) string {
 	return fmt.Sprintf("department:%d", id)
+}
+
+func keyDeptChild(parentDeptID, childDeptID int) string {
+	return fmt.Sprintf("department:child:%d:%d", parentDeptID, childDeptID)
 }
 
 func keyDeptSlug(slug string) string {
@@ -107,9 +115,20 @@ func isProtectedDepartmentID(id int) bool {
 	return id == protectedRootDepartmentID
 }
 
+func normalizeChildScopeError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if generated.IsNotFound(err) {
+		return ErrDepartmentChildNotFound
+	}
+	return err
+}
+
 func invalidateDept(id int) {
 	cache.InvalidateKeys(
 		keyDept(id),
+		"department:child:*",
 		"department:list:*",
 		"department:children:*",
 	)
@@ -167,10 +186,32 @@ func (s *departmentService) Update(ctx context.Context, input model.DepartmentDT
 	return res, err
 }
 
+func (s *departmentService) UpdateChild(ctx context.Context, parentDeptID int, input model.DepartmentDTO, userID int) (*model.DepartmentDTO, error) {
+	input.ParentID = &parentDeptID
+	res, err := s.repo.UpdateChild(ctx, parentDeptID, input)
+	if err != nil {
+		return nil, normalizeChildScopeError(err)
+	}
+	invalidateDept(res.ID)
+	cache.InvalidateKeys(keyMyFirstDept(userID))
+	invalidateCorporateAdminSync(res.CorporateAdministratorID)
+	return res, nil
+}
+
 func (s *departmentService) GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error) {
 	return cache.Get(keyDept(id), cache.TTLLong, func() (*model.DepartmentDTO, error) {
 		return s.repo.GetByID(ctx, id)
 	})
+}
+
+func (s *departmentService) GetChildByID(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentDTO, error) {
+	res, err := cache.Get(keyDeptChild(parentDeptID, childDeptID), cache.TTLLong, func() (*model.DepartmentDTO, error) {
+		return s.repo.GetChildByID(ctx, parentDeptID, childDeptID)
+	})
+	if err != nil {
+		return nil, normalizeChildScopeError(err)
+	}
+	return res, nil
 }
 
 func (s *departmentService) GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error) {
@@ -248,6 +289,17 @@ func (s *departmentService) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
+func (s *departmentService) DeleteChild(ctx context.Context, parentDeptID, childDeptID int) error {
+	if isProtectedDepartmentID(childDeptID) {
+		return ErrProtectedDepartmentDelete
+	}
+	if err := s.repo.DeleteChild(ctx, parentDeptID, childDeptID); err != nil {
+		return normalizeChildScopeError(err)
+	}
+	invalidateDept(childDeptID)
+	return nil
+}
+
 func (s *departmentService) GetFirstDepartmentOfUser(ctx context.Context, userID int) (*model.DepartmentDTO, error) {
 	key := keyMyFirstDept(userID)
 
@@ -264,10 +316,16 @@ func (s *departmentService) GetFirstDepartmentOfUser(ctx context.Context, userID
 	return res, nil
 }
 
-func (s *departmentService) PreviewSyncFromParent(ctx context.Context, targetDeptID int) (*model.DepartmentSyncPreviewDTO, error) {
-	return s.syncer.PreviewFromParent(ctx, targetDeptID)
+func (s *departmentService) PreviewSyncFromParent(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentSyncPreviewDTO, error) {
+	if _, err := s.repo.GetChildByID(ctx, parentDeptID, childDeptID); err != nil {
+		return nil, normalizeChildScopeError(err)
+	}
+	return s.syncer.PreviewFromParent(ctx, childDeptID)
 }
 
-func (s *departmentService) ApplySyncFromParent(ctx context.Context, targetDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error) {
-	return s.syncer.ApplyFromParent(ctx, targetDeptID, previewToken)
+func (s *departmentService) ApplySyncFromParent(ctx context.Context, parentDeptID, childDeptID int, previewToken string) (*model.DepartmentSyncApplyResultDTO, error) {
+	if _, err := s.repo.GetChildByID(ctx, parentDeptID, childDeptID); err != nil {
+		return nil, normalizeChildScopeError(err)
+	}
+	return s.syncer.ApplyFromParent(ctx, childDeptID, previewToken)
 }
