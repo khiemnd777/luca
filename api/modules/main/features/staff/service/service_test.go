@@ -12,13 +12,18 @@ import (
 )
 
 type staffRepoStub struct {
-	updateDeptID int
-	updateInput  model.StaffDTO
-	updateErr    error
-	updateDTO    *model.StaffDTO
-	deleteDeptID int
-	deleteUserID int
-	deleteErr    error
+	updateDeptID            int
+	updateInput             model.StaffDTO
+	updateErr               error
+	updateDTO               *model.StaffDTO
+	assignSourceDeptID      int
+	assignUserID            int
+	assignDestinationDeptID int
+	assignErr               error
+	assignDTO               *model.StaffDTO
+	deleteDeptID            int
+	deleteUserID            int
+	deleteErr               error
 }
 
 func (r *staffRepoStub) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
@@ -37,8 +42,17 @@ func (r *staffRepoStub) Update(ctx context.Context, deptID int, input model.Staf
 	return &model.StaffDTO{ID: input.ID, DepartmentID: input.DepartmentID, Name: input.Name}, nil
 }
 
-func (r *staffRepoStub) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
-	return nil, nil
+func (r *staffRepoStub) AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error) {
+	r.assignSourceDeptID = sourceDeptID
+	r.assignUserID = userID
+	r.assignDestinationDeptID = destinationDeptID
+	if r.assignErr != nil {
+		return nil, r.assignErr
+	}
+	if r.assignDTO != nil {
+		return r.assignDTO, nil
+	}
+	return &model.StaffDTO{ID: userID, DepartmentID: &destinationDeptID}, nil
 }
 
 func (r *staffRepoStub) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*repository.CorporateAdminAssignmentResult, error) {
@@ -146,5 +160,50 @@ func TestStaffServiceDeletePropagatesStaffNotFound(t *testing.T) {
 	err := svc.Delete(context.Background(), 10, 42)
 	if !errors.Is(err, ErrStaffNotFound) {
 		t.Fatalf("Delete() error = %v, want ErrStaffNotFound", err)
+	}
+}
+
+func TestStaffServiceAssignPassesDepartmentScopeToRepository(t *testing.T) {
+	repo := &staffRepoStub{}
+	svc := NewStaffService(repo, nil, nil)
+
+	dto, err := svc.AssignStaffToDepartment(context.Background(), 10, 42, 12)
+	if err != nil {
+		t.Fatalf("AssignStaffToDepartment() error = %v", err)
+	}
+	if repo.assignSourceDeptID != 10 {
+		t.Fatalf("repo assign source deptID = %d, want 10", repo.assignSourceDeptID)
+	}
+	if repo.assignUserID != 42 {
+		t.Fatalf("repo assign userID = %d, want 42", repo.assignUserID)
+	}
+	if repo.assignDestinationDeptID != 12 {
+		t.Fatalf("repo assign destination deptID = %d, want 12", repo.assignDestinationDeptID)
+	}
+	if dto == nil || dto.DepartmentID == nil || *dto.DepartmentID != 12 {
+		t.Fatalf("AssignStaffToDepartment() dto department id = %v, want 12", dto)
+	}
+}
+
+func TestStaffServiceAssignPropagatesScopedErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{name: "staff not found", err: repository.ErrStaffNotFound, want: ErrStaffNotFound},
+		{name: "department forbidden", err: repository.ErrDepartmentScopeForbidden, want: ErrDepartmentScopeForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &staffRepoStub{assignErr: tt.err}
+			svc := NewStaffService(repo, nil, nil)
+
+			_, err := svc.AssignStaffToDepartment(context.Background(), 10, 42, 12)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("AssignStaffToDepartment() error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }

@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"entgo.io/ent/dialect/sql/schema"
 	_ "github.com/mattn/go-sqlite3"
 
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/enttest"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/staff"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/user"
 	"github.com/khiemnd777/noah_api/shared/metadata/customfields"
 )
@@ -66,6 +69,21 @@ func createStaffUser(t *testing.T, ctx context.Context, db *generated.Client, de
 	return userEnt
 }
 
+func createDepartment(t *testing.T, ctx context.Context, db *generated.Client, name string, parentID *int) *generated.Department {
+	t.Helper()
+
+	create := db.Department.Create().
+		SetName(name)
+	if parentID != nil {
+		create.SetParentID(*parentID)
+	}
+	deptEnt, err := create.Save(ctx)
+	if err != nil {
+		t.Fatalf("create department %q: %v", name, err)
+	}
+	return deptEnt
+}
+
 func requireUserName(t *testing.T, ctx context.Context, db *generated.Client, userID int, want string) {
 	t.Helper()
 
@@ -88,6 +106,37 @@ func requireUserDeleted(t *testing.T, ctx context.Context, db *generated.Client,
 	got := userEnt.DeletedAt != nil
 	if got != want {
 		t.Fatalf("user %d deleted = %v, want %v", userID, got, want)
+	}
+}
+
+func requireStaffDepartment(t *testing.T, ctx context.Context, db *generated.Client, userID int, wantDeptID int) {
+	t.Helper()
+
+	staffEnt, err := db.Staff.Query().
+		Where(staff.HasUserWith(user.IDEQ(userID))).
+		Only(ctx)
+	if err != nil {
+		t.Fatalf("query staff for user %d: %v", userID, err)
+	}
+	if staffEnt.DepartmentID == nil || *staffEnt.DepartmentID != wantDeptID {
+		t.Fatalf("staff department id = %v, want %d", staffEnt.DepartmentID, wantDeptID)
+	}
+}
+
+func requireDepartmentMembership(t *testing.T, ctx context.Context, db *generated.Client, userID int, departmentID int, want bool) {
+	t.Helper()
+
+	exists, err := db.DepartmentMember.Query().
+		Where(
+			departmentmember.UserIDEQ(userID),
+			departmentmember.DepartmentIDEQ(departmentID),
+		).
+		Exist(ctx)
+	if err != nil {
+		t.Fatalf("query department membership user %d department %d: %v", userID, departmentID, err)
+	}
+	if exists != want {
+		t.Fatalf("department membership user %d department %d exists = %v, want %v", userID, departmentID, exists, want)
 	}
 }
 
@@ -192,4 +241,93 @@ func TestStaffRepositoryUpdateDeleteMissingTargetsReturnStaffNotFound(t *testing
 	if err := repo.Delete(ctx, 10, 999); !errors.Is(err, ErrStaffNotFound) {
 		t.Fatalf("Delete() missing target error = %v, want ErrStaffNotFound", err)
 	}
+}
+
+func TestStaffRepositoryAssignAllowsSourceDepartmentSelf(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newStaffTestRepo(t)
+
+	sourceDept := createDepartment(t, ctx, db, "source", nil)
+	target := createStaffUser(t, ctx, db, sourceDept.ID, "assign-self")
+
+	dto, err := repo.AssignStaffToDepartment(ctx, sourceDept.ID, target.ID, sourceDept.ID)
+	if err != nil {
+		t.Fatalf("AssignStaffToDepartment() self error = %v", err)
+	}
+	if dto == nil || dto.DepartmentID == nil || *dto.DepartmentID != sourceDept.ID {
+		t.Fatalf("AssignStaffToDepartment() dto department id = %v, want %d", dto, sourceDept.ID)
+	}
+	requireStaffDepartment(t, ctx, db, target.ID, sourceDept.ID)
+	requireDepartmentMembership(t, ctx, db, target.ID, sourceDept.ID, true)
+}
+
+func TestStaffRepositoryAssignAllowsDirectChildDepartment(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newStaffTestRepo(t)
+
+	sourceDept := createDepartment(t, ctx, db, "source", nil)
+	childDept := createDepartment(t, ctx, db, "child", &sourceDept.ID)
+	target := createStaffUser(t, ctx, db, sourceDept.ID, "assign-child")
+
+	dto, err := repo.AssignStaffToDepartment(ctx, sourceDept.ID, target.ID, childDept.ID)
+	if err != nil {
+		t.Fatalf("AssignStaffToDepartment() child error = %v", err)
+	}
+	if dto == nil || dto.DepartmentID == nil || *dto.DepartmentID != childDept.ID {
+		t.Fatalf("AssignStaffToDepartment() dto department id = %v, want %d", dto, childDept.ID)
+	}
+	requireStaffDepartment(t, ctx, db, target.ID, childDept.ID)
+	requireDepartmentMembership(t, ctx, db, target.ID, childDept.ID, true)
+}
+
+func TestStaffRepositoryAssignRejectsUnrelatedDepartmentWithoutMutation(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newStaffTestRepo(t)
+
+	sourceDept := createDepartment(t, ctx, db, "source", nil)
+	unrelatedDept := createDepartment(t, ctx, db, "unrelated", nil)
+	target := createStaffUser(t, ctx, db, sourceDept.ID, "assign-unrelated")
+
+	_, err := repo.AssignStaffToDepartment(ctx, sourceDept.ID, target.ID, unrelatedDept.ID)
+	if !errors.Is(err, ErrDepartmentScopeForbidden) {
+		t.Fatalf("AssignStaffToDepartment() unrelated error = %v, want ErrDepartmentScopeForbidden", err)
+	}
+	requireStaffDepartment(t, ctx, db, target.ID, sourceDept.ID)
+	requireDepartmentMembership(t, ctx, db, target.ID, unrelatedDept.ID, false)
+}
+
+func TestStaffRepositoryAssignRejectsStaffOutsideSourceDepartmentWithoutMutation(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newStaffTestRepo(t)
+
+	sourceDept := createDepartment(t, ctx, db, "source", nil)
+	otherDept := createDepartment(t, ctx, db, "other", nil)
+	childDept := createDepartment(t, ctx, db, "child", &sourceDept.ID)
+	target := createStaffUser(t, ctx, db, otherDept.ID, "assign-cross-source")
+
+	_, err := repo.AssignStaffToDepartment(ctx, sourceDept.ID, target.ID, childDept.ID)
+	if !errors.Is(err, ErrStaffNotFound) {
+		t.Fatalf("AssignStaffToDepartment() cross source error = %v, want ErrStaffNotFound", err)
+	}
+	requireStaffDepartment(t, ctx, db, target.ID, otherDept.ID)
+	requireDepartmentMembership(t, ctx, db, target.ID, childDept.ID, false)
+}
+
+func TestStaffRepositoryAssignRejectsDeletedUserWithoutMutation(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newStaffTestRepo(t)
+
+	sourceDept := createDepartment(t, ctx, db, "source", nil)
+	childDept := createDepartment(t, ctx, db, "child", &sourceDept.ID)
+	target := createStaffUser(t, ctx, db, sourceDept.ID, "assign-deleted-user")
+	if err := db.User.UpdateOneID(target.ID).SetDeletedAt(time.Now()).Exec(ctx); err != nil {
+		t.Fatalf("mark user deleted: %v", err)
+	}
+
+	_, err := repo.AssignStaffToDepartment(ctx, sourceDept.ID, target.ID, childDept.ID)
+	if !errors.Is(err, ErrStaffNotFound) {
+		t.Fatalf("AssignStaffToDepartment() deleted user error = %v, want ErrStaffNotFound", err)
+	}
+	requireStaffDepartment(t, ctx, db, target.ID, sourceDept.ID)
+	requireDepartmentMembership(t, ctx, db, target.ID, childDept.ID, false)
 }

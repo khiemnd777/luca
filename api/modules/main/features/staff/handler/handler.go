@@ -253,6 +253,11 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
 
+	sourceDeptID, err := getRouteDepartmentID(c)
+	if err != nil || sourceDeptID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid department id")
+	}
+
 	type AssignDepartmentRequest struct {
 		DepartmentID int `json:"department_id"`
 	}
@@ -265,8 +270,14 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "department_id is required")
 	}
 
-	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), userID, payload.DepartmentID)
+	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), sourceDeptID, userID, payload.DepartmentID)
 	if err != nil {
+		if errors.Is(err, service.ErrStaffNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
+		if errors.Is(err, service.ErrDepartmentScopeForbidden) {
+			return client_error.ResponseError(c, fiber.StatusForbidden, err, "forbidden")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 

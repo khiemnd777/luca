@@ -30,7 +30,7 @@ import (
 type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
-	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
+	AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error)
 	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) (int, error)
 	ChangePassword(ctx context.Context, id int, newPassword string) error
@@ -57,6 +57,7 @@ type CorporateAdminAssignmentResult struct {
 }
 
 var ErrStaffNotFound = errors.New("staff not found")
+var ErrDepartmentScopeForbidden = errors.New("department scope forbidden")
 
 func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
 	if dto == nil {
@@ -417,40 +418,99 @@ func (r *staffRepo) Update(ctx context.Context, deptID int, input model.StaffDTO
 	return dto, nil
 }
 
-func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
+func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error) {
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
 	staffEnt, err := tx.Staff.Query().
-		Where(staff.HasUserWith(user.IDEQ(userID))).
+		Where(
+			staff.DepartmentIDEQ(sourceDeptID),
+			staff.HasUserWith(
+				user.IDEQ(userID),
+				user.DeletedAtIsNil(),
+			),
+		).
 		Only(ctx)
 	if err != nil {
-		_ = tx.Rollback()
 		if generated.IsNotFound(err) {
-			return nil, fmt.Errorf("staff not found")
+			return nil, ErrStaffNotFound
 		}
 		return nil, err
 	}
 
-	if _, err = tx.Staff.UpdateOneID(staffEnt.ID).
-		SetDepartmentID(departmentID).
-		Save(ctx); err != nil {
-		_ = tx.Rollback()
+	_, err = tx.Department.Query().
+		Where(
+			department.IDEQ(destinationDeptID),
+			department.Deleted(false),
+			department.Or(
+				department.IDEQ(sourceDeptID),
+				department.ParentIDEQ(sourceDeptID),
+			),
+		).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, ErrDepartmentScopeForbidden
+		}
 		return nil, err
 	}
 
-	if err = ensureDepartmentMembershipInTx(ctx, tx, userID, departmentID); err != nil {
-		_ = tx.Rollback()
+	updatedStaffEnt, err := tx.Staff.UpdateOneID(staffEnt.ID).
+		SetDepartmentID(destinationDeptID).
+		Save(ctx)
+	if err != nil {
 		return nil, err
+	}
+
+	if err = ensureDepartmentMembershipInTx(ctx, tx, userID, destinationDeptID); err != nil {
+		return nil, err
+	}
+
+	userEnt, err := tx.User.Query().
+		Where(
+			user.IDEQ(userID),
+			user.DeletedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	sectionIDs, err := updatedStaffEnt.QuerySections().
+		Select(staffsection.FieldSectionID).
+		Ints(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	roleIDs, err := userEnt.QueryRoles().IDs(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	dto := mapper.MapAs[*generated.User, *model.StaffDTO](userEnt)
+	setDepartmentIDFromPersistedStaff(dto, updatedStaffEnt.DepartmentID)
+	dto.SectionIDs = sectionIDs
+	dto.RoleIDs = roleIDs
+	if updatedStaffEnt.SectionNames != nil {
+		dto.SectionNames = strings.Split(*updatedStaffEnt.SectionNames, "|")
+	}
+	if updatedStaffEnt.CustomFields != nil {
+		dto.CustomFields = updatedStaffEnt.CustomFields
 	}
 
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-
-	return r.GetByID(ctx, userID)
+	err = nil
+	return dto, nil
 }
 
 func (r *staffRepo) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error) {

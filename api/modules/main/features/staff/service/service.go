@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -22,7 +23,7 @@ import (
 type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
-	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
+	AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error
 	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) error
 	ChangePassword(ctx context.Context, id int, newPassword string) error
@@ -53,6 +54,7 @@ func (e ErrConflict) Is(target error) bool {
 }
 
 var ErrStaffNotFound = repository.ErrStaffNotFound
+var ErrDepartmentScopeForbidden = repository.ErrDepartmentScopeForbidden
 
 func NewStaffService(repo repository.StaffRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffService {
 	return &staffService{repo: repo, deps: deps, cfMgr: cfMgr}
@@ -188,9 +190,15 @@ func (s *staffService) Update(ctx context.Context, deptID int, input model.Staff
 	return dto, nil
 }
 
-func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
-	dto, err := s.repo.AssignStaffToDepartment(ctx, userID, departmentID)
+func (s *staffService) AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error) {
+	dto, err := s.repo.AssignStaffToDepartment(ctx, sourceDeptID, userID, destinationDeptID)
 	if err != nil {
+		if errors.Is(err, repository.ErrStaffNotFound) {
+			return nil, ErrStaffNotFound
+		}
+		if errors.Is(err, repository.ErrDepartmentScopeForbidden) {
+			return nil, ErrDepartmentScopeForbidden
+		}
 		return nil, err
 	}
 
@@ -198,7 +206,7 @@ func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, 
 	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID), kUserDepartment(userID))
 
 	if dto != nil {
-		s.upsertSearch(ctx, departmentID, dto)
+		s.upsertSearch(ctx, destinationDeptID, dto)
 	}
 
 	return dto, nil
