@@ -6,6 +6,8 @@ import { priorityColor, priorityLabel, statusColor, statusLabel } from "@root/sh
 import { navigate } from "@root/core/navigation/navigate";
 import { getLatestOrderItemIdByOrderId, unlink } from "@features/order/api/order-item.api";
 import { orderTableByDentistId } from "@features/dentist/api/dentist.api";
+import { createElement } from "react";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -22,7 +24,13 @@ const columns: ColumnDef<OrderModel>[] = [
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
     sortable: true,
   },
-  { key: "codeLatest", header: "Mã đơn", sortable: true, labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    sortable: true,
+    labelField: true,
+    render: (row) => createElement(OrderCodeText, { code: row.codeLatest || row.code }),
+  },
   {
     key: "remakeCount",
     header: "Làm lại",

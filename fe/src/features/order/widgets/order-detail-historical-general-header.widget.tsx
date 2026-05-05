@@ -12,6 +12,7 @@ import { Section } from "@root/shared/components/ui/section";
 import { CircularProgress } from "@mui/material";
 import type { OrderModel } from "../model/order.model";
 import { useAsync } from "@root/core/hooks/use-async";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
@@ -29,16 +30,15 @@ function OrderDetailHistoricalGeneralWidget() {
     { key: `order-detail-historical-header:${orderId ?? "new"}:${orderItemId ?? "new"}` }
   );
 
-  // page information
-  const isOriginal = detail?.latestOrderItem?.code === detail?.code;
-  const originalCodeLabel = !isOriginal ? ` ⬅ Mã gốc: ${detail?.code}` : '';
-  const codeLabel = `Mã: ${detail?.latestOrderItem?.code}${originalCodeLabel}`
-  // title
-  const title = `${codeLabel}`;
-
   return (
     <>
-      <SectionCard title={title ?? ""}
+      <SectionCard title={(
+        <OrderCodeTitle
+          code={detail?.latestOrderItem?.code}
+          originalCode={detail?.code}
+          fallback=""
+        />
+      )}
         extra={
           <>
             <IfPermission permissions={["order.create"]}>

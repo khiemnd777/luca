@@ -32,6 +32,7 @@ import { getInProgressesByOrderItemId, processes } from "../api/order-item-proce
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
 import type { OrderItemProcessModel } from "../model/order-item-process.model";
 import type { OrderModel } from "../model/order.model";
+import { OrderCodeTitle } from "./order-code-text.component";
 
 type OrderDetailInsightProps = {
   detail?: OrderModel | null;
@@ -124,18 +125,6 @@ function buildMetricChipTone(value: number): InsightMetricTone {
   if (value <= 0) return "default";
   if (value >= 3) return "warning";
   return "info";
-}
-
-function buildInsightTitle(detail?: OrderModel | null) {
-  const latestCode = detail?.codeLatest?.trim();
-  const originalCode = detail?.code?.trim();
-  const displayCode = latestCode || originalCode;
-
-  if (!displayCode) return "Insight điều hành";
-  if (originalCode && latestCode && originalCode !== latestCode) {
-    return `Insight điều hành - Mã: ${latestCode} - Mã gốc: ${originalCode}`;
-  }
-  return `Insight điều hành - Mã: ${displayCode}`;
 }
 
 function MetricChip({
@@ -512,7 +501,6 @@ export function OrderDetailInsight({ detail, loading }: OrderDetailInsightProps)
     : "Chưa có trạng thái giao";
   const insightLoading = Boolean(loading && !detail);
   const syncing = Boolean(loadingProcesses || loadingInProgresses);
-  const insightTitle = React.useMemo(() => buildInsightTitle(detail), [detail]);
 
   return (
     <Stack spacing={2}>
@@ -522,7 +510,12 @@ export function OrderDetailInsight({ detail, loading }: OrderDetailInsightProps)
             <Stack direction="row" alignItems="center" spacing={1}>
               <InsightsOutlinedIcon fontSize="small" />
               <Typography variant="subtitle1" fontWeight={700}>
-                {insightTitle}
+                <OrderCodeTitle
+                  prefix="Insight điều hành -"
+                  code={detail?.codeLatest || detail?.code}
+                  originalCode={detail?.code}
+                  fallback="Insight điều hành"
+                />
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">

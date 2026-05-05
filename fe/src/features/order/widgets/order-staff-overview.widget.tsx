@@ -39,6 +39,7 @@ import type { OrderItemProcessInProgressProcessModel } from "@features/order/mod
 import type { OrderItemProcessModel } from "@features/order/model/order-item-process.model";
 import type { StaffOverviewModel } from "@features/order/model/staff-overview.model";
 import { statusColor, statusLabel } from "@shared/utils/order.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type StaffOverviewPayload = {
   staff: StaffModel | null;
@@ -234,7 +235,7 @@ function InsightFlagRow({
 }: {
   title: string;
   value: string;
-  caption: string;
+  caption: React.ReactNode;
   tone?: ChipProps["color"];
 }) {
   return (
@@ -376,7 +377,7 @@ function ActiveOrderRow({
         <Stack spacing={0.75}>
           <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
             <Typography fontWeight={700}>
-              {item.orderCode || `#${item.orderItemId ?? item.id ?? "N/A"}`}
+              <OrderCodeText code={item.orderCode} fallback={`#${item.orderItemId ?? item.id ?? "N/A"}`} />
             </Typography>
             <Chip
               size="small"
@@ -550,7 +551,7 @@ function RecentCompletionSection({
               <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1}>
                 <Stack spacing={0.35}>
                   <Typography fontWeight={700}>
-                    {item.orderItemCode || `#${item.orderItemId ?? item.id ?? "N/A"}`}
+                    <OrderCodeText code={item.orderItemCode} fallback={`#${item.orderItemId ?? item.id ?? "N/A"}`} />
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {[item.sectionName, item.processName].filter(Boolean).join(" • ") || "Chưa có công đoạn"}
@@ -1138,7 +1139,12 @@ export function StaffOverviewWidget() {
               title="Aging dài nhất"
               value={alertStats.oldestSeconds > 0 ? formatDuration(alertStats.oldestSeconds) : "Chưa có"}
               caption={longestRunningItem?.orderCode
-                ? `${longestRunningItem.orderCode} • ${longestRunningItem.processName || "Công đoạn"}`
+                ? (
+                  <>
+                    <OrderCodeText code={longestRunningItem.orderCode} />
+                    {` • ${longestRunningItem.processName || "Công đoạn"}`}
+                  </>
+                )
                 : "Chưa có đầu việc active để đo aging."}
               tone={alertStats.oldestSeconds >= 8 * 60 * 60 ? "warning" : alertStats.oldestSeconds > 0 ? "success" : "default"}
             />

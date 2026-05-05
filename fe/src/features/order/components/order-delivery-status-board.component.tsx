@@ -26,6 +26,7 @@ import {
   resolveLatestOrderItem,
 } from "../utils/order-delivery-proof.utils";
 import { OrderDeliveryProofPhoto } from "./order-delivery-proof-photo.component";
+import { OrderCodeText } from "./order-code-text.component";
 
 type OrderDetailDeliveryStatusBoardProps = {
   orderId?: number;
@@ -130,7 +131,9 @@ export function OrderDetailDeliveryStatusBoard({ orderId: explicitOrderId }: Ord
             return (
               <Stack spacing={1}>
                 {code && (
-                  <Typography fontWeight={700}>{code}</Typography>
+                  <Typography fontWeight={700}>
+                    <OrderCodeText code={code} />
+                  </Typography>
                 )}
                 {item?.productName && (
                   <Stack direction="row" alignItems="center" spacing={1}>

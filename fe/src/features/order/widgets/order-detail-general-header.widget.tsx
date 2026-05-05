@@ -10,6 +10,7 @@ import { id as getById } from "../api/order.api";
 import { Section } from "@root/shared/components/ui/section";
 import { CircularProgress } from "@mui/material";
 import { useAsync } from "@root/core/hooks/use-async";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 export function OrderDetailWidget() {
   const { orderId } = useParams();
@@ -22,16 +23,15 @@ export function OrderDetailWidget() {
     key: `order-detail:${orderId ?? "new"}`,
   });
 
-  // page information
-  const isOriginal = detail?.codeLatest === detail?.code;
-  const originalCodeLabel = !isOriginal ? ` ⬅ Mã gốc: ${detail?.code}` : '';
-  const codeLabel = `Mã: ${detail?.codeLatest}${originalCodeLabel}`
-  // title
-  const title = `${codeLabel}`;
-
   return (
     <>
-      <SectionCard title={title ?? ""}
+      <SectionCard title={(
+        <OrderCodeTitle
+          code={detail?.codeLatest || detail?.code}
+          originalCode={detail?.code}
+          fallback=""
+        />
+      )}
         extra={
           <>
             <IfPermission permissions={["order.edit"]}>

@@ -25,6 +25,7 @@ import { ResponsiveGrid } from "@shared/components/ui/responsive-grid";
 import { SectionCard } from "@shared/components/ui/section-card";
 import { formatDateTime, relTime } from "@shared/utils/datetime.utils";
 import { statusColor, statusLabel } from "@shared/utils/order.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
 const ORDER_STATUS_SEQUENCE = ["received", "in_progress", "qc", "rework", "completed"] as const;
@@ -171,7 +172,7 @@ function RecentOrderRow({ item }: { item: DentistOverviewRecentOrderModel }) {
       <Stack spacing={0.75}>
         <Stack direction="row" justifyContent="space-between" spacing={1}>
           <Typography variant="body2" fontWeight={700}>
-            {item.orderCode || `Đơn #${item.orderId}`}
+            <OrderCodeText code={item.orderCode} fallback={`Đơn #${item.orderId}`} />
           </Typography>
           <Chip size="small" label={statusLabel(item.status) || item.status || "Không rõ"} />
         </Stack>

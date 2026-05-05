@@ -11,7 +11,6 @@ import { Section } from "@root/shared/components/ui/section";
 import { Box, CircularProgress, Stack } from "@mui/material";
 import { useAsync } from "@root/core/hooks/use-async";
 import { OrderProcessesStatusBoard } from "../components/order-process-status-board.component";
-import { generateTitle } from "../utils/order.utils";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -32,6 +31,7 @@ import { useAuthStore } from "@store/auth-store";
 import { OrderPrescriptionFilesSection } from "../components/order-prescription-files-section.component";
 import { OrderDetailInsight } from "../components/order-detail-insight.component";
 import { OrderDentistReviewPanel } from "../components/order-dentist-review-panel.component";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 export function OrderDetailBodyWidget() {
   const { orderId } = useParams();
@@ -46,9 +46,12 @@ export function OrderDetailBodyWidget() {
     key: `order-detail:${orderId ?? "new"}`,
   });
 
-  const title = React.useMemo(
-    () => generateTitle(detail?.code, detail?.codeLatest),
-    [detail?.code, detail?.codeLatest]
+  const title = (
+    <OrderCodeTitle
+      code={detail?.codeLatest || detail?.code}
+      originalCode={detail?.code}
+      fallback=""
+    />
   );
   const orderTargetId = React.useMemo(() => {
     const value = detail?.id ?? (orderId ? Number(orderId) : undefined);

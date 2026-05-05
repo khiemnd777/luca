@@ -1,4 +1,3 @@
-import React from "react";
 import { registerSlot } from "@core/module/registry";
 import { useParams } from "react-router-dom";
 import { CircularProgress, Stack, Typography } from "@mui/material";
@@ -8,6 +7,7 @@ import { getByOrderIdAndOrderItemId, id as getById } from "../api/order.api";
 import type { OrderModel } from "../model/order.model";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { Spacer } from "@root/shared/components/ui/spacer";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 export function OrderInProgressDetailWidget() {
   const { orderId, orderItemId } = useParams();
@@ -28,11 +28,6 @@ export function OrderInProgressDetailWidget() {
     }
   );
 
-  const title = React.useMemo(() => {
-    const codeTitle = detail?.latestOrderItem?.code;
-    return codeTitle ? `Mã: ${codeTitle}` : "Đơn hàng";
-  }, [detail?.latestOrderItem?.code]);
-
   return (
     <>
       <Section>
@@ -42,7 +37,7 @@ export function OrderInProgressDetailWidget() {
           </Stack>
         ) : (
           <Typography variant="subtitle1" fontWeight={700}>
-            {title}
+            <OrderCodeTitle code={detail?.latestOrderItem?.code} fallback="Đơn hàng" />
           </Typography>
         )}
       </Section>

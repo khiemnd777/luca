@@ -5,6 +5,7 @@ import {
   registerNotificationRenderer,
   type NotificationRenderer,
 } from "@core/notification/notification-renderer";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type OrderDeliveryCompletedNotificationData = {
   departmentId?: number | string;
@@ -19,20 +20,18 @@ const OrderDeliveryCompletedNotificationRenderer: NotificationRenderer<
   OrderDeliveryCompletedNotificationData
 > = (notification, ctx) => {
   const data = notification.data;
-  const title = `Đơn hàng #${data?.orderItemCode ?? ""} đã giao hoàn tất`;
-
-  const bodyLines: string[] = [];
-
-  if (data?.orderItemCode) {
-    bodyLines.push(`Mã: ${data.orderItemCode}`);
-  }
+  const title = (
+    <>
+      Đơn hàng #<OrderCodeText code={data?.orderItemCode} /> đã giao hoàn tất
+    </>
+  );
 
   const body =
-    bodyLines.length > 0 ? (
+    data?.orderItemCode ? (
       <Box>
-        {bodyLines.map((line, index) => (
-          <div key={`${line}-${index}`}>{line}</div>
-        ))}
+        <div>
+          Mã: <OrderCodeText code={data.orderItemCode} />
+        </div>
       </Box>
     ) : (
       notification.body || ""

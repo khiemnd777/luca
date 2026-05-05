@@ -31,6 +31,7 @@ import { off, on } from "@root/core/module/event-bus";
 import toast from "react-hot-toast";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
 import { buildProcessNameLabel, buildProductNameLabel } from "../utils/order.utils";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 type CheckCodeStep = "select-product" | "check-in";
 
@@ -114,11 +115,6 @@ export function OrderProcessCheckCodeWidget() {
     isCheckout ? "check-out" : "check-in",
   ].join(":");
 
-  const title = React.useMemo(() => {
-    const codeTitle = currentTarget?.orderItemCode;
-    return codeTitle ? `Mã: ${codeTitle}` : "Đơn hàng";
-  }, [currentTarget?.orderItemCode]);
-
   return (
     <>
       {preparedData ? (
@@ -130,7 +126,7 @@ export function OrderProcessCheckCodeWidget() {
               </Stack>
             ) : (
               <Typography variant="subtitle1" fontWeight={700}>
-                {title}
+                <OrderCodeTitle code={currentTarget?.orderItemCode} fallback="Đơn hàng" />
               </Typography>
             )}
           </Section>

@@ -3,6 +3,8 @@ import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/ta
 import type { CompletedOrderModel } from "@features/order/model/completed-order.model";
 import { completedList } from "@features/order/api/order.api";
 import { navigate } from "@root/core/navigation/navigate";
+import { createElement } from "react";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<CompletedOrderModel>[] = [
   // {
@@ -11,7 +13,12 @@ const columns: ColumnDef<CompletedOrderModel>[] = [
   //   width: 95,
   //   accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
   // },
-  { key: "codeLatest", header: "Mã đơn", labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    labelField: true,
+    render: (row) => createElement(OrderCodeText, { code: row.codeLatest }),
+  },
   // { key: "createdAt", header: "Ngày tạo đơn", type: "datetime" },
 ];
 

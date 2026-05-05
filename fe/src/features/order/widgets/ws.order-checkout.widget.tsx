@@ -5,6 +5,7 @@ import { invalidate } from "@core/hooks/use-async";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
 import { stack } from "@root/core/network/websocket/ws-stack";
 import { mapper } from "@root/core/mapper/auto-mapper";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type OrderCheckoutNotificationData = {
   leaderId?: number | string;
@@ -22,7 +23,9 @@ function NotificationStackWidget(msg: any) {
     const result = mapper.map<any, OrderCheckoutNotificationData>("Common", msg.payload.payload, "dto_to_model");
     return (
       <Stack spacing={0.5}>
-        <Typography variant="subtitle2">Đơn hàng #{result.orderItemCode} đang chờ xử lý</Typography>
+        <Typography variant="subtitle2">
+          Đơn hàng #<OrderCodeText code={result.orderItemCode} /> đang chờ xử lý
+        </Typography>
         {/* <Typography variant="body2" color="text.secondary">
           {message}
         </Typography> */}

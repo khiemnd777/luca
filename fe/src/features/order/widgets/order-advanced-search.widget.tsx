@@ -39,6 +39,7 @@ import { toast } from "react-hot-toast";
 import * as React from "react";
 import ExpandLessRoundedIcon from "@mui/icons-material/ExpandLessRounded";
 import ExpandMoreRoundedIcon from "@mui/icons-material/ExpandMoreRounded";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const monthOptions = Array.from({ length: 12 }, (_, index) => ({
   value: String(index + 1),
@@ -289,20 +290,32 @@ function OrderAdvancedSearchWidget() {
     };
   }, [productKeyword]);
 
-  const appliedChips = React.useMemo(() => {
-    const chips: string[] = [];
-    if (appliedFilters.department?.name) chips.push(`Chi nhánh: ${appliedFilters.department.name}`);
-    if (appliedFilters.categories.length) chips.push(`Loại phục hình: ${appliedFilters.categories.length}`);
-    if (appliedFilters.products.length) chips.push(`Sản phẩm: ${appliedFilters.products.length}`);
-    if (appliedFilters.orderCode.trim()) chips.push(`Mã đơn: ${appliedFilters.orderCode.trim()}`);
-    if (appliedFilters.clinicName.trim()) chips.push(`Nha khoa: ${appliedFilters.clinicName.trim()}`);
-    if (appliedFilters.dentistName.trim()) chips.push(`Bác sĩ: ${appliedFilters.dentistName.trim()}`);
-    if (appliedFilters.patientName.trim()) chips.push(`Bệnh nhân: ${appliedFilters.patientName.trim()}`);
+  const appliedChips = React.useMemo<Array<{ key: string; label: React.ReactNode }>>(() => {
+    const chips: Array<{ key: string; label: React.ReactNode }> = [];
+    if (appliedFilters.department?.name) chips.push({ key: "department", label: `Chi nhánh: ${appliedFilters.department.name}` });
+    if (appliedFilters.categories.length) chips.push({ key: "categories", label: `Loại phục hình: ${appliedFilters.categories.length}` });
+    if (appliedFilters.products.length) chips.push({ key: "products", label: `Sản phẩm: ${appliedFilters.products.length}` });
+    if (appliedFilters.orderCode.trim()) {
+      const code = appliedFilters.orderCode.trim();
+      chips.push({
+        key: "orderCode",
+        label: <>Mã đơn: <OrderCodeText code={code} /></>,
+      });
+    }
+    if (appliedFilters.clinicName.trim()) chips.push({ key: "clinicName", label: `Nha khoa: ${appliedFilters.clinicName.trim()}` });
+    if (appliedFilters.dentistName.trim()) chips.push({ key: "dentistName", label: `Bác sĩ: ${appliedFilters.dentistName.trim()}` });
+    if (appliedFilters.patientName.trim()) chips.push({ key: "patientName", label: `Bệnh nhân: ${appliedFilters.patientName.trim()}` });
     if (appliedFilters.createdYear.trim() || appliedFilters.createdMonth.trim()) {
-      chips.push(`Ngày tạo: ${[appliedFilters.createdMonth.trim(), appliedFilters.createdYear.trim()].filter(Boolean).join("/")}`);
+      chips.push({
+        key: "createdDate",
+        label: `Ngày tạo: ${[appliedFilters.createdMonth.trim(), appliedFilters.createdYear.trim()].filter(Boolean).join("/")}`,
+      });
     }
     if (appliedFilters.deliveryYear.trim() || appliedFilters.deliveryMonth.trim()) {
-      chips.push(`Ngày giao: ${[appliedFilters.deliveryMonth.trim(), appliedFilters.deliveryYear.trim()].filter(Boolean).join("/")}`);
+      chips.push({
+        key: "deliveryDate",
+        label: `Ngày giao: ${[appliedFilters.deliveryMonth.trim(), appliedFilters.deliveryYear.trim()].filter(Boolean).join("/")}`,
+      });
     }
     return chips;
   }, [appliedFilters]);
@@ -698,7 +711,7 @@ function OrderAdvancedSearchWidget() {
         <Box sx={{ mt: 2 }}>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             {appliedChips.length > 0 ? appliedChips.map((chip) => (
-              <Chip key={chip} label={chip} size="small" color="primary" variant="outlined" />
+              <Chip key={chip.key} label={chip.label} size="small" color="primary" variant="outlined" />
             )) : (
               <Typography variant="body2" color="text.secondary">
                 Chưa áp dụng bộ lọc. Bảng hiện hiển thị danh sách đơn hàng mặc định.

@@ -17,6 +17,7 @@ import { Section } from "@shared/components/ui/section";
 import { formatDateTime } from "@root/shared/utils/datetime.utils";
 import { navigate } from "@root/core/navigation/navigate";
 import { useAsync } from "@root/core/hooks/use-async";
+import { OrderCodeText } from "../components/order-code-text.component";
 
 export function OrderDetailHistoricalListWidget() {
   const { orderId, orderItemId } = useParams();
@@ -90,7 +91,7 @@ export function OrderDetailHistoricalListWidget() {
                                 : "text.primary"
                           }
                         >
-                          {it.code}
+                          <OrderCodeText code={it.code} />
                         </Typography>
 
                         {isCurrent && (

@@ -13,7 +13,6 @@ import { Box, CircularProgress, Stack } from "@mui/material";
 import type { OrderModel } from "../model/order.model";
 import { useAsync } from "@root/core/hooks/use-async";
 import { OrderProcessesStatusBoard } from "../components/order-process-status-board.component";
-import { generateTitle } from "../utils/order.utils";
 import { OrderInProgress } from "../components/order-inprogress.component";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
@@ -24,6 +23,7 @@ import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 import { OrderDetailInsight } from "../components/order-detail-insight.component";
 import { OrderDentistReviewPanel } from "../components/order-dentist-review-panel.component";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 export function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
@@ -39,9 +39,12 @@ export function OrderDetailHistoricalGeneralWidget() {
     { key: "order-detail-historical-body" }
   );
 
-  const title = React.useMemo(
-    () => generateTitle(detail?.code, detail?.latestOrderItem?.code),
-    [detail?.code, detail?.latestOrderItem?.code]
+  const title = (
+    <OrderCodeTitle
+      code={detail?.latestOrderItem?.code || detail?.codeLatest || detail?.code}
+      originalCode={detail?.code}
+      fallback=""
+    />
   );
   const orderTargetId = React.useMemo(() => {
     const value = detail?.id ?? (orderId ? Number(orderId) : undefined);

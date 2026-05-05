@@ -8,6 +8,7 @@ import { navigate } from "@core/navigation/navigate";
 import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/table/table.types";
 import type { ListResult } from "@core/types/list-result";
 import { getLatestOrderItemIdByOrderId, unlink } from "@features/order/api/order-item.api";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 import { OrderRiskChip } from "@features/order/components/order-risk-chip.component";
 import type { OrderItemHistoricalModel } from "@features/order/model/order-item.model";
 import type { OrderModel } from "@features/order/model/order.model";
@@ -188,7 +189,7 @@ function renderCodeCell(row: GroupedOrderRow, onToggleExpand: (orderId: number) 
         <Box sx={{ width: 32, flexShrink: 0 }} />
         <Box sx={{ minWidth: 0 }}>
           <Typography variant="body2" sx={{ fontWeight: 500, color: "text.primary" }}>
-            {childCode || row.history.code}
+            <OrderCodeText code={childCode === "—" ? row.history.code : childCode} />
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {buildRowSubtitle(row)}
@@ -203,7 +204,7 @@ function renderCodeCell(row: GroupedOrderRow, onToggleExpand: (orderId: number) 
       {renderExpandButton(row, onToggleExpand)}
       <Box sx={{ minWidth: 0 }}>
         <Typography variant="body2" sx={{ fontWeight: 600, color: "text.primary" }}>
-          {getRowCode(row)}
+          <OrderCodeText code={getRowCode(row) === "—" ? null : getRowCode(row)} />
         </Typography>
         <Typography variant="caption" color="text.secondary">
           {buildRowSubtitle(row)}

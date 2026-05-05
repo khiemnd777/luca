@@ -15,6 +15,7 @@ import { useDebounce } from "@root/core/hooks/use-debounce";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
 import { OrderRiskChip } from "@features/order/components/order-risk-chip.component";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -31,7 +32,13 @@ const columns: ColumnDef<OrderModel>[] = [
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
     sortable: true,
   },
-  { key: "codeLatest", header: "Mã đơn", sortable: true, labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    sortable: true,
+    labelField: true,
+    render: (row) => createElement(OrderCodeText, { code: row.codeLatest || row.code }),
+  },
   {
     key: "riskBucket",
     header: "Due/Risk",
