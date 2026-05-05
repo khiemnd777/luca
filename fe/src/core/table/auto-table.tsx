@@ -1,6 +1,6 @@
 import * as React from "react";
 import { getTableSchema } from "@core/table/table-registry";
-import type { TableSchema } from "@core/table/table.types";
+import type { TableSchema, TableViewMode } from "@core/table/table.types";
 import { SchemaTable, type SchemaTableRef } from "@core/table/schema-table";
 
 export type AutoTableRef = { reload: () => void };
@@ -9,10 +9,11 @@ type Props<T extends { id?: string | number }> = {
   name?: string;
   schema?: TableSchema<T>;
   params?: Record<string, any>;
+  view?: TableViewMode;
 };
 
 export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
-  ({ name, schema: schemaProp, params }, ref) => {
+  ({ name, schema: schemaProp, params, view }, ref) => {
     const schema = React.useMemo(() => {
       if (schemaProp) return schemaProp;
       if (name) return getTableSchema(name);
@@ -26,6 +27,6 @@ export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
 
     if (!schema) return <div>Table schema {name ? `"${name}"` : ""} chưa được đăng ký.</div>;
 
-    return <SchemaTable ref={inner} schema={schema} schemaName={name} params={params} />;
+    return <SchemaTable ref={inner} schema={schema} schemaName={name} params={params} view={view} />;
   }
 );

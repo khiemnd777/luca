@@ -3,6 +3,7 @@ import type { LocalizedText } from "@root/core/i18n/localized-text";
 import type { SxProps, Theme } from "@mui/material/styles";
 
 export type SortDir = "asc" | "desc";
+export type TableViewMode = "table" | "vertical";
 
 export type FetchTableOpts = {
   limit: number;
@@ -139,6 +140,7 @@ export type TableSchema<T> = {
   dense?: boolean;                         // default true
   stickyTopOffset?: number;                // default 0
   hidePagination?: boolean;                // default false
+  defaultView?: TableViewMode;             // default table
 
   // row actions
   onView?: (row: T) => void | Promise<void>;

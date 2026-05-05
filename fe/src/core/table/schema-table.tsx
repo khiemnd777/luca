@@ -1,6 +1,6 @@
 import * as React from "react";
 import { EditTable } from "@core/table/edit-table";
-import type { TableSchema, SortDir, ColumnDef, ColumnType, TableRowAction } from "@core/table/table.types";
+import type { TableSchema, SortDir, ColumnDef, ColumnType, TableRowAction, TableViewMode } from "@core/table/table.types";
 import { subscribeTableReload } from "@core/table/table-reload";
 import { resolveRowLabel } from "@core/table/table-utils";
 import { ConfirmDialog } from "@shared/components/dialog/confirm-dialog";
@@ -184,13 +184,14 @@ type Props<T extends { id?: string | number }> = {
   schema: TableSchema<T>;
   schemaName?: string;
   params?: Record<string, any>;
+  view?: TableViewMode;
 };
 
 export function ForwardSchemaTable<T extends { id?: string | number }>(
   props: Props<T>,
   ref: React.ForwardedRef<SchemaTableRef>
 ) {
-  const { schema, schemaName, params } = props;
+  const { schema, schemaName, params, view } = props;
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(schema.initialPageSize ?? 20);
@@ -308,6 +309,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         dense={schema.dense ?? true}
         stickyTopOffset={schema.stickyTopOffset ?? 0}
         hidePagination={schema.hidePagination ?? false}
+        view={view ?? schema.defaultView ?? "table"}
 
         // actions
         onView={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onView : undefined}

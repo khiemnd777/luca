@@ -1,8 +1,10 @@
 import * as React from "react";
 import {
   Box,
+  Button,
   Paper,
   Stack,
+  Typography,
   Tooltip,
   IconButton,
   Chip,
@@ -15,8 +17,9 @@ import DeleteRoundedIcon from "@mui/icons-material/DeleteRounded";
 import VisibilityRoundedIcon from "@mui/icons-material/VisibilityRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import DragIndicatorRoundedIcon from "@mui/icons-material/DragIndicatorRounded";
+import ReceiptLongRoundedIcon from "@mui/icons-material/ReceiptLongRounded";
 import QRCode from "react-qr-code";
-import type { ColumnDef, ImageShape, SortDir, TableRowAction } from "@core/table/table.types";
+import type { ColumnDef, ImageShape, SortDir, TableRowAction, TableViewMode } from "@core/table/table.types";
 import { useDisplayUrl } from "@core/photo/use-display-url";
 import { camelToSnake } from "@shared/utils/string.utils";
 import { formatDate, formatDateTime } from "@root/shared/utils/datetime.utils";
@@ -64,6 +67,7 @@ export type EditTableProps<T> = {
   /** Khoảng offset top cho header sticky (ví dụ có appbar) */
   stickyTopOffset?: number;
   hidePagination?: boolean;
+  view?: TableViewMode;
 
   /** Drag & Drop reorder (client-side) */
   onReorder?: (newRows: T[], from: number, to: number) => void;
@@ -350,6 +354,7 @@ export function EditTable<T extends { id?: string | number }>({
   sortDirection: controlledSortDir,
   stickyTopOffset = 0,
   hidePagination = false,
+  view = "table",
   onReorder,
 }: EditTableProps<T>) {
   const { t } = useI18n();
@@ -898,6 +903,235 @@ export function EditTable<T extends { id?: string | number }>({
     }
   };
 
+  const getColumnHeader = React.useCallback((col: ColumnDef<T>) => {
+    return resolveLocalizedText(col.header, t) || String(col.key);
+  }, [t]);
+
+  const titleColumn = React.useMemo(
+    () => columns.find((col) => col.labelField) ?? columns[0],
+    [columns]
+  );
+  const summaryColumns = React.useMemo(
+    () => columns
+      .filter((col) => col !== titleColumn)
+      .filter((col) => col.type === "color" || String(col.key) === "riskBucket")
+      .slice(0, 3),
+    [columns, titleColumn]
+  );
+  const detailColumns = React.useMemo(
+    () => columns.filter((col) => col !== titleColumn && !summaryColumns.includes(col)),
+    [columns, summaryColumns, titleColumn]
+  );
+
+  const renderPagination = () => {
+    if (hidePagination) return null;
+
+    return (
+      <Box
+        sx={{
+          px: 1.5,
+          py: 0.5,
+          borderTop: "1px solid",
+          borderColor: footerBorderColor,
+          backgroundColor: footerBackground,
+        }}
+      >
+        <TablePagination
+          component="div"
+          count={total ?? -1}
+          page={page - 1}
+          onPageChange={(_, p) => onPageChange(p + 1)}
+          rowsPerPage={pageSize}
+          onRowsPerPageChange={(e) =>
+            onPageSizeChange?.(parseInt(e.target.value, 10))
+          }
+          rowsPerPageOptions={[10, 20, 50, 100]}
+          sx={{
+            color: "text.secondary",
+            "& .MuiTablePagination-toolbar": {
+              minHeight: 52,
+              px: 0.5,
+              gap: 1,
+            },
+            "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
+              color: "text.secondary",
+              fontSize: theme.typography.body2.fontSize,
+              fontWeight: 500,
+            },
+            "& .MuiTablePagination-select": {
+              borderRadius: 1,
+              fontWeight: 600,
+            },
+            "& .MuiTablePagination-actions .MuiIconButton-root": {
+              borderRadius: 1.5,
+            },
+          }}
+        />
+      </Box>
+    );
+  };
+
+  if (view === "vertical") {
+    const sortableColumns = columns.filter((col) => !!col.sortable || !!col.accessor || !!col.comparator);
+
+    return (
+      <Paper
+        variant="outlined"
+        sx={{
+          borderRadius: tableRadius,
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          sx={{
+            px: 1.5,
+            py: 1,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            flexWrap: "wrap",
+            backgroundColor: headerBackground,
+            color: headerTextColor,
+            borderBottom: "1px solid",
+            borderColor: stickyBoundaryColor,
+          }}
+        >
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+            Sắp xếp:
+          </Typography>
+          {sortableColumns.map((col) => {
+            const key = camelToSnake(String(col.key));
+            const active = (controlledSortBy ?? orderBy) === key;
+            const direction = active ? ((controlledSortDir ?? order) ?? "asc") : "asc";
+
+            return (
+              <Button
+                key={String(col.key)}
+                size="small"
+                variant={active ? "contained" : "outlined"}
+                color={active ? "primary" : "inherit"}
+                onClick={() => handleSortClick(col)}
+                endIcon={
+                  active ? (
+                    <Box component="span" sx={{ fontSize: 12, lineHeight: 1 }}>
+                      {direction === "asc" ? "↑" : "↓"}
+                    </Box>
+                  ) : null
+                }
+                sx={{
+                  minHeight: 30,
+                  textTransform: "none",
+                  borderRadius: 1,
+                  bgcolor: active ? undefined : "background.paper",
+                }}
+              >
+                {getColumnHeader(col)}
+              </Button>
+            );
+          })}
+        </Box>
+
+        <Box sx={{ bgcolor: "background.default" }}>
+          {loading ? (
+            <Box sx={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", px: 2 }}>
+              Đang tải…
+            </Box>
+          ) : error ? (
+            <Box sx={{ minHeight: 56, display: "flex", alignItems: "center", justifyContent: "center", px: 2, color: "error.main" }}>
+              {error}
+            </Box>
+          ) : sortedRows.length === 0 ? (
+            <Box sx={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", px: 2 }}>
+              {t("admin.general.no_data", "Không có dữ liệu")}
+            </Box>
+          ) : (
+            <Stack spacing={1.25} sx={{ p: 1.5 }}>
+              {sortedRows.map((row, rowIdx) => (
+                <Box
+                  key={row.id ?? rowIdx}
+                  role="row"
+                  {...getRowA11yProps(row)}
+                  sx={{
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 1,
+                    bgcolor: "background.paper",
+                    cursor: isClickableRow ? "pointer" : undefined,
+                    overflow: "hidden",
+                    "&:hover": {
+                      backgroundColor: rowHoverBackground,
+                    },
+                  }}
+                >
+                  <Box
+                    sx={{
+                      px: 1.5,
+                      py: 1,
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: 1,
+                      borderBottom: "1px solid",
+                      borderColor: "divider",
+                    }}
+                  >
+                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+                      {titleColumn ? (
+                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+                          <ReceiptLongRoundedIcon fontSize="small" color="primary" sx={{ flexShrink: 0 }} />
+                          <Typography component="div" variant="body2" sx={{ fontWeight: 700, minWidth: 0 }}>
+                            {renderCell(row, titleColumn)}
+                          </Typography>
+                        </Stack>
+                      ) : null}
+                      {summaryColumns.map((col) => (
+                        <Box key={String(col.key)} sx={{ display: "inline-flex" }}>
+                          {renderCell(row, col)}
+                        </Box>
+                      ))}
+                    </Stack>
+                    {hasActions ? (
+                      <Box onClick={stopRowClick} sx={{ flexShrink: 0 }}>
+                        {renderActionButtons(row)}
+                      </Box>
+                    ) : null}
+                  </Box>
+
+                  <Box
+                    sx={{
+                      display: "grid",
+                      gridTemplateColumns: {
+                        xs: "1fr",
+                        sm: "repeat(2, minmax(0, 1fr))",
+                        lg: "repeat(4, minmax(0, 1fr))",
+                      },
+                      columnGap: 2,
+                      rowGap: 1,
+                      px: 1.5,
+                      py: 1.25,
+                    }}
+                  >
+                    {detailColumns.map((col) => (
+                      <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
+                          {getColumnHeader(col)}
+                        </Typography>
+                        <Box sx={{ fontSize: theme.typography.body2.fontSize, minWidth: 0 }}>
+                          {renderCell(row, col)}
+                        </Box>
+                      </Box>
+                    ))}
+                  </Box>
+                </Box>
+              ))}
+            </Stack>
+          )}
+        </Box>
+
+        {renderPagination()}
+      </Paper>
+    );
+  };
+
   return (
     <Paper
       variant="outlined"
@@ -1330,49 +1564,7 @@ export function EditTable<T extends { id?: string | number }>({
         </Box>
       </Box>
 
-      {!hidePagination && (
-        <Box
-          sx={{
-            px: 1.5,
-            py: 0.5,
-            borderTop: "1px solid",
-            borderColor: footerBorderColor,
-            backgroundColor: footerBackground,
-          }}
-        >
-          <TablePagination
-            component="div"
-            count={total ?? -1}
-            page={page - 1}
-            onPageChange={(_, p) => onPageChange(p + 1)}
-            rowsPerPage={pageSize}
-            onRowsPerPageChange={(e) =>
-              onPageSizeChange?.(parseInt(e.target.value, 10))
-            }
-            rowsPerPageOptions={[10, 20, 50, 100]}
-            sx={{
-              color: "text.secondary",
-              "& .MuiTablePagination-toolbar": {
-                minHeight: 52,
-                px: 0.5,
-                gap: 1,
-              },
-              "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
-                color: "text.secondary",
-                fontSize: theme.typography.body2.fontSize,
-                fontWeight: 500,
-              },
-              "& .MuiTablePagination-select": {
-                borderRadius: 1,
-                fontWeight: 600,
-              },
-              "& .MuiTablePagination-actions .MuiIconButton-root": {
-                borderRadius: 1.5,
-              },
-            }}
-          />
-        </Box>
-      )}
+      {renderPagination()}
     </Paper>
   );
 }

@@ -20,6 +20,7 @@ import { OrderCodeText } from "@features/order/components/order-code-text.compon
 const columns: ColumnDef<OrderModel>[] = [
   {
     key: "statusLatest",
+    header: "Trạng thái",
     type: "color",
     width: 110,
     accessor: (row) => ({ text: statusLabel(row.statusLatest), color: statusColor(row.statusLatest) }),
@@ -27,6 +28,7 @@ const columns: ColumnDef<OrderModel>[] = [
   },
   {
     key: "priorityLatest",
+    header: "Ưu tiên",
     type: "color",
     width: 95,
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
@@ -90,7 +92,7 @@ registerTable("orders", () => {
       return list(tableOpts);
     },
     initialPageSize: 10,
-    initialSort: { by: "created_at", dir: "desc" },
+    initialSort: { by: "delivery_date", dir: "asc" },
     // allowUpdating: ["order.update"],
     // allowDeleting: ["order.delete"],
     // onView: (row: OrderModel) => { navigate(`/order/${row.id}`) },

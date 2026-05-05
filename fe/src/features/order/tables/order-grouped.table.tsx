@@ -437,7 +437,7 @@ export function createGroupedOrderTableSchema({
       };
     },
     initialPageSize: 10,
-    initialSort: { by: "created_at", dir: "desc" },
+    initialSort: { by: "delivery_date", dir: "asc" },
     onEdit: (row) => {
       if (row.kind !== "master") return;
       navigate(`/order/${row.orderId}`);
