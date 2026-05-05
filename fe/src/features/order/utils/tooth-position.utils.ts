@@ -20,34 +20,45 @@ const validToothCodes = new Set<number>(
   Object.keys(TOOTH_SPRITES).map((code) => Number(code))
 );
 
+const jawToothCodes = [upperToothCodes, lowerToothCodes] as const;
+
 function isToothCode(code: number): code is ToothCode {
   return validToothCodes.has(code);
 }
 
-function uniqueSortedCodes(codes: Iterable<number>): ToothCode[] {
-  return Array.from(new Set(codes))
-    .filter(isToothCode)
-    .sort((a, b) => a - b);
+function uniqueCodesInOrder(codes: Iterable<number>): ToothCode[] {
+  return Array.from(new Set(codes)).filter(isToothCode);
 }
 
 export function expandToothSelectionSegment(segment: ToothSelectionSegment): ToothCode[] {
   if (segment.kind === "single") return [segment.code];
 
-  const rangeStart = Math.min(segment.start, segment.end);
-  const rangeEnd = Math.max(segment.start, segment.end);
-  const codes: ToothCode[] = [];
+  if (Math.floor(segment.start / 10) === Math.floor(segment.end / 10)) {
+    const rangeStart = Math.min(segment.start, segment.end);
+    const rangeEnd = Math.max(segment.start, segment.end);
+    const codes: ToothCode[] = [];
 
-  for (let code = rangeStart; code <= rangeEnd; code += 1) {
-    if (isToothCode(code)) {
-      codes.push(code);
+    for (let code = rangeStart; code <= rangeEnd; code += 1) {
+      if (isToothCode(code)) {
+        codes.push(code);
+      }
     }
+
+    return codes;
   }
 
-  return codes;
+  const jawCodes = getSegmentJawCodes(segment.start, segment.end);
+  if (!jawCodes) return [];
+
+  const startIndex = jawCodes.indexOf(segment.start);
+  const endIndex = jawCodes.indexOf(segment.end);
+  const from = Math.min(startIndex, endIndex);
+  const to = Math.max(startIndex, endIndex);
+  return jawCodes.slice(from, to + 1);
 }
 
 export function expandToothSelectionSegments(segments: ToothSelectionSegment[]): ToothCode[] {
-  return uniqueSortedCodes(segments.flatMap(expandToothSelectionSegment));
+  return uniqueCodesInOrder(segments.flatMap(expandToothSelectionSegment));
 }
 
 export function parseToothPositionSegments(value?: string | null): ToothSelectionSegment[] {
@@ -65,9 +76,8 @@ export function parseToothPositionSegments(value?: string | null): ToothSelectio
     if (!Number.isFinite(start) || !Number.isFinite(end)) return [];
 
     if (parts.length === 2) {
-      const rangeCodes = uniqueSortedCodes([start, end]);
-      if (rangeCodes.length !== 2 && start !== end) return [];
       if (!isToothCode(start) || !isToothCode(end)) return [];
+      if (!getSegmentJawCodes(start, end)) return [];
       return [{ kind: "bridge", start, end }];
     }
 
@@ -80,34 +90,39 @@ export function formatToothPositionSegments(segments: ToothSelectionSegment[]): 
   return sortToothSelectionSegments(segments)
     .map((segment) => {
       if (segment.kind === "single") return `${segment.code}`;
-      const start = Math.min(segment.start, segment.end);
-      const end = Math.max(segment.start, segment.end);
+      const [start, end] = getFormattedBridgeEndpoints(segment.start, segment.end);
       return start === end ? `${start}` : `${start}-${end}`;
     })
     .join(",");
 }
 
 export function createBridgeSegments(codes: ToothCode[]): ToothSelectionSegment[] {
-  const sorted = uniqueSortedCodes(codes);
-  if (!sorted.length) return [];
-
+  const codeSet = new Set<number>(codes);
   const segments: ToothSelectionSegment[] = [];
-  let start = sorted[0];
-  let prev = sorted[0];
 
-  for (let i = 1; i < sorted.length; i += 1) {
-    const current = sorted[i];
-    if (current === prev + 1) {
-      prev = current;
-      continue;
+  for (const jawCodes of jawToothCodes) {
+    let start: ToothCode | null = null;
+    let prev: ToothCode | null = null;
+
+    for (const code of jawCodes) {
+      if (!codeSet.has(code)) {
+        if (start != null && prev != null) {
+          segments.push(createBridgeSegment(start, prev));
+        }
+        start = null;
+        prev = null;
+        continue;
+      }
+
+      start ??= code;
+      prev = code;
     }
 
-    segments.push({ kind: "bridge", start, end: prev });
-    start = current;
-    prev = current;
+    if (start != null && prev != null) {
+      segments.push(createBridgeSegment(start, prev));
+    }
   }
 
-  segments.push({ kind: "bridge", start, end: prev });
   return segments;
 }
 
@@ -214,8 +229,10 @@ function filterSegmentsByCodes(
 }
 
 function segmentSortValue(segment: ToothSelectionSegment) {
-  if (segment.kind === "single") return segment.code;
-  return Math.min(segment.start, segment.end);
+  const code = segment.kind === "single"
+    ? segment.code
+    : getFormattedBridgeEndpoints(segment.start, segment.end)[0];
+  return code;
 }
 
 function getAffectedJawCodes(codes: ToothCode[]) {
@@ -230,4 +247,28 @@ function getAffectedJawCodes(codes: ToothCode[]) {
   }
 
   return affectedCodes;
+}
+
+function getSegmentJawCodes(start: ToothCode, end: ToothCode): ToothCode[] | null {
+  return jawToothCodes.find((codes) => codes.includes(start) && codes.includes(end)) ?? null;
+}
+
+function getFormattedBridgeEndpoints(start: ToothCode, end: ToothCode): [ToothCode, ToothCode] {
+  if (start === end) return [start, end];
+
+  const startQuadrant = Math.floor(start / 10);
+  const endQuadrant = Math.floor(end / 10);
+  if (startQuadrant === endQuadrant) {
+    return start < end ? [start, end] : [end, start];
+  }
+
+  const jawCodes = getSegmentJawCodes(start, end);
+  if (!jawCodes) return start < end ? [start, end] : [end, start];
+
+  return jawCodes.indexOf(start) <= jawCodes.indexOf(end) ? [start, end] : [end, start];
+}
+
+function createBridgeSegment(start: ToothCode, end: ToothCode): ToothSelectionSegment {
+  const [formattedStart, formattedEnd] = getFormattedBridgeEndpoints(start, end);
+  return { kind: "bridge", start: formattedStart, end: formattedEnd };
 }

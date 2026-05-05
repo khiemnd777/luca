@@ -32,9 +32,44 @@ describe("tooth position utilities", () => {
     expect(expandToothSelectionSegments(segments)).toEqual([12, 13, 14, 15, 18]);
   });
 
+  test("expands upper bridge ranges across the midline by jaw order", () => {
+    expect(expandToothSelectionSegments(parseToothPositionSegments("11-21"))).toEqual([11, 21]);
+    expect(expandToothSelectionSegments(parseToothPositionSegments("12-22"))).toEqual([12, 11, 21, 22]);
+    expect(expandToothSelectionSegments(parseToothPositionSegments("14-26"))).toEqual([
+      14,
+      13,
+      12,
+      11,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+    ]);
+  });
+
+  test("expands lower bridge ranges across the midline by jaw order", () => {
+    expect(expandToothSelectionSegments(parseToothPositionSegments("41-31"))).toEqual([41, 31]);
+  });
+
+  test("formats cross-midline bridge ranges without numeric normalization", () => {
+    expect(formatToothPositionSegments(parseToothPositionSegments("11-21"))).toBe("11-21");
+    expect(formatToothPositionSegments(parseToothPositionSegments("12-22"))).toBe("12-22");
+    expect(formatToothPositionSegments(parseToothPositionSegments("14-26"))).toBe("14-26");
+    expect(formatToothPositionSegments(parseToothPositionSegments("41-31"))).toBe("41-31");
+  });
+
   test("creates bridge segments for contiguous valid tooth groups", () => {
     expect(formatToothPositionSegments(createBridgeSegments([18, 17, 16, 15]))).toBe("15-18");
     expect(formatToothPositionSegments(createBridgeSegments([18, 17, 16, 15, 21, 22]))).toBe("15-18,21-22");
+  });
+
+  test("creates cross-midline bridge segments for contiguous jaw-order groups", () => {
+    expect(formatToothPositionSegments(createBridgeSegments([11, 21]))).toBe("11-21");
+    expect(formatToothPositionSegments(createBridgeSegments([12, 11, 21, 22]))).toBe("12-22");
+    expect(formatToothPositionSegments(createBridgeSegments([14, 13, 12, 11, 21, 22, 23, 24, 25, 26]))).toBe("14-26");
+    expect(formatToothPositionSegments(createBridgeSegments([41, 31]))).toBe("41-31");
   });
 
   test("adds a dragged bridge without clearing existing single selections", () => {
