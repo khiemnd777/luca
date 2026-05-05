@@ -4,6 +4,7 @@ import "time"
 
 type OrderItemProcessInProgressDTO struct {
 	ID               int64                                  `json:"id,omitempty"`
+	Mode             string                                 `json:"mode,omitempty"`
 	ProcessID        *int64                                 `json:"process_id,omitempty"`
 	ProcessName      *string                                `json:"process_name,omitempty"`
 	PrevProcessID    *int64                                 `json:"prev_process_id,omitempty"`
@@ -29,6 +30,12 @@ type OrderItemProcessInProgressDTO struct {
 	CompletedAt      *time.Time                             `json:"completed_at,omitempty"`
 	UpdatedAt        time.Time                              `json:"updated_at,omitempty"`
 	AvailableTargets []*OrderItemProcessInProgressTargetDTO `json:"available_targets,omitempty"`
+
+	RequiresDentistReview     bool    `json:"requires_dentist_review,omitempty"`
+	DentistReviewRequestNote  *string `json:"dentist_review_request_note,omitempty"`
+	DentistReviewID           *int64  `json:"dentist_review_id,omitempty"`
+	DentistReviewStatus       *string `json:"dentist_review_status,omitempty"`
+	DentistReviewResponseNote *string `json:"dentist_review_response_note,omitempty"`
 }
 
 type OrderItemProcessInProgressTargetDTO struct {
@@ -52,4 +59,9 @@ type OrderItemProcessInProgressTargetDTO struct {
 	StartedAt     *time.Time `json:"started_at,omitempty"`
 	CompletedAt   *time.Time `json:"completed_at,omitempty"`
 	Mode          string     `json:"mode,omitempty"`
+
+	DentistReviewID           *int64  `json:"dentist_review_id,omitempty"`
+	DentistReviewStatus       *string `json:"dentist_review_status,omitempty"`
+	DentistReviewRequestNote  *string `json:"dentist_review_request_note,omitempty"`
+	DentistReviewResponseNote *string `json:"dentist_review_response_note,omitempty"`
 }

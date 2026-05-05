@@ -99,6 +99,7 @@ const ORDER_STATUS_PALETTE = [
   "#9e9e9e", // waiting - gray
   "#607d8b", // received - blue gray
   "#1976d2", // in progress - blue
+  "#0288d1", // waiting dentist review - light blue
   "#f9a825", // qc - amber
   "#2e7d32", // completed - green
   "#d32f2f", // issue - red
@@ -110,16 +111,18 @@ const ORDER_STATUSES = [
   { value: "waiting", label: "Đang chờ", displayOrder: 1, },
   { value: "received", label: "Đã nhận đơn", displayOrder: 2, },
   { value: "in_progress", label: "Đang gia công", displayOrder: 3, },
-  { value: "qc", label: "Đang kiểm thử", displayOrder: 4, },
-  { value: "issue", label: "Sự cố", displayOrder: 5, },
-  { value: "rework", label: "Làm lại", displayOrder: 6, },
-  { value: "completed", label: "Đã hoàn thành", displayOrder: 7, },
+  { value: "waiting_dentist_review", label: "Chờ nha sĩ check", displayOrder: 4, },
+  { value: "qc", label: "Đang kiểm thử", displayOrder: 5, },
+  { value: "issue", label: "Sự cố", displayOrder: 6, },
+  { value: "rework", label: "Làm lại", displayOrder: 7, },
+  { value: "completed", label: "Đã hoàn thành", displayOrder: 8, },
 ] as const;
 
 const ORDER_STATUS_HELPERS = [
   { value: "waiting", label: "Số lượng đơn đang chờ xử lý" },
   { value: "received", label: "Số lượng đơn đã nhận" },
   { value: "in_progress", label: "Số lượng đơn đang được gia công" },
+  { value: "waiting_dentist_review", label: "Số lượng đơn đang chờ nha sĩ check" },
   { value: "qc", label: "Số lượng đơn đang kiểm tra chất lượng" },
   { value: "completed", label: "Số lượng đơn đã hoàn thành" },
   { value: "issue", label: "Số lượng đơn bị sự cố" },

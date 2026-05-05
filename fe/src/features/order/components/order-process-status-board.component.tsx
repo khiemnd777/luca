@@ -78,6 +78,7 @@ export function OrderProcessesStatusBoard() {
         statuses={[
           { label: "Đang chờ", value: "waiting" },
           { label: "Đang gia công", value: "in_progress" },
+          { label: "Chờ nha sĩ check", value: "waiting_dentist_review", disableDrop: true, disableDrag: true },
           { label: "Kiểm thử", value: "qc" },
           { label: "Làm lại", value: "rework" },
           { label: "Hoàn thành", value: "completed" },

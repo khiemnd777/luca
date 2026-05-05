@@ -37,6 +37,7 @@ func (h *OrderItemProcessHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/check-in-out/prepare", h.PrepareCheckInOrOut)
 	app.RouterGet(router, "/:dept_id<int>/order/processes/check-in-out/prepare-by-code", h.PrepareCheckInOrOutByCode)
 	app.RouterPost(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/check-in-out", h.CheckInOrOut)
+	app.RouterPost(router, "/:dept_id<int>/order/processes/dentist-reviews/:review_id<int>/resolve", h.ResolveDentistReview)
 	app.RouterPost(router, "/:dept_id<int>/order/processes/in-progress/:in_progress_id<int>/assign", h.Assign)
 	app.RouterPut(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/:order_item_process_id<int>", h.Update)
 }
@@ -199,6 +200,31 @@ func (h *OrderItemProcessHandler) CheckInOrOut(c *fiber.Ctx) error {
 	deptID, _ := utils.GetDeptIDInt(c)
 
 	dto, err := h.svc.CheckInOrOut(c.UserContext(), deptID, userID, checkInOrOutData)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(dto)
+}
+
+func (h *OrderItemProcessHandler) ResolveDentistReview(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.development"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	reviewID, _ := utils.GetParamAsInt(c, "review_id")
+	if reviewID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
+	}
+
+	payload, err := app.ParseBody[model.OrderItemProcessDentistReviewResolveDTO](c)
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	userID, _ := utils.GetUserIDInt(c)
+
+	dto, err := h.svc.ResolveDentistReview(c.UserContext(), deptID, userID, int64(reviewID), payload)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

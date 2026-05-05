@@ -121,6 +121,22 @@ export function buildOrderProcessInProgressSchema(): FormSchema {
       ],
     ),
     {
+      name: "requiresDentistReview",
+      label: "Gửi mẫu cho nha sĩ check trước khi tiếp tục",
+      kind: "checkbox",
+      fullWidth: true,
+      defaultValue: false,
+    },
+    {
+      name: "dentistReviewRequestNote",
+      label: "Nội dung cần nha sĩ check",
+      kind: "textarea",
+      fullWidth: true,
+      rows: 3,
+      rules: { required: "Vui lòng nhập nội dung cần nha sĩ check" },
+      showIf: (values) => Boolean(values.requiresDentistReview),
+    },
+    {
       name: "checkOutNote",
       label: "Ghi chú giao ca",
       kind: "textarea",

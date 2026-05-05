@@ -1,7 +1,12 @@
 import { apiClient } from "@core/network/api-client";
 import { useAuthStore } from "@store/auth-store";
 import { mapper } from "@core/mapper/auto-mapper";
-import type { OrderItemProcessInProgressModel, OrderItemProcessTargetModel } from "../model/order-item-process-inprogress.model";
+import type {
+  OrderItemProcessDentistReviewModel,
+  OrderItemProcessDentistReviewResult,
+  OrderItemProcessInProgressModel,
+  OrderItemProcessTargetModel,
+} from "../model/order-item-process-inprogress.model";
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
 import type { OrderItemProcessModel, OrderItemProcessUpsertModel } from "../model/order-item-process.model";
 import type { FetchTableOpts } from "@root/core/table/table.types";
@@ -78,10 +83,36 @@ export async function checkInOrOut(payload: OrderItemProcessInProgressModel): Pr
   const { departmentApiPath } = useAuthStore.getState();
   const orderId = payload.orderId ?? (payload as any).order_id;
   const orderItemId = payload.orderItemId ?? (payload as any).order_item_id;
-  const body = sanitizeCheckInOutPayload(payload as Record<string, any>);
+  const dto = mapper.map<OrderItemProcessInProgressModel, Record<string, any>>(
+    "OrderItemProcessInProgress",
+    payload,
+    "model_to_dto",
+  );
+  const body = sanitizeCheckInOutPayload(dto);
   const { data } = await apiClient.post<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-in-out`, body);
   const result = mapper.map<any, OrderItemProcessInProgressModel>("OrderItemProcessInProgress", data, "dto_to_model");
   return result;
+}
+
+export type ResolveDentistReviewPayload = {
+  result: OrderItemProcessDentistReviewResult;
+  note?: string | null;
+};
+
+export async function resolveDentistReview(
+  reviewId: number,
+  payload: ResolveDentistReviewPayload,
+): Promise<OrderItemProcessDentistReviewModel> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const body: { result: OrderItemProcessDentistReviewResult; note?: string | null } = {
+    result: payload.result,
+  };
+  if (payload.note !== undefined) {
+    body.note = payload.note;
+  }
+
+  const { data } = await apiClient.post<any>(`${departmentApiPath()}/order/processes/dentist-reviews/${reviewId}/resolve`, body);
+  return mapDentistReview(data);
 }
 
 export async function assign(inprogressId: number, assignedId: number, assignedName: string, note: string): Promise<OrderItemProcessInProgressModel> {
@@ -137,6 +168,30 @@ function mapPreparedInProgress(data: any): OrderItemProcessInProgressModel {
   return {
     ...result,
     availableTargets,
+  };
+}
+
+function mapDentistReview(data: any): OrderItemProcessDentistReviewModel {
+  return {
+    id: data?.id ?? null,
+    orderId: data?.order_id ?? null,
+    orderItemId: data?.order_item_id ?? null,
+    orderItemCode: data?.order_item_code ?? null,
+    productId: data?.product_id ?? null,
+    productCode: data?.product_code ?? null,
+    productName: data?.product_name ?? null,
+    processId: data?.process_id ?? null,
+    processName: data?.process_name ?? null,
+    inProgressId: data?.in_progress_id ?? null,
+    status: data?.status ?? null,
+    requestNote: data?.request_note ?? null,
+    responseNote: data?.response_note ?? null,
+    requestedBy: data?.requested_by ?? null,
+    resolvedBy: data?.resolved_by ?? null,
+    requestedAt: data?.requested_at ?? null,
+    resolvedAt: data?.resolved_at ?? null,
+    createdAt: data?.created_at ?? null,
+    updatedAt: data?.updated_at ?? null,
   };
 }
 

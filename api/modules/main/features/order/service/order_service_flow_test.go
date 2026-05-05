@@ -150,6 +150,18 @@ func assertContainsKey(t *testing.T, keys []string, expected string) {
 	t.Fatalf("expected invalidated key %q, got %v", expected, keys)
 }
 
+func TestOrderServiceUpdateStatus_RejectsDentistReviewInternalStatus(t *testing.T) {
+	svc := &orderService{}
+
+	_, err := svc.UpdateStatus(context.Background(), 1, 2, 3, " waiting_dentist_review ")
+	if err == nil {
+		t.Fatal("expected waiting dentist review status error")
+	}
+	if !strings.Contains(err.Error(), "waiting dentist review status must be created from the dentist review checkout flow") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 type orderRepositoryStub struct {
 	createFn func(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)
 	updateFn func(ctx context.Context, deptID, userID int, input *model.OrderUpsertDTO) (*model.OrderDTO, error)

@@ -1,6 +1,8 @@
 export interface StatusOption {
   label: string;
   value: string;
+  disableDrop?: boolean;
+  disableDrag?: boolean;
 }
 
 export interface BoardItem<T = any> {

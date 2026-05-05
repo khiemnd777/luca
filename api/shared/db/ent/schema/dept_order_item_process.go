@@ -105,6 +105,7 @@ func (OrderItemProcess) Edges() []ent.Edge {
 			Required().
 			Unique(),
 		edge.To("in_progresses", OrderItemProcessInProgress.Type),
+		edge.To("dentist_reviews", OrderItemProcessDentistReview.Type),
 	}
 }
 

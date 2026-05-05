@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -11,6 +12,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocess"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocessdentistreview"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocessinprogress"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/predicate"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/section"
@@ -23,10 +25,11 @@ import (
 type OrderItemProcessInProgressRepository interface {
 	PrepareCheckInOrOut(ctx context.Context, tx *generated.Tx, orderItemID int64, orderID *int64) (*model.OrderItemProcessInProgressDTO, error)
 	PrepareCheckInOrOutByCode(ctx context.Context, code string) (*model.OrderItemProcessInProgressDTO, error)
-	CheckInOrOut(ctx context.Context, checkInOrOutData *model.OrderItemProcessInProgressDTO) (*model.OrderItemProcessInProgressDTO, *string, *string, *generated.OrderItem, error)
+	CheckInOrOut(ctx context.Context, userID int, checkInOrOutData *model.OrderItemProcessInProgressDTO) (*model.OrderItemProcessInProgressDTO, *string, *string, *generated.OrderItem, error)
 	Assign(ctx context.Context, inprogressID int64, assignedID *int64, assignedName *string, note *string) (*model.OrderItemProcessInProgressDTO, *string, *string, *generated.OrderItem, error)
 	CheckIn(ctx context.Context, tx *generated.Tx, orderItemID int64, orderID *int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
 	CheckOut(ctx context.Context, tx *generated.Tx, orderItemID int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
+	ResolveDentistReview(ctx context.Context, deptID int, reviewID int64, result string, note *string, resolvedBy int) (*model.OrderItemProcessDentistReviewDTO, *model.OrderItemProcessInProgressDTO, *string, *generated.OrderItem, error)
 	GetLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressDTO, error)
 	GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error)
 	GetInProgressesByOrderItemID(ctx context.Context, tx *generated.Tx, orderItemID int64) ([]*model.OrderItemProcessInProgressAndProcessDTO, error)
@@ -312,7 +315,12 @@ func (r *orderItemProcessInProgressRepository) prepareTargets(
 			return nil, latestErr
 		}
 
-		target, buildErr := r.buildPrepareTarget(group, latest, orderID, orderItemEntity.Code)
+		review, reviewErr := r.reviewForPrepare(ctx, tx, orderItemID, productID, latest)
+		if reviewErr != nil {
+			return nil, reviewErr
+		}
+
+		target, buildErr := r.buildPrepareTarget(group, latest, review, orderID, orderItemEntity.Code)
 		if buildErr != nil {
 			return nil, buildErr
 		}
@@ -325,11 +333,57 @@ func (r *orderItemProcessInProgressRepository) prepareTargets(
 func (r *orderItemProcessInProgressRepository) buildPrepareTarget(
 	processes []*generated.OrderItemProcess,
 	latest *generated.OrderItemProcessInProgress,
+	review *generated.OrderItemProcessDentistReview,
 	orderID *int64,
 	orderItemCode *string,
 ) (*model.OrderItemProcessInProgressTargetDTO, error) {
 	if len(processes) == 0 {
 		return nil, fmt.Errorf("processes are required")
+	}
+
+	if review != nil && review.Status == "pending" {
+		currentProcessID := processes[0].ID
+		if review.ProcessID != nil {
+			currentProcessID = *review.ProcessID
+		} else if latest != nil && latest.ProcessID != nil {
+			currentProcessID = *latest.ProcessID
+		}
+		targetProcess := r.findProcess(processes, currentProcessID)
+		if targetProcess == nil {
+			return nil, fmt.Errorf("process %d not found for pending dentist review", currentProcessID)
+		}
+		target := &model.OrderItemProcessInProgressTargetDTO{
+			ProcessID:                 &currentProcessID,
+			NextProcessID:             r.nextProcessID(processes, currentProcessID),
+			OrderItemID:               targetProcess.OrderItemID,
+			OrderID:                   r.pickOrderID(orderID, targetProcess),
+			OrderItemCode:             orderItemCode,
+			ProductID:                 targetProcess.ProductID,
+			ProductCode:               targetProcess.ProductCode,
+			ProductName:               targetProcess.ProductName,
+			ProcessName:               targetProcess.ProcessName,
+			AssignedID:                targetProcess.AssignedID,
+			AssignedName:              targetProcess.AssignedName,
+			SectionName:               targetProcess.SectionName,
+			SectionID:                 targetProcess.SectionID,
+			Mode:                      "dentist_review",
+			DentistReviewID:           &review.ID,
+			DentistReviewStatus:       &review.Status,
+			DentistReviewRequestNote:  &review.RequestNote,
+			DentistReviewResponseNote: review.ResponseNote,
+		}
+		if review.InProgressID != nil {
+			target.ID = *review.InProgressID
+		}
+		if latest != nil {
+			target.ID = latest.ID
+			target.PrevProcessID = latest.PrevProcessID
+			target.CheckInNote = latest.CheckInNote
+			target.CheckOutNote = latest.CheckOutNote
+			target.StartedAt = latest.StartedAt
+			target.CompletedAt = latest.CompletedAt
+		}
+		return target, nil
 	}
 
 	// Checkout target for the product currently in progress.
@@ -372,6 +426,9 @@ func (r *orderItemProcessInProgressRepository) buildPrepareTarget(
 
 	if latest != nil {
 		switch {
+		case review != nil && review.Status == "rejected" && latest.ProcessID != nil:
+			targetProcessID = *latest.ProcessID
+			prevProcessID = latest.PrevProcessID
 		case latest.NextProcessID != nil:
 			targetProcessID = *latest.NextProcessID
 			prevProcessID = latest.ProcessID
@@ -435,6 +492,12 @@ func (r *orderItemProcessInProgressRepository) selectPrepareTarget(
 		CompletedAt:   selected.CompletedAt,
 		SectionName:   selected.SectionName,
 		SectionID:     selected.SectionID,
+		Mode:          selected.Mode,
+
+		DentistReviewID:           selected.DentistReviewID,
+		DentistReviewStatus:       selected.DentistReviewStatus,
+		DentistReviewRequestNote:  selected.DentistReviewRequestNote,
+		DentistReviewResponseNote: selected.DentistReviewResponseNote,
 	}
 }
 
@@ -570,6 +633,7 @@ func (r *orderItemProcessInProgressRepository) Assign(
 
 func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 	ctx context.Context,
+	userID int,
 	checkInOrOutData *model.OrderItemProcessInProgressDTO,
 ) (
 	*model.OrderItemProcessInProgressDTO,
@@ -602,7 +666,10 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 			return nil, nil, nil, nil, err
 		}
 
-		leaderID, leaderName, sectionName, processName, err := r.ProcessInfoByProcessID(ctx, tx, checkInOrOutData.NextProcessID)
+		requiresDentistReview := checkInOrOutData.RequiresDentistReview
+		nextProcessID := checkInOrOutData.NextProcessID
+
+		leaderID, leaderName, sectionName, processName, err := r.ProcessInfoByProcessID(ctx, tx, nextProcessID)
 		if err != nil {
 			return nil, nil, nil, nil, err
 		}
@@ -611,7 +678,7 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 		entity, err := r.inprogressClient(tx).
 			UpdateOneID(checkInOrOutData.ID).
 			SetProcessID(*checkInOrOutData.ProcessID).
-			SetNillableNextProcessID(checkInOrOutData.NextProcessID).
+			SetNillableNextProcessID(nextProcessID).
 			SetNillableNextProcessName(processName).
 			SetNillableNextSectionName(sectionName).
 			SetNillableNextLeaderID(leaderID).
@@ -628,7 +695,22 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 			return nil, nil, nil, nil, err
 		}
 
-		if err := r.updateProcessStatus(ctx, tx, *checkInOrOutData.ProcessID, "completed"); err != nil {
+		processStatus := "completed"
+		if requiresDentistReview {
+			processStatus = "waiting_dentist_review"
+			var requestedBy *int
+			if userID > 0 {
+				requestedBy = &userID
+			}
+			review, reviewErr := r.createDentistReview(ctx, tx, entity, checkInOrOutData.ProcessName, checkInOrOutData.DentistReviewRequestNote, requestedBy)
+			if reviewErr != nil {
+				return nil, nil, nil, nil, reviewErr
+			}
+			checkInOrOutData.DentistReviewID = &review.ID
+			checkInOrOutData.DentistReviewStatus = &review.Status
+		}
+
+		if err := r.updateProcessStatus(ctx, tx, *checkInOrOutData.ProcessID, processStatus); err != nil {
 			return nil, nil, nil, nil, err
 		}
 
@@ -644,6 +726,9 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 		}
 
 		dto := mapper.MapAs[*generated.OrderItemProcessInProgress, *model.OrderItemProcessInProgressDTO](entity)
+		dto.RequiresDentistReview = requiresDentistReview
+		dto.DentistReviewID = checkInOrOutData.DentistReviewID
+		dto.DentistReviewStatus = checkInOrOutData.DentistReviewStatus
 
 		// Get current section and process's name
 		_, _, sectionName, processName, err = r.ProcessInfoByProcessID(ctx, tx, checkInOrOutData.ProcessID)
@@ -651,7 +736,7 @@ func (r *orderItemProcessInProgressRepository) CheckInOrOut(
 			dto.SectionName = sectionName
 			dto.ProcessName = processName
 		}
-		return dto, nil, orderstatus, ordercreatedat, nil
+		return dto, &processStatus, orderstatus, ordercreatedat, nil
 	}
 
 	if checkInOrOutData.ProcessID == nil {
@@ -752,7 +837,7 @@ func (r *orderItemProcessInProgressRepository) CheckIn(ctx context.Context, tx *
 		return nil, err
 	}
 	prepared.CheckInNote = note
-	_, _, _, _, err = r.CheckInOrOut(ctx, prepared)
+	_, _, _, _, err = r.CheckInOrOut(ctx, 0, prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -768,7 +853,7 @@ func (r *orderItemProcessInProgressRepository) CheckOut(ctx context.Context, tx 
 	if prepared.ID == 0 {
 		return nil, fmt.Errorf("no checkout target found for order item %d", orderItemID)
 	}
-	_, _, _, _, err = r.CheckInOrOut(ctx, prepared)
+	_, _, _, _, err = r.CheckInOrOut(ctx, 0, prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -782,6 +867,95 @@ func (r *orderItemProcessInProgressRepository) GetLatest(ctx context.Context, tx
 	}
 	dto := mapper.MapAs[*generated.OrderItemProcessInProgress, *model.OrderItemProcessInProgressDTO](entity)
 	return dto, nil
+}
+
+func (r *orderItemProcessInProgressRepository) ResolveDentistReview(
+	ctx context.Context,
+	deptID int,
+	reviewID int64,
+	result string,
+	note *string,
+	resolvedBy int,
+) (*model.OrderItemProcessDentistReviewDTO, *model.OrderItemProcessInProgressDTO, *string, *generated.OrderItem, error) {
+	result = strings.TrimSpace(result)
+	if result != "approved" && result != "rejected" {
+		return nil, nil, nil, nil, fmt.Errorf("invalid dentist review result")
+	}
+
+	var err error
+	tx, err := r.db.Tx(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}()
+
+	review, err := tx.OrderItemProcessDentistReview.
+		Query().
+		Where(
+			orderitemprocessdentistreview.ID(reviewID),
+			orderitemprocessdentistreview.HasOrderItemWith(
+				orderitem.HasOrderWith(order.DepartmentIDEQ(deptID)),
+			),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	if review.Status != "pending" {
+		return nil, nil, nil, nil, fmt.Errorf("dentist review %d is already %s", reviewID, review.Status)
+	}
+	if review.ProcessID == nil {
+		return nil, nil, nil, nil, fmt.Errorf("process id is required for dentist review %d", reviewID)
+	}
+
+	now := time.Now()
+	reviewStatus := result
+	review, err = tx.OrderItemProcessDentistReview.
+		UpdateOneID(review.ID).
+		SetStatus(reviewStatus).
+		SetNillableResponseNote(note).
+		SetResolvedBy(resolvedBy).
+		SetResolvedAt(now).
+		Save(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	processStatus := "completed"
+	completedAt := &now
+	if result == "rejected" {
+		processStatus = "rework"
+		completedAt = nil
+	}
+	if err := r.updateProcessStatus(ctx, tx, *review.ProcessID, processStatus); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	orderStatus, orderItem, err := r.syncOrderAndItemStatus(ctx, tx, review.OrderItemID, review.OrderID, completedAt)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err := r.syncOrderProcessLatest(ctx, tx, *review.ProcessID, review.OrderItemID, review.OrderID); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	var inprogressDTO *model.OrderItemProcessInProgressDTO
+	if review.InProgressID != nil {
+		inprogress, latestErr := tx.OrderItemProcessInProgress.Get(ctx, *review.InProgressID)
+		if latestErr != nil {
+			return nil, nil, nil, nil, latestErr
+		}
+		inprogressDTO = mapper.MapAs[*generated.OrderItemProcessInProgress, *model.OrderItemProcessInProgressDTO](inprogress)
+	}
+
+	return mapDentistReview(review), inprogressDTO, orderStatus, orderItem, nil
 }
 
 func (r *orderItemProcessInProgressRepository) GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error) {
@@ -872,6 +1046,104 @@ func (r *orderItemProcessInProgressRepository) latestEntity(ctx context.Context,
 		return nil, err
 	}
 	return entity, nil
+}
+
+func (r *orderItemProcessInProgressRepository) reviewForPrepare(
+	ctx context.Context,
+	tx *generated.Tx,
+	orderItemID int64,
+	productID *int,
+	latest *generated.OrderItemProcessInProgress,
+) (*generated.OrderItemProcessDentistReview, error) {
+	pendingPredicates := []predicate.OrderItemProcessDentistReview{
+		orderitemprocessdentistreview.OrderItemID(orderItemID),
+		orderitemprocessdentistreview.StatusEQ("pending"),
+	}
+	if productID != nil {
+		pendingPredicates = append(pendingPredicates, orderitemprocessdentistreview.ProductIDEQ(*productID))
+	}
+	review, err := r.dentistReviewClient(tx).
+		Query().
+		Where(pendingPredicates...).
+		Order(orderitemprocessdentistreview.ByCreatedAt(sql.OrderDesc())).
+		First(ctx)
+	if err == nil {
+		return review, nil
+	}
+	if !generated.IsNotFound(err) {
+		return nil, err
+	}
+	if latest == nil || latest.CompletedAt == nil {
+		return nil, nil
+	}
+
+	rejectedPredicates := []predicate.OrderItemProcessDentistReview{
+		orderitemprocessdentistreview.StatusEQ("rejected"),
+	}
+	if latest.ID > 0 {
+		rejectedPredicates = append(rejectedPredicates, orderitemprocessdentistreview.InProgressIDEQ(latest.ID))
+	} else {
+		return nil, nil
+	}
+
+	review, err = r.dentistReviewClient(tx).
+		Query().
+		Where(rejectedPredicates...).
+		Order(orderitemprocessdentistreview.ByUpdatedAt(sql.OrderDesc())).
+		First(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return review, nil
+}
+
+func (r *orderItemProcessInProgressRepository) createDentistReview(
+	ctx context.Context,
+	tx *generated.Tx,
+	inprogress *generated.OrderItemProcessInProgress,
+	processName *string,
+	note *string,
+	requestedBy *int,
+) (*generated.OrderItemProcessDentistReview, error) {
+	if inprogress == nil {
+		return nil, fmt.Errorf("in-progress checkpoint is required")
+	}
+	requestNote := strings.TrimSpace(utils.SafeString(note))
+	if requestNote == "" {
+		return nil, fmt.Errorf("dentist review request note is required")
+	}
+
+	existing, err := r.dentistReviewClient(tx).
+		Query().
+		Where(
+			orderitemprocessdentistreview.InProgressID(inprogress.ID),
+			orderitemprocessdentistreview.StatusEQ("pending"),
+		).
+		Only(ctx)
+	if err == nil {
+		return existing, nil
+	}
+	if !generated.IsNotFound(err) {
+		return nil, err
+	}
+
+	return r.dentistReviewClient(tx).
+		Create().
+		SetNillableOrderID(inprogress.OrderID).
+		SetOrderItemID(inprogress.OrderItemID).
+		SetNillableOrderItemCode(inprogress.OrderItemCode).
+		SetNillableProductID(inprogress.ProductID).
+		SetNillableProductCode(inprogress.ProductCode).
+		SetNillableProductName(inprogress.ProductName).
+		SetNillableProcessID(inprogress.ProcessID).
+		SetNillableProcessName(processName).
+		SetInProgressID(inprogress.ID).
+		SetRequestNote(requestNote).
+		SetNillableRequestedBy(requestedBy).
+		Save(ctx)
 }
 
 func (r *orderItemProcessInProgressRepository) getProcesses(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) ([]*generated.OrderItemProcess, error) {
@@ -1031,7 +1303,7 @@ func (r *orderItemProcessInProgressRepository) syncOrderAndItemStatus(
 			allCompleted = false
 		}
 		switch status {
-		case "in_progress", "qc", "rework":
+		case "in_progress", "qc", "rework", "waiting_dentist_review":
 			anyInProgress = true
 		}
 	}
@@ -1335,6 +1607,40 @@ func (r *orderItemProcessInProgressRepository) processClient(tx *generated.Tx) *
 		return tx.OrderItemProcess
 	}
 	return r.db.OrderItemProcess
+}
+
+func (r *orderItemProcessInProgressRepository) dentistReviewClient(tx *generated.Tx) *generated.OrderItemProcessDentistReviewClient {
+	if tx != nil {
+		return tx.OrderItemProcessDentistReview
+	}
+	return r.db.OrderItemProcessDentistReview
+}
+
+func mapDentistReview(review *generated.OrderItemProcessDentistReview) *model.OrderItemProcessDentistReviewDTO {
+	if review == nil {
+		return nil
+	}
+	return &model.OrderItemProcessDentistReviewDTO{
+		ID:            review.ID,
+		OrderID:       review.OrderID,
+		OrderItemID:   review.OrderItemID,
+		OrderItemCode: review.OrderItemCode,
+		ProductID:     review.ProductID,
+		ProductCode:   review.ProductCode,
+		ProductName:   review.ProductName,
+		ProcessID:     review.ProcessID,
+		ProcessName:   review.ProcessName,
+		InProgressID:  review.InProgressID,
+		Status:        review.Status,
+		RequestNote:   review.RequestNote,
+		ResponseNote:  review.ResponseNote,
+		RequestedBy:   review.RequestedBy,
+		ResolvedBy:    review.ResolvedBy,
+		RequestedAt:   review.RequestedAt,
+		ResolvedAt:    review.ResolvedAt,
+		CreatedAt:     review.CreatedAt,
+		UpdatedAt:     review.UpdatedAt,
+	}
 }
 
 func sameAssigned(a, b *int64) bool {

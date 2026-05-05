@@ -102,6 +102,8 @@ export default function StatusBoard<T>({
               <StatusColumn
                 label={st.label}
                 statusValue={st.value}
+                disableDrop={st.disableDrop}
+                disableDrag={st.disableDrag}
                 items={data.filter(it => it.status === st.value)}
                 renderCard={renderCard}
                 onCardClick={onCardClick}
