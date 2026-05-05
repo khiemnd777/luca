@@ -34,7 +34,7 @@ type StaffService interface {
 	ListByRoleName(ctx context.Context, roleName string, query table.TableQuery) (table.TableListResult[model.StaffDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
 	SearchWithRoleName(ctx context.Context, roleName string, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
-	Delete(ctx context.Context, id int) error
+	Delete(ctx context.Context, deptID int, userID int) error
 }
 
 type staffService struct {
@@ -51,6 +51,8 @@ func (e ErrConflict) Is(target error) bool {
 	_, ok := target.(ErrConflict)
 	return ok
 }
+
+var ErrStaffNotFound = repository.ErrStaffNotFound
 
 func NewStaffService(repo repository.StaffRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffService {
 	return &staffService{repo: repo, deps: deps, cfMgr: cfMgr}
@@ -170,7 +172,7 @@ func (s *staffService) Create(ctx context.Context, deptID int, input model.Staff
 func (s *staffService) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	input.DepartmentID = utils.Ptr(deptID)
 
-	dto, err := s.repo.Update(ctx, input)
+	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
 		return nil, err
 	}
@@ -352,14 +354,14 @@ func (s *staffService) CheckEmailExists(ctx context.Context, userID int, email s
 	return s.repo.CheckEmailExists(ctx, userID, email)
 }
 
-func (s *staffService) Delete(ctx context.Context, id int) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
+func (s *staffService) Delete(ctx context.Context, deptID int, userID int) error {
+	if err := s.repo.Delete(ctx, deptID, userID); err != nil {
 		return err
 	}
 	cache.InvalidateKeys(kStaffAll()...)
-	cache.InvalidateKeys(kStaffByID(id), kStaffSectionList(id), kUserRoleList(id), kSectionStaffAll(id))
+	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(userID)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +29,7 @@ import (
 
 type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
-	Update(ctx context.Context, input model.StaffDTO) (*model.StaffDTO, error)
+	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error)
 	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) (int, error)
@@ -41,7 +42,7 @@ type StaffRepository interface {
 	ListByRoleName(ctx context.Context, roleName string, query table.TableQuery) (table.TableListResult[model.StaffDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
 	SearchWithRoleName(ctx context.Context, roleName string, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
-	Delete(ctx context.Context, id int) error
+	Delete(ctx context.Context, deptID int, userID int) error
 }
 
 type staffRepo struct {
@@ -54,6 +55,8 @@ type CorporateAdminAssignmentResult struct {
 	PreviousCorporateAdminID *int
 	CurrentCorporateAdminID  int
 }
+
+var ErrStaffNotFound = errors.New("staff not found")
 
 func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
 	if dto == nil {
@@ -261,7 +264,7 @@ func (r *staffRepo) Create(ctx context.Context, deptID int, input model.StaffDTO
 	return dto, nil
 }
 
-func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.StaffDTO, error) {
+func (r *staffRepo) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -274,7 +277,28 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 		}
 	}()
 
-	userQ := tx.User.UpdateOneID(input.ID).
+	userID := input.ID
+	targetUserEnt, err := tx.User.Query().
+		Where(
+			user.IDEQ(userID),
+			user.DeletedAtIsNil(),
+			user.HasStaffWith(staff.DepartmentIDEQ(deptID)),
+		).
+		WithStaff().
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, ErrStaffNotFound
+		}
+		return nil, err
+	}
+	if targetUserEnt.Edges.Staff == nil {
+		return nil, ErrStaffNotFound
+	}
+	staffEnt := targetUserEnt.Edges.Staff
+	staffRecordID := staffEnt.ID
+
+	userQ := tx.User.UpdateOneID(userID).
 		SetName(input.Name).
 		SetNillableEmail(&input.Email).
 		SetNillablePhone(&input.Phone).
@@ -292,15 +316,6 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 		return nil, err
 	}
 
-	staffEnt, err := tx.Staff.
-		Query().
-		Where(staff.HasUserWith(user.IDEQ(input.ID))).
-		Only(ctx)
-
-	if err != nil {
-		return nil, err
-	}
-
 	var sectionNamesStr string
 	var sectionNames []string
 
@@ -310,7 +325,7 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 
 		if _, err = tx.StaffSection.
 			Delete().
-			Where(staffsection.StaffIDEQ(staffEnt.ID)).
+			Where(staffsection.StaffIDEQ(staffRecordID)).
 			Exec(ctx); err != nil {
 			return nil, err
 		}
@@ -319,7 +334,7 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 			bulk := make([]*generated.StaffSectionCreate, 0, len(sectionIDs))
 			for _, sid := range sectionIDs {
 				bulk = append(bulk, tx.StaffSection.Create().
-					SetStaffID(staffEnt.ID).
+					SetStaffID(staffRecordID).
 					SetSectionID(sid),
 				)
 			}
@@ -358,7 +373,7 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 		}
 	}
 
-	staffQ := tx.Staff.UpdateOneID(staffEnt.ID).
+	staffQ := tx.Staff.UpdateOneID(staffRecordID).
 		SetNillableSectionNames(&sectionNamesStr)
 
 	// customfields
@@ -393,7 +408,7 @@ func (r *staffRepo) Update(ctx context.Context, input model.StaffDTO) (*model.St
 	}
 
 	dto := mapper.MapAs[*generated.User, *model.StaffDTO](userEnt)
-	dto.DepartmentID = input.DepartmentID
+	setDepartmentIDFromPersistedStaff(dto, staffEnt.DepartmentID)
 	dto.SectionIDs = input.SectionIDs
 	dto.SectionNames = sectionNames
 	dto.RoleIDs = input.RoleIDs
@@ -876,8 +891,20 @@ func (r *staffRepo) SearchWithRoleName(ctx context.Context, roleName string, que
 	)
 }
 
-func (r *staffRepo) Delete(ctx context.Context, id int) error {
-	return r.db.User.UpdateOneID(id).
+func (r *staffRepo) Delete(ctx context.Context, deptID int, userID int) error {
+	affected, err := r.db.User.Update().
+		Where(
+			user.IDEQ(userID),
+			user.DeletedAtIsNil(),
+			user.HasStaffWith(staff.DepartmentIDEQ(deptID)),
+		).
 		SetDeletedAt(time.Now()).
-		Exec(ctx)
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrStaffNotFound
+	}
+	return nil
 }

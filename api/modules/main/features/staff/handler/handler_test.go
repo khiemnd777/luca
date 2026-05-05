@@ -20,6 +20,10 @@ import (
 type staffServiceStub struct {
 	listDeptID                         int
 	createErr                          error
+	updateErr                          error
+	deleteErr                          error
+	deletedDeptID                      int
+	deletedUserID                      int
 	assignedCorporateAdminUserID       int
 	unassignedCorporateAdminUserID     int
 	assignedCorporateAdminDepartment   int
@@ -31,7 +35,7 @@ func (s *staffServiceStub) Create(ctx context.Context, deptID int, input model.S
 }
 
 func (s *staffServiceStub) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
-	return nil, nil
+	return nil, s.updateErr
 }
 
 func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
@@ -87,8 +91,10 @@ func (s *staffServiceStub) SearchWithRoleName(ctx context.Context, roleName stri
 	return dbutils.SearchResult[model.StaffDTO]{}, nil
 }
 
-func (s *staffServiceStub) Delete(ctx context.Context, id int) error {
-	return nil
+func (s *staffServiceStub) Delete(ctx context.Context, deptID int, userID int) error {
+	s.deletedDeptID = deptID
+	s.deletedUserID = userID
+	return s.deleteErr
 }
 
 func TestListUsesDepartmentIDFromRouteParam(t *testing.T) {
@@ -140,6 +146,85 @@ func TestCreateMapsConflictToHTTP409(t *testing.T) {
 	}
 	if res.StatusCode != fiber.StatusConflict {
 		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
+	}
+}
+
+func TestUpdateMapsStaffNotFoundToHTTP404(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{updateErr: service.ErrStaffNotFound}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Put("/:dept_id/staff/:id", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/5/staff/42", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected %d, got %d", fiber.StatusNotFound, res.StatusCode)
+	}
+}
+
+func TestDeleteUsesDepartmentAndUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.delete"})
+		return c.Next()
+	})
+	app.Delete("/:dept_id/staff/:id", h.Delete)
+
+	req := httptest.NewRequest(http.MethodDelete, "/5/staff/42", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected %d, got %d", fiber.StatusNoContent, res.StatusCode)
+	}
+	if svc.deletedDeptID != 5 {
+		t.Fatalf("expected deptID 5, got %d", svc.deletedDeptID)
+	}
+	if svc.deletedUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.deletedUserID)
+	}
+}
+
+func TestDeleteMapsStaffNotFoundToHTTP404(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{deleteErr: service.ErrStaffNotFound}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.delete"})
+		return c.Next()
+	})
+	app.Delete("/:dept_id/staff/:id", h.Delete)
+
+	req := httptest.NewRequest(http.MethodDelete, "/5/staff/42", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected %d, got %d", fiber.StatusNotFound, res.StatusCode)
 	}
 }
 
