@@ -2,12 +2,14 @@
 package handler
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/modules/photo/config"
+	"github.com/khiemnd777/noah_api/modules/photo/repository"
 	"github.com/khiemnd777/noah_api/modules/photo/service"
 	"github.com/khiemnd777/noah_api/shared/app"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
@@ -133,6 +135,9 @@ func (h *PhotoHandler) DeletePhoto(c *fiber.Ctx) error {
 	userId, _ := utils.GetUserIDInt(c)
 	err := h.svc.Delete(c.UserContext(), id, userId, folderID)
 	if err != nil {
+		if errors.Is(err, repository.ErrPhotoNotFound) || generated.IsNotFound(err) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "Photo not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Delete failed")
 	}
 	return c.SendStatus(fiber.StatusOK)
@@ -184,6 +189,9 @@ func (h *PhotoHandler) DeleteMany(c *fiber.Ctx) error {
 
 	err := h.svc.DeleteMany(c.UserContext(), req.IDs, userId, req.FolderID)
 	if err != nil {
+		if errors.Is(err, repository.ErrPhotoNotFound) || generated.IsNotFound(err) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "Photo not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Delete failed")
 	}
 	return c.SendStatus(fiber.StatusNoContent)
@@ -229,6 +237,9 @@ func (h *PhotoHandler) UpdateFolder(c *fiber.Ctx) error {
 
 	err := h.svc.UpdateFolder(c.UserContext(), userID, req.IDs, req.FolderID, req.OldFolderID)
 	if err != nil {
+		if errors.Is(err, repository.ErrPhotoNotFound) || generated.IsNotFound(err) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "Update target not found")
+		}
 		logger.Error("Failed to update folder for photos: ", err)
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, "Update failed")
 	}
