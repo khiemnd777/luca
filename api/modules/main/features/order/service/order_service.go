@@ -516,6 +516,10 @@ func (s *orderService) Update(ctx context.Context, deptID, userID int, input *mo
 }
 
 func (s *orderService) UpdateStatus(ctx context.Context, deptID, userID int, orderItemProcessID int64, status string) (*model.OrderItemDTO, error) {
+	if strings.TrimSpace(status) == "waiting_dentist_review" {
+		return nil, fmt.Errorf("waiting dentist review status must be created from the dentist review checkout flow")
+	}
+
 	out, err := s.repo.UpdateStatus(ctx, orderItemProcessID, status)
 	if err != nil {
 		return nil, err

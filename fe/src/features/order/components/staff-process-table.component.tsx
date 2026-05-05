@@ -1,5 +1,6 @@
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import type { OrderItemProcessInProgressProcessModel } from "@features/order/model/order-item-process-inprogress-process.model";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 export type StaffProcessTableProps = {
   rows: OrderItemProcessInProgressProcessModel[];
@@ -13,6 +14,7 @@ const columns: GridColDef<OrderItemProcessInProgressProcessModel>[] = [
     flex: 1.2,
     minWidth: 140,
     valueGetter: (_, row) => row.orderItemCode ?? "",
+    renderCell: (params) => <OrderCodeText code={params.row.orderItemCode} />,
   },
   {
     field: "processName",

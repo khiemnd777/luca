@@ -187,7 +187,7 @@ export type FieldDef = {
 
   // fileupload | imageupload
   accept?: string;                                                          // ví dụ: "image/*,.pdf"
-  uploader?: (files: File[]) => Promise<string[]>;                          // trả về URLs sau upload
+  uploader?: (files: File[], onProgress?: (p: { index: number; progress: number }) => void) => Promise<string[]>; // trả về URLs sau upload
   maxFiles?: number;
   multipleFiles?: boolean;                                                  // nếu không set, suy ra từ rules.required hoặc defaultValue
   imagePreviewAspectRatio?: string;

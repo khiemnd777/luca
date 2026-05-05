@@ -6,8 +6,18 @@ import { SafeButton } from "@shared/components/button/safe-button";
 import { AutoForm } from "@core/form/auto-form";
 import type { AutoFormRef } from "@root/core/form/form.types";
 import { useAsync } from "@root/core/hooks/use-async";
-import { CircularProgress, MenuItem, Stack, TextField, Typography } from "@mui/material";
-import { getCheckoutLatest, prepareCheckInOrOutByCode } from "../api/order-item-process.api";
+import {
+  Alert,
+  CircularProgress,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from "@mui/material";
+import {
+  getCheckoutLatest,
+  prepareCheckInOrOutByCode,
+} from "../api/order-item-process.api";
 import type { OrderItemProcessInProgressModel } from "../model/order-item-process-inprogress.model";
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
 import { OrderQrScanner } from "../components/order-scanner.component";
@@ -20,7 +30,8 @@ import { AutoFormButtons } from "@root/core/form/auto-form-buttons";
 import { off, on } from "@root/core/module/event-bus";
 import toast from "react-hot-toast";
 import KeyboardBackspaceIcon from "@mui/icons-material/KeyboardBackspace";
-import { buildProductNameLabel } from "../utils/order.utils";
+import { buildProcessNameLabel, buildProductNameLabel } from "../utils/order.utils";
+import { OrderCodeTitle } from "../components/order-code-text.component";
 
 type CheckCodeStep = "select-product" | "check-in";
 
@@ -41,7 +52,11 @@ export function OrderProcessCheckCodeWidget() {
     return () => off("order:check-code", handler);
   }, []);
 
-  const { data: preparedData, loading: loadingPrepared, error: preparedDataError } =
+  const {
+    data: preparedData,
+    loading: loadingPrepared,
+    error: preparedDataError,
+  } =
     useAsync<OrderItemProcessInProgressModel | null>(() => {
       if (!orderCode) return Promise.resolve(null);
       return prepareCheckInOrOutByCode(orderCode);
@@ -89,6 +104,7 @@ export function OrderProcessCheckCodeWidget() {
     });
 
   const isCheckout = Boolean(currentTarget?.id);
+  const isPendingDentistReview = currentTarget?.mode === "dentist_review";
   const header = "Hiện tại";
   const currentFormKey = [
     currentTarget?.orderId ?? 0,
@@ -98,11 +114,6 @@ export function OrderProcessCheckCodeWidget() {
     currentTarget?.id ?? 0,
     isCheckout ? "check-out" : "check-in",
   ].join(":");
-
-  const title = React.useMemo(() => {
-    const codeTitle = currentTarget?.orderItemCode;
-    return codeTitle ? `Mã: ${codeTitle}` : "Đơn hàng";
-  }, [currentTarget?.orderItemCode]);
 
   return (
     <>
@@ -115,7 +126,7 @@ export function OrderProcessCheckCodeWidget() {
               </Stack>
             ) : (
               <Typography variant="subtitle1" fontWeight={700}>
-                {title}
+                <OrderCodeTitle code={currentTarget?.orderItemCode} fallback="Đơn hàng" />
               </Typography>
             )}
           </Section>
@@ -156,45 +167,58 @@ export function OrderProcessCheckCodeWidget() {
           ) : null}
           {!isSelectProductStep ? (
             <>
-              <Section>
-                <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  {hasMultipleTargets ? (
-                    <SafeButton
-                      variant="outlined"
-                      icon={<KeyboardBackspaceIcon />}
-                      onClick={() => setStep("select-product")}
-                    >
-                      Đổi sản phẩm
-                    </SafeButton>
-                  ) : null}
-                  <IfPermission permissions={["order.development"]}>
-                    <SafeButton
-                      variant="contained"
-                      icon={isCheckout ? <OutputIcon /> : <InputIcon />}
-                      onClick={() => frmProcessCheckInOrOutRef.current?.submit()}
-                    >
-                      {isCheckout ? "Check out" : "Check in"}
-                    </SafeButton>
-                  </IfPermission>
-                </Stack>
-              </Section>
-              <Spacer />
-              <SectionCard title={header}>
-                {loadingPrepared ? (
-                  <Stack alignItems="center" py={2}>
-                    <CircularProgress size={22} />
-                  </Stack>
-                ) : (
-                  <AutoForm
-                    key={currentFormKey}
-                    name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
-                    ref={frmProcessCheckInOrOutRef}
-                    initial={currentTarget ?? {}}
+              {isPendingDentistReview ? (
+                <>
+                  <DentistReviewPendingPanel
+                    target={currentTarget}
+                    previousProcess={checkoutLatestData}
+                    loadingPreviousProcess={loadingCheckoutLatest}
                   />
-                )}
-              </SectionCard>
-              <Spacer />
-              {loadingCheckoutLatest || checkoutLatestData?.id ? (
+                  <Spacer />
+                </>
+              ) : (
+                <>
+                  <Section>
+                    <Stack direction="row" spacing={1} justifyContent="flex-end">
+                      {hasMultipleTargets ? (
+                        <SafeButton
+                          variant="outlined"
+                          icon={<KeyboardBackspaceIcon />}
+                          onClick={() => setStep("select-product")}
+                        >
+                          Đổi sản phẩm
+                        </SafeButton>
+                      ) : null}
+                      <IfPermission permissions={["order.development"]}>
+                        <SafeButton
+                          variant="contained"
+                          icon={isCheckout ? <OutputIcon /> : <InputIcon />}
+                          onClick={() => frmProcessCheckInOrOutRef.current?.submit()}
+                        >
+                          {isCheckout ? "Check out" : "Check in"}
+                        </SafeButton>
+                      </IfPermission>
+                    </Stack>
+                  </Section>
+                  <Spacer />
+                  <SectionCard title={header}>
+                    {loadingPrepared ? (
+                      <Stack alignItems="center" py={2}>
+                        <CircularProgress size={22} />
+                      </Stack>
+                    ) : (
+                      <AutoForm
+                        key={currentFormKey}
+                        name={isCheckout ? 'order-process-inprogress-check-out' : 'order-process-inprogress-check-in'}
+                        ref={frmProcessCheckInOrOutRef}
+                        initial={currentTarget ?? {}}
+                      />
+                    )}
+                  </SectionCard>
+                  <Spacer />
+                </>
+              )}
+              {!isPendingDentistReview && (loadingCheckoutLatest || checkoutLatestData?.id) ? (
                 <SectionCard title="Công đoạn trước">
                   {loadingCheckoutLatest ? (
                     <Stack alignItems="center" py={2}>
@@ -221,6 +245,68 @@ export function OrderProcessCheckCodeWidget() {
         </SectionCard>
       )}
     </>
+  );
+}
+
+type DentistReviewPendingPanelProps = {
+  target: OrderItemProcessInProgressModel;
+  previousProcess?: OrderItemProcessInProgressProcessModel | null;
+  loadingPreviousProcess: boolean;
+};
+
+function DentistReviewPendingPanel({
+  target,
+  previousProcess,
+  loadingPreviousProcess,
+}: DentistReviewPendingPanelProps) {
+  const requestNote =
+    target.dentistReviewRequestNote ??
+    target.dentistReview?.requestNote ??
+    "";
+
+  return (
+    <SectionCard title="Chờ nha sĩ kiểm tra">
+      <Stack spacing={2}>
+        <Alert severity="info" variant="outlined">
+          Công đoạn này đang chờ Admin ghi nhận kết quả nha sĩ kiểm tra trong màn Chi tiết đơn hàng.
+        </Alert>
+
+        <Stack spacing={1}>
+          <ReviewInfoRow label="Sản phẩm" value={buildProductNameLabel(target) || "—"} />
+          <ReviewInfoRow
+            label="Công đoạn đã hoàn thành"
+            value={
+              loadingPreviousProcess
+                ? "Đang tải..."
+                : buildProcessNameLabel(previousProcess ?? {}) || "—"
+            }
+          />
+          <ReviewInfoRow label="Công đoạn hiện tại" value={buildProcessNameLabel(target) || "—"} />
+          <ReviewInfoRow label="Ghi chú cho nha sĩ" value={requestNote || "—"} preserveLineBreaks />
+        </Stack>
+      </Stack>
+    </SectionCard>
+  );
+}
+
+function ReviewInfoRow({
+  label,
+  value,
+  preserveLineBreaks,
+}: {
+  label: string;
+  value: string;
+  preserveLineBreaks?: boolean;
+}) {
+  return (
+    <Stack spacing={0.25}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography variant="body2" sx={{ whiteSpace: preserveLineBreaks ? "pre-wrap" : undefined }}>
+        {value}
+      </Typography>
+    </Stack>
   );
 }
 

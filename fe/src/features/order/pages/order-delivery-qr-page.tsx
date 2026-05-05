@@ -24,6 +24,7 @@ import type {
   DeliveryQRFlowError,
   DeliveryQRSessionStartResponse,
 } from "@features/order/model/order-delivery-qr.model";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const ALLOWED_PROOF_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_PROOF_SIZE = 5 * 1024 * 1024;
@@ -483,7 +484,7 @@ export default function OrderDeliveryQRPage() {
                     Mã đơn hàng
                   </Typography>
                   <Typography variant="h6" fontWeight={700}>
-                    {activeSession.order_code || `#${activeSession.order_id}`}
+                    <OrderCodeText code={activeSession.order_code} fallback={`#${activeSession.order_id}`} />
                   </Typography>
                 </Stack>
 

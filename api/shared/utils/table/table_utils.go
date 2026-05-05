@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/shared/utils"
+	"github.com/khiemnd777/noah_api/shared/utils/orderby"
 )
 
 type TableQuery struct {
@@ -112,10 +113,13 @@ func isDesc(dir string) bool { return strings.EqualFold(dir, "desc") }
 
 // Build các OrderOption dựa trên table/field, dùng được cho mọi entity
 // O ~ func(*sql.Selector) để khớp với <entity>.OrderOption
-func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkField string) []O {
+func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkField string) ([]O, error) {
 	// custom_fields.<key>
 	if strings.HasPrefix(field, "custom_fields.") {
 		key := strings.TrimPrefix(field, "custom_fields.")
+		if err := orderby.ValidateCustomFieldOrderKey(key); err != nil {
+			return nil, err
+		}
 
 		// order JSONB: (custom_fields->>'key') [ASC|DESC]
 		makeJSON := func(d bool) O {
@@ -148,7 +152,7 @@ func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkF
 		if pkField != "" {
 			opts = append(opts, makePK(desc))
 		}
-		return opts
+		return opts, nil
 	}
 
 	makeOne := func(f string, d bool) O {
@@ -169,7 +173,7 @@ func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkF
 	if pkField != "" && pkField != field {
 		opts = append(opts, makeOne(pkField, desc)) // tie-breaker ổn định
 	}
-	return opts
+	return opts, nil
 }
 
 // deprecated: use TableListV2
@@ -195,15 +199,18 @@ func TableList[
 	mapItems func(src []*T) []*R, // optional mapper
 ) (TableListResult[R], error) {
 
-	total, err := q.Clone().Count(ctx)
+	limit, offset := normalizePaging(opts.Limit, opts.Offset)
+	field, _ := resolveOrderField(opts.OrderBy, defaultField)
+	desc := isDesc(opts.Direction)
+	orderOpts, err := buildSQLOptions[O](table, field, desc, pkField)
 	if err != nil {
 		return TableListResult[R]{}, err
 	}
 
-	limit, offset := normalizePaging(opts.Limit, opts.Offset)
-	field, _ := resolveOrderField(opts.OrderBy, defaultField)
-	desc := isDesc(opts.Direction)
-	orderOpts := buildSQLOptions[O](table, field, desc, pkField)
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return TableListResult[R]{}, err
+	}
 
 	srcItems, err := q.
 		Limit(limit).
@@ -250,15 +257,18 @@ func TableListV2[
 	mapItems func(src []*T) []*R,
 ) (TableListResult[R], error) {
 
-	total, err := base.Clone().Count(ctx)
+	limit, offset := normalizePaging(opts.Limit, opts.Offset)
+	field, _ := resolveOrderField(opts.OrderBy, defaultField)
+	desc := isDesc(opts.Direction)
+	orderOpts, err := buildSQLOptions[O](table, field, desc, pkField)
 	if err != nil {
 		return TableListResult[R]{}, err
 	}
 
-	limit, offset := normalizePaging(opts.Limit, opts.Offset)
-	field, _ := resolveOrderField(opts.OrderBy, defaultField)
-	desc := isDesc(opts.Direction)
-	orderOpts := buildSQLOptions[O](table, field, desc, pkField)
+	total, err := base.Clone().Count(ctx)
+	if err != nil {
+		return TableListResult[R]{}, err
+	}
 
 	q := buildDataQuery(base.Clone()).
 		Limit(limit).

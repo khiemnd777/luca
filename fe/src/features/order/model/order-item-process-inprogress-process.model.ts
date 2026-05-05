@@ -16,4 +16,9 @@ export interface OrderItemProcessInProgressProcessModel {
   sectionName?: string | null;
   sectionId?: number | null;
   color?: string | null;
+  requiresDentistReview?: boolean | null;
+  dentistReviewRequestNote?: string | null;
+  dentistReviewId?: number | null;
+  dentistReviewStatus?: string | null;
+  dentistReviewResponseNote?: string | null;
 }

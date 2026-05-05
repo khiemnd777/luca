@@ -235,6 +235,9 @@ func (h *StaffHandler) Update(c *fiber.Ctx) error {
 
 	dto, err := h.svc.Update(c.UserContext(), deptID, payload)
 	if err != nil {
+		if errors.Is(err, service.ErrStaffNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.Status(fiber.StatusOK).JSON(dto)
@@ -250,6 +253,11 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
 
+	sourceDeptID, err := getRouteDepartmentID(c)
+	if err != nil || sourceDeptID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid department id")
+	}
+
 	type AssignDepartmentRequest struct {
 		DepartmentID int `json:"department_id"`
 	}
@@ -262,8 +270,14 @@ func (h *StaffHandler) AssignStaffToDepartment(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "department_id is required")
 	}
 
-	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), userID, payload.DepartmentID)
+	dto, err := h.svc.AssignStaffToDepartment(c.UserContext(), sourceDeptID, userID, payload.DepartmentID)
 	if err != nil {
+		if errors.Is(err, service.ErrStaffNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
+		if errors.Is(err, service.ErrDepartmentScopeForbidden) {
+			return client_error.ResponseError(c, fiber.StatusForbidden, err, "forbidden")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 
@@ -354,11 +368,18 @@ func (h *StaffHandler) Delete(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.delete"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	id, _ := utils.GetParamAsInt(c, "id")
-	if id <= 0 {
+	userID, _ := utils.GetParamAsInt(c, "id")
+	if userID <= 0 {
 		return client_error.ResponseError(c, fiber.StatusNotFound, nil, "invalid id")
 	}
-	if err := h.svc.Delete(c.UserContext(), id); err != nil {
+	deptID, err := getRouteDepartmentID(c)
+	if err != nil || deptID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid department id")
+	}
+	if err := h.svc.Delete(c.UserContext(), deptID, userID); err != nil {
+		if errors.Is(err, service.ErrStaffNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.SendStatus(fiber.StatusNoContent)

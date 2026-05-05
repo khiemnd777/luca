@@ -16,6 +16,7 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/iancoleman/strcase v0.3.0
 	github.com/lib/pq v1.10.9
+	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/mozillazg/go-unidecode v0.2.0
 	github.com/redis/go-redis/v9 v9.12.1
 	github.com/robfig/cron/v3 v3.0.1
@@ -58,7 +59,6 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/mattn/go-sqlite3 v1.14.28 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	github.com/montanaflynn/stats v0.7.1 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect

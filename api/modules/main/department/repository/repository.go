@@ -18,12 +18,15 @@ import (
 type DepartmentRepository interface {
 	Create(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error)
 	Update(ctx context.Context, input model.DepartmentDTO) (*model.DepartmentDTO, error)
+	UpdateChild(ctx context.Context, parentDeptID int, input model.DepartmentDTO) (*model.DepartmentDTO, error)
 	GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error)
+	GetChildByID(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentDTO, error)
 	GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error)
 	List(ctx context.Context, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.DepartmentDTO], error)
 	ChildrenList(ctx context.Context, parentID int, query table.TableQuery) (table.TableListResult[model.DepartmentDTO], error)
 	Delete(ctx context.Context, id int) error
+	DeleteChild(ctx context.Context, parentDeptID, childDeptID int) error
 	ExistsMembership(ctx context.Context, userID, deptID int) (bool, error)
 	GetFirstDepartmentOfUser(ctx context.Context, userID int) (*model.DepartmentDTO, error)
 }
@@ -97,6 +100,55 @@ func (r *departmentRepo) Update(ctx context.Context, input model.DepartmentDTO) 
 	})
 }
 
+func (r *departmentRepo) UpdateChild(ctx context.Context, parentDeptID int, input model.DepartmentDTO) (*model.DepartmentDTO, error) {
+	return dbutils.WithTx(ctx, r.db, func(tx *generated.Tx) (*model.DepartmentDTO, error) {
+		n, err := tx.Department.Update().
+			Where(
+				department.ID(input.ID),
+				department.ParentIDEQ(parentDeptID),
+				department.Deleted(false),
+			).
+			SetActive(input.Active).
+			SetName(input.Name).
+			SetNillableLogo(input.Logo).
+			SetNillableLogoRect(input.LogoRect).
+			SetNillableAddress(input.Address).
+			SetNillablePhoneNumber(input.PhoneNumber).
+			SetNillablePhoneNumber2(input.PhoneNumber2).
+			SetNillablePhoneNumber3(input.PhoneNumber3).
+			SetNillableEmail(input.Email).
+			SetNillableTax(input.Tax).
+			SetNillableParentID(input.ParentID).
+			SetNillableCorporateAdministratorID(input.CorporateAdministratorID).
+			Save(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return r.getChildByID(ctx, tx, parentDeptID, input.ID)
+		}
+
+		entity, err := tx.Department.Query().
+			Where(
+				department.ID(input.ID),
+				department.ParentIDEQ(parentDeptID),
+				department.Deleted(false),
+			).
+			Only(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		if entity.CorporateAdministratorID != nil && *entity.CorporateAdministratorID > 0 {
+			if err := staffrepo.SyncDepartmentCorporateAdminInTx(ctx, tx, *entity.CorporateAdministratorID, entity.ID); err != nil {
+				return nil, err
+			}
+		}
+
+		return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+	})
+}
+
 func (r *departmentRepo) GetByID(ctx context.Context, id int) (*model.DepartmentDTO, error) {
 	entity, err := r.db.Department.Query().
 		Where(department.ID(id), department.Deleted(false)).
@@ -109,6 +161,30 @@ func (r *departmentRepo) GetByID(ctx context.Context, id int) (*model.Department
 	departmentDTO := mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity)
 
 	return departmentDTO, nil
+}
+
+func (r *departmentRepo) GetChildByID(ctx context.Context, parentDeptID, childDeptID int) (*model.DepartmentDTO, error) {
+	return r.getChildByID(ctx, nil, parentDeptID, childDeptID)
+}
+
+func (r *departmentRepo) getChildByID(ctx context.Context, tx *generated.Tx, parentDeptID, childDeptID int) (*model.DepartmentDTO, error) {
+	query := r.db.Department.Query()
+	if tx != nil {
+		query = tx.Department.Query()
+	}
+
+	entity, err := query.
+		Where(
+			department.ID(childDeptID),
+			department.ParentIDEQ(parentDeptID),
+			department.Deleted(false),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
 }
 
 func (r *departmentRepo) GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error) {
@@ -198,6 +274,25 @@ func (r *departmentRepo) Delete(ctx context.Context, id int) error {
 	return r.db.Department.UpdateOneID(id).
 		SetDeleted(true).
 		Exec(ctx)
+}
+
+func (r *departmentRepo) DeleteChild(ctx context.Context, parentDeptID, childDeptID int) error {
+	n, err := r.db.Department.Update().
+		Where(
+			department.ID(childDeptID),
+			department.ParentIDEQ(parentDeptID),
+			department.Deleted(false),
+		).
+		SetDeleted(true).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		_, err := r.GetChildByID(ctx, parentDeptID, childDeptID)
+		return err
+	}
+	return nil
 }
 
 func (r *departmentRepo) ExistsMembership(ctx context.Context, userID, deptID int) (bool, error) {

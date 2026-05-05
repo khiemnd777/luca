@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
+
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	promotionengine "github.com/khiemnd777/noah_api/modules/main/features/promotion/engine"
 	promotionrepo "github.com/khiemnd777/noah_api/modules/main/features/promotion/repository"
@@ -17,6 +19,10 @@ import (
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/clinic"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/material"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/order"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitem"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/orderitemprocessdentistreview"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/predicate"
 	"github.com/khiemnd777/noah_api/shared/logger"
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
@@ -75,10 +81,12 @@ func (s *orderService) GenerateDeliveryNoteByOrderID(ctx context.Context, req De
 	shippingAddress := s.resolveDeliveryNoteShippingAddress(ctx, orderDTO)
 	attachments := s.resolveDeliveryNoteAttachments(ctx, orderDTO, materials)
 	implantAccessories := s.resolveDeliveryNoteImplantAccessories(ctx, orderDTO, materials)
+	dentistReviews := s.resolveDeliveryNoteDentistReviews(ctx, orderDTO)
 	note, err := buildDeliveryNoteFromOrder(orderDTO, products, materials, company, shippingAddress, attachments, implantAccessories, req)
 	if err != nil {
 		return nil, "", err
 	}
+	note.DentistReviews = dentistReviews
 	buildDataDuration = time.Since(buildStartedAt)
 
 	promotionStartedAt := time.Now()
@@ -334,6 +342,70 @@ func buildQRSlipA5FromOrder(orderDTO *model.OrderDTO, products []*model.OrderIte
 		QRCode:         qrValue,
 		QRCodeImageURL: BuildQRCodeImageURL(qrValue, 720),
 	}, nil
+}
+
+func (s *orderService) resolveDeliveryNoteDentistReviews(ctx context.Context, orderDTO *model.OrderDTO) []DeliveryNoteDentistReview {
+	if orderDTO == nil || orderDTO.LatestOrderItem == nil || orderDTO.LatestOrderItem.ID <= 0 {
+		return nil
+	}
+
+	entClient, ok := s.deps.Ent.(*generated.Client)
+	if !ok || entClient == nil {
+		return nil
+	}
+
+	predicates := []predicate.OrderItemProcessDentistReview{
+		orderitemprocessdentistreview.OrderItemID(orderDTO.LatestOrderItem.ID),
+		orderitemprocessdentistreview.StatusEQ("pending"),
+	}
+	if orderDTO.ID > 0 {
+		predicates = append(
+			predicates,
+			orderitemprocessdentistreview.HasOrderItemWith(
+				orderitem.IDEQ(orderDTO.LatestOrderItem.ID),
+				orderitem.HasOrderWith(order.IDEQ(orderDTO.ID)),
+			),
+		)
+	}
+	if orderDTO.DepartmentID != nil && *orderDTO.DepartmentID > 0 {
+		predicates = append(
+			predicates,
+			orderitemprocessdentistreview.HasOrderItemWith(
+				orderitem.HasOrderWith(order.DepartmentIDEQ(*orderDTO.DepartmentID)),
+			),
+		)
+	}
+
+	reviews, err := entClient.OrderItemProcessDentistReview.
+		Query().
+		Where(predicates...).
+		Order(orderitemprocessdentistreview.ByCreatedAt(sql.OrderDesc())).
+		All(ctx)
+	if err != nil {
+		logger.Warn(
+			"delivery_note_dentist_reviews_lookup_failed",
+			"order_id", orderDTO.ID,
+			"order_item_id", orderDTO.LatestOrderItem.ID,
+			"error", err.Error(),
+		)
+		return nil
+	}
+
+	out := make([]DeliveryNoteDentistReview, 0, len(reviews))
+	for _, review := range reviews {
+		if review == nil || strings.TrimSpace(review.RequestNote) == "" {
+			continue
+		}
+		out = append(out, DeliveryNoteDentistReview{
+			ProductName: firstNonEmpty(
+				utils.DerefString(review.ProductName),
+				utils.DerefString(review.ProductCode),
+			),
+			ProcessName: utils.DerefString(review.ProcessName),
+			RequestNote: review.RequestNote,
+		})
+	}
+	return out
 }
 
 func resolveDeliveryNoteShowAmounts(showAmounts *bool) bool {

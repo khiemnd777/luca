@@ -9,6 +9,7 @@ import { useEffect } from "react";
 import { invalidate } from "@root/core/hooks/use-async";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
 import { relTime } from "@root/shared/utils/datetime.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<InProgressOrderModel>[] = [
   // {
@@ -29,7 +30,12 @@ const columns: ColumnDef<InProgressOrderModel>[] = [
     header: "Tiến độ",
     accessor: (row) => relTime(row.deliveryDate, row.now),
   },
-  { key: "codeLatest", header: "Mã đơn", labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    labelField: true,
+    render: (row) => <OrderCodeText code={row.codeLatest} />,
+  },
   {
     key: "processNameLatest",
     header: "Công đoạn",

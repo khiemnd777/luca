@@ -4,6 +4,7 @@ import type { OrderItemProductModel } from "@features/order/model/order-item-pro
 import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
 import { SectionCard } from "@root/shared/components/ui/section-card";
 import { prefixCurrency } from "@root/shared/utils/currency.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type OrderProductsAndMaterialsProps = {
   products?: OrderItemProductModel[] | null;
@@ -21,11 +22,6 @@ type GroupedOrder = {
 
 function normalizeType(type?: string | null) {
   return (type ?? "").trim().toLowerCase();
-}
-
-function buildOrderLabel(orderCode: string | null) {
-  if (orderCode == null) return "Đơn hàng không xác định";
-  return `Mã đơn: ${orderCode}`;
 }
 
 function getProductLabel(item: OrderItemProductModel) {
@@ -185,7 +181,9 @@ export default function OrderProductsAndMaterials({
           }}
         >
           <Stack spacing={1}>
-            <Typography fontWeight={700}>{buildOrderLabel(group.orderItemCode)}</Typography>
+            <Typography fontWeight={700}>
+              Mã đơn: <OrderCodeText code={group.orderItemCode} fallback="Đơn hàng không xác định" />
+            </Typography>
 
             {renderTable({
               title: "Sản phẩm",

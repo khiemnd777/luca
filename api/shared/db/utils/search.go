@@ -9,6 +9,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/iancoleman/strcase"
 	"github.com/khiemnd777/noah_api/shared/utils"
+	"github.com/khiemnd777/noah_api/shared/utils/orderby"
 )
 
 type SearchResult[T any] struct {
@@ -102,10 +103,13 @@ func ResolveOrderField(orderBy *string, defaultField string) (field string) {
 }
 
 // O ~ func(*sql.Selector) để khớp với <entity>.OrderOption
-func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkField string) []O {
+func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkField string) ([]O, error) {
 	// custom_fields.<key>
 	if strings.HasPrefix(field, "custom_fields.") {
 		key := strings.TrimPrefix(field, "custom_fields.")
+		if err := orderby.ValidateCustomFieldOrderKey(key); err != nil {
+			return nil, err
+		}
 
 		// ORDER BY (custom_fields->>'key') ASC|DESC
 		makeJSON := func(d bool) O {
@@ -142,7 +146,7 @@ func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkF
 		if pkField != "" {
 			opts = append(opts, makePK(desc))
 		}
-		return opts
+		return opts, nil
 	}
 
 	// sort
@@ -164,7 +168,7 @@ func buildSQLOptions[O ~func(*sql.Selector)](table, field string, desc bool, pkF
 	if pkField != "" && pkField != field {
 		opts = append(opts, makeOne(pkField, desc))
 	}
-	return opts
+	return opts, nil
 }
 
 // ================= Generic Search =================
@@ -235,6 +239,14 @@ func Search[
 		query = query.Where(orFn(preds...))
 	}
 
+	// ORDER BY is validated before any database query so malicious order_by values fail early.
+	field := ResolveOrderField(sq.OrderBy, defaultField)
+	desc := isDesc(sq.Direction)
+	orderOpts, err := buildSQLOptions[O](table, field, desc, pkField)
+	if err != nil {
+		return SearchResult[R]{}, err
+	}
+
 	// TOTAL (đếm theo cùng điều kiện hiện tại; nếu keyword rỗng = đếm tất cả)
 	total, err := query.Clone().Count(ctx)
 	if err != nil {
@@ -242,9 +254,6 @@ func Search[
 	}
 
 	// ORDER BY
-	field := ResolveOrderField(sq.OrderBy, defaultField)
-	desc := isDesc(sq.Direction)
-	orderOpts := buildSQLOptions[O](table, field, desc, pkField)
 	query = query.Order(orderOpts...)
 
 	// Chuẩn hóa limit/offset (phòng khi limit không hợp lệ)

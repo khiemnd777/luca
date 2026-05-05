@@ -5,6 +5,7 @@ import { mapper } from "@root/core/mapper/auto-mapper";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { stack } from "@root/core/network/websocket/ws-stack";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type OrderProcessCompletedNotificationData = {
   departmentId?: number | string;
@@ -30,7 +31,7 @@ function NotificationStackWidget(msg: any) {
   return (
     <Stack spacing={0.5}>
       <Typography variant="subtitle2">
-        Đơn hàng #{result.orderItemCode} đã hoàn thành gia công
+        Đơn hàng #<OrderCodeText code={result.orderItemCode} /> đã hoàn thành gia công
       </Typography>
     </Stack>
   );

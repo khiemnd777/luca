@@ -1,9 +1,10 @@
 import { Box, Stack, Typography } from "@mui/material";
+import type * as React from "react";
 import type { OrderItemProcessInProgressProcessModel } from "@features/order/model/order-item-process-inprogress-process.model";
 import { StaffTimelineBlock } from "@features/order/components/staff-timeline-block.component";
 
 export type StaffTimelineLaneProps = {
-  label: string;
+  label: React.ReactNode;
   items: OrderItemProcessInProgressProcessModel[];
   rangeStart: Date;
   rangeEnd: Date;

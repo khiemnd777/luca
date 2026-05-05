@@ -6,6 +6,7 @@ import type { OrderItemProcessInProgressProcessModel } from "@features/order/mod
 import { normalizeTimelineInput } from "@features/order/components/staff-timeline.utils";
 import { StaffTimelineLane } from "@features/order/components/staff-timeline-lane.component";
 import { formatDateShort } from "@shared/utils/datetime.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 export type StaffTimelineProps = {
   items: OrderItemProcessInProgressProcessModel[];
@@ -72,7 +73,7 @@ export function StaffTimeline({ items, rangeStart, rangeEnd, onBlockClick }: Sta
           {lanes.map((lane) => (
             <StaffTimelineLane
               key={lane.processName}
-              label={lane.items[0]?.orderItemCode ?? "N/A"}
+              label={<OrderCodeText code={lane.items[0]?.orderItemCode} fallback="N/A" />}
               items={lane.items}
               rangeStart={rangeStart}
               rangeEnd={rangeEnd}

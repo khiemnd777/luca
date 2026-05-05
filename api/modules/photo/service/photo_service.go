@@ -164,7 +164,7 @@ func (s *PhotoService) UpdateFolder(ctx context.Context, userID int, ids []int, 
 	}
 
 	return cache.UpdateManyAndInvalidate(keysToInvalidate, func() error {
-		return s.repo.UpdateFolder(ctx, ids, folderID)
+		return s.repo.UpdateFolder(ctx, userID, ids, folderID, oldFolderID)
 	})
 }
 
@@ -174,7 +174,7 @@ func (s *PhotoService) Delete(ctx context.Context, id, userId int, folderID *int
 	keyUserPhotoList := fmt.Sprintf("user:%d:folder:%d:photo:list", userId, folderIDKey)
 	keyListFirstPage := fmt.Sprintf("user:%d:folder:%d:photo:list:first-page", userId, folderIDKey)
 	return cache.UpdateManyAndInvalidate([]string{keyUserPhoto, keyUserPhotoList, keyListFirstPage}, func() error {
-		return s.repo.SoftDelete(ctx, id)
+		return s.repo.SoftDelete(ctx, id, userId, folderID)
 	})
 }
 
@@ -191,7 +191,7 @@ func (s *PhotoService) DeleteMany(ctx context.Context, ids []int, userID int, fo
 	keys = append(keys, keyList, keyListFirstPage)
 
 	return cache.UpdateManyAndInvalidate(keys, func() error {
-		return s.repo.SoftDeleteMany(ctx, ids)
+		return s.repo.SoftDeleteMany(ctx, ids, userID, folderID)
 	})
 }
 

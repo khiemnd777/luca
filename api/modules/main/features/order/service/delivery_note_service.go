@@ -62,6 +62,7 @@ type DeliveryNote struct {
 	Attachments        DeliveryNoteAttachments        `json:"attachments"`
 	ImplantAccessories DeliveryNoteImplantAccessories `json:"implant_accessories"`
 	PaymentMethod      DeliveryNotePaymentMethod      `json:"payment_method"`
+	DentistReviews     []DeliveryNoteDentistReview    `json:"dentist_reviews"`
 }
 
 type DeliveryNoteCompany struct {
@@ -117,6 +118,12 @@ type DeliveryNotePaymentMethod struct {
 	CongNo  bool `json:"cong_no"`
 }
 
+type DeliveryNoteDentistReview struct {
+	ProductName string `json:"product_name"`
+	ProcessName string `json:"process_name"`
+	RequestNote string `json:"request_note"`
+}
+
 type QRSlipA5 struct {
 	Order          QRSlipA5Order  `json:"order"`
 	Products       []QRSlipA5Item `json:"products"`
@@ -154,6 +161,7 @@ type deliveryNoteTemplateData struct {
 	Attachments        DeliveryNoteAttachments
 	ImplantAccessories DeliveryNoteImplantAccessories
 	PaymentMethod      DeliveryNotePaymentMethod
+	DentistReviews     []DeliveryNoteDentistReview
 	TotalQuantity      float64
 	TotalAmount        float64
 }
@@ -310,6 +318,7 @@ func buildDeliveryNoteViewData(data DeliveryNote, paperSize string) deliveryNote
 		Attachments:        data.Attachments,
 		ImplantAccessories: data.ImplantAccessories,
 		PaymentMethod:      data.PaymentMethod,
+		DentistReviews:     normalizeDeliveryNoteDentistReviews(data.DentistReviews),
 		TotalQuantity:      totalQty,
 		TotalAmount:        totalAmount,
 	}
@@ -324,6 +333,22 @@ func buildQRSlipA5ViewData(data QRSlipA5) qrSlipA5TemplateData {
 		QRCode:         strings.TrimSpace(data.QRCode),
 		QRCodeImageURL: strings.TrimSpace(data.QRCodeImageURL),
 	}
+}
+
+func normalizeDeliveryNoteDentistReviews(items []DeliveryNoteDentistReview) []DeliveryNoteDentistReview {
+	out := make([]DeliveryNoteDentistReview, 0, len(items))
+	for _, item := range items {
+		requestNote := strings.TrimSpace(item.RequestNote)
+		if requestNote == "" {
+			continue
+		}
+		out = append(out, DeliveryNoteDentistReview{
+			ProductName: strings.TrimSpace(item.ProductName),
+			ProcessName: strings.TrimSpace(item.ProcessName),
+			RequestNote: requestNote,
+		})
+	}
+	return out
 }
 
 func GenerateQRSlipA5PDF(data QRSlipA5) ([]byte, error) {

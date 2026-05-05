@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,6 +21,14 @@ import (
 type staffServiceStub struct {
 	listDeptID                         int
 	createErr                          error
+	updateErr                          error
+	deleteErr                          error
+	deletedDeptID                      int
+	deletedUserID                      int
+	assignErr                          error
+	assignedSourceDeptID               int
+	assignedUserID                     int
+	assignedDestinationDeptID          int
 	assignedCorporateAdminUserID       int
 	unassignedCorporateAdminUserID     int
 	assignedCorporateAdminDepartment   int
@@ -31,11 +40,17 @@ func (s *staffServiceStub) Create(ctx context.Context, deptID int, input model.S
 }
 
 func (s *staffServiceStub) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
-	return nil, nil
+	return nil, s.updateErr
 }
 
-func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
-	return nil, nil
+func (s *staffServiceStub) AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error) {
+	s.assignedSourceDeptID = sourceDeptID
+	s.assignedUserID = userID
+	s.assignedDestinationDeptID = destinationDeptID
+	if s.assignErr != nil {
+		return nil, s.assignErr
+	}
+	return &model.StaffDTO{ID: userID, DepartmentID: &destinationDeptID}, nil
 }
 
 func (s *staffServiceStub) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error {
@@ -87,8 +102,10 @@ func (s *staffServiceStub) SearchWithRoleName(ctx context.Context, roleName stri
 	return dbutils.SearchResult[model.StaffDTO]{}, nil
 }
 
-func (s *staffServiceStub) Delete(ctx context.Context, id int) error {
-	return nil
+func (s *staffServiceStub) Delete(ctx context.Context, deptID int, userID int) error {
+	s.deletedDeptID = deptID
+	s.deletedUserID = userID
+	return s.deleteErr
 }
 
 func TestListUsesDepartmentIDFromRouteParam(t *testing.T) {
@@ -140,6 +157,185 @@ func TestCreateMapsConflictToHTTP409(t *testing.T) {
 	}
 	if res.StatusCode != fiber.StatusConflict {
 		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
+	}
+}
+
+func TestUpdateMapsStaffNotFoundToHTTP404(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{updateErr: service.ErrStaffNotFound}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Put("/:dept_id/staff/:id", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/5/staff/42", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected %d, got %d", fiber.StatusNotFound, res.StatusCode)
+	}
+}
+
+func TestDeleteUsesDepartmentAndUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.delete"})
+		return c.Next()
+	})
+	app.Delete("/:dept_id/staff/:id", h.Delete)
+
+	req := httptest.NewRequest(http.MethodDelete, "/5/staff/42", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNoContent {
+		t.Fatalf("expected %d, got %d", fiber.StatusNoContent, res.StatusCode)
+	}
+	if svc.deletedDeptID != 5 {
+		t.Fatalf("expected deptID 5, got %d", svc.deletedDeptID)
+	}
+	if svc.deletedUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.deletedUserID)
+	}
+}
+
+func TestDeleteMapsStaffNotFoundToHTTP404(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{deleteErr: service.ErrStaffNotFound}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.delete"})
+		return c.Next()
+	})
+	app.Delete("/:dept_id/staff/:id", h.Delete)
+
+	req := httptest.NewRequest(http.MethodDelete, "/5/staff/42", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusNotFound {
+		t.Fatalf("expected %d, got %d", fiber.StatusNotFound, res.StatusCode)
+	}
+}
+
+func TestAssignDepartmentRoutePassesSourceDepartmentAndUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff/:id/assign-department", h.AssignStaffToDepartment)
+
+	req := httptest.NewRequest(http.MethodPost, "/10/staff/42/assign-department", bytes.NewBufferString(`{"department_id":12}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.assignedSourceDeptID != 10 {
+		t.Fatalf("expected source deptID 10, got %d", svc.assignedSourceDeptID)
+	}
+	if svc.assignedUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.assignedUserID)
+	}
+	if svc.assignedDestinationDeptID != 12 {
+		t.Fatalf("expected destination deptID 12, got %d", svc.assignedDestinationDeptID)
+	}
+}
+
+func TestAssignDepartmentInvalidRouteDepartmentReturnsHTTP400(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff/:id/assign-department", h.AssignStaffToDepartment)
+
+	req := httptest.NewRequest(http.MethodPost, "/bad/staff/42/assign-department", bytes.NewBufferString(`{"department_id":12}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusBadRequest {
+		t.Fatalf("expected %d, got %d", fiber.StatusBadRequest, res.StatusCode)
+	}
+}
+
+func TestAssignDepartmentScopeMissMapsToNon500Response(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "staff not found", err: service.ErrStaffNotFound, want: fiber.StatusNotFound},
+		{name: "destination forbidden", err: service.ErrDepartmentScopeForbidden, want: fiber.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := fiber.New()
+			svc := &staffServiceStub{assignErr: tt.err}
+			h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+				Ent: (*generated.Client)(nil),
+			})
+
+			app.Use(func(c *fiber.Ctx) error {
+				c.Locals("deptID", 1)
+				c.Locals("permissions", []string{"staff.update"})
+				return c.Next()
+			})
+			app.Post("/:dept_id/staff/:id/assign-department", h.AssignStaffToDepartment)
+
+			req := httptest.NewRequest(http.MethodPost, "/10/staff/42/assign-department", bytes.NewBufferString(`{"department_id":12}`))
+			req.Header.Set("Content-Type", "application/json")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test error: %v", err)
+			}
+			if res.StatusCode != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, res.StatusCode)
+			}
+			if errors.Is(tt.err, service.ErrStaffNotFound) && res.StatusCode == fiber.StatusInternalServerError {
+				t.Fatal("scope miss returned 500")
+			}
+		})
 	}
 }
 

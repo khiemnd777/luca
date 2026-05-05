@@ -1,11 +1,15 @@
 import type { FieldDef } from "@core/form/types";
 import type { FormSchema } from "@core/form/form.types";
 import { registerForm } from "@core/form/form-registry";
+import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
 import { Box, Stack, Typography } from "@mui/material";
 import { formatDateTime } from "@root/shared/utils/datetime.utils";
 import { getContrastText } from "@root/shared/utils/color.utils";
 
 export function buildOrderProcessInProgressPrevSchema(): FormSchema {
+  const hasDentistReview = (values: Record<string, any>) =>
+    Boolean(values.requiresDentistReview || values.dentistReviewRequestNote);
+
   const fields: FieldDef[] = [
     {
       name: "processName",
@@ -92,6 +96,40 @@ export function buildOrderProcessInProgressPrevSchema(): FormSchema {
       label: "Ghi chú giao ca",
       kind: "textarea",
       asText: true,
+    },
+    {
+      name: "requiresDentistReview",
+      label: "Yêu cầu nha sĩ kiểm tra",
+      kind: "custom",
+      showIf: hasDentistReview,
+      render: ({ field }) => (
+        <Stack spacing={0.5}>
+          <Typography variant="caption" color="text.secondary">
+            {field.label}
+          </Typography>
+          <Box
+            sx={{
+              width: 24,
+              height: 24,
+              borderRadius: "50%",
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              bgcolor: "success.main",
+              color: "success.contrastText",
+            }}
+          >
+            <CheckRoundedIcon sx={{ fontSize: 18 }} />
+          </Box>
+        </Stack>
+      ),
+    },
+    {
+      name: "dentistReviewRequestNote",
+      label: "Ghi chú cho nha sĩ",
+      kind: "textarea",
+      asText: true,
+      showIf: hasDentistReview,
     },
   ];
 

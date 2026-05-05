@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -22,7 +23,7 @@ import (
 type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
-	AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error)
+	AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error
 	UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) error
 	ChangePassword(ctx context.Context, id int, newPassword string) error
@@ -34,7 +35,7 @@ type StaffService interface {
 	ListByRoleName(ctx context.Context, roleName string, query table.TableQuery) (table.TableListResult[model.StaffDTO], error)
 	Search(ctx context.Context, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
 	SearchWithRoleName(ctx context.Context, roleName string, query dbutils.SearchQuery) (dbutils.SearchResult[model.StaffDTO], error)
-	Delete(ctx context.Context, id int) error
+	Delete(ctx context.Context, deptID int, userID int) error
 }
 
 type staffService struct {
@@ -51,6 +52,9 @@ func (e ErrConflict) Is(target error) bool {
 	_, ok := target.(ErrConflict)
 	return ok
 }
+
+var ErrStaffNotFound = repository.ErrStaffNotFound
+var ErrDepartmentScopeForbidden = repository.ErrDepartmentScopeForbidden
 
 func NewStaffService(repo repository.StaffRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffService {
 	return &staffService{repo: repo, deps: deps, cfMgr: cfMgr}
@@ -170,7 +174,7 @@ func (s *staffService) Create(ctx context.Context, deptID int, input model.Staff
 func (s *staffService) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	input.DepartmentID = utils.Ptr(deptID)
 
-	dto, err := s.repo.Update(ctx, input)
+	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
 		return nil, err
 	}
@@ -186,9 +190,15 @@ func (s *staffService) Update(ctx context.Context, deptID int, input model.Staff
 	return dto, nil
 }
 
-func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, departmentID int) (*model.StaffDTO, error) {
-	dto, err := s.repo.AssignStaffToDepartment(ctx, userID, departmentID)
+func (s *staffService) AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error) {
+	dto, err := s.repo.AssignStaffToDepartment(ctx, sourceDeptID, userID, destinationDeptID)
 	if err != nil {
+		if errors.Is(err, repository.ErrStaffNotFound) {
+			return nil, ErrStaffNotFound
+		}
+		if errors.Is(err, repository.ErrDepartmentScopeForbidden) {
+			return nil, ErrDepartmentScopeForbidden
+		}
 		return nil, err
 	}
 
@@ -196,7 +206,7 @@ func (s *staffService) AssignStaffToDepartment(ctx context.Context, userID int, 
 	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID), kUserDepartment(userID))
 
 	if dto != nil {
-		s.upsertSearch(ctx, departmentID, dto)
+		s.upsertSearch(ctx, destinationDeptID, dto)
 	}
 
 	return dto, nil
@@ -352,14 +362,14 @@ func (s *staffService) CheckEmailExists(ctx context.Context, userID int, email s
 	return s.repo.CheckEmailExists(ctx, userID, email)
 }
 
-func (s *staffService) Delete(ctx context.Context, id int) error {
-	if err := s.repo.Delete(ctx, id); err != nil {
+func (s *staffService) Delete(ctx context.Context, deptID int, userID int) error {
+	if err := s.repo.Delete(ctx, deptID, userID); err != nil {
 		return err
 	}
 	cache.InvalidateKeys(kStaffAll()...)
-	cache.InvalidateKeys(kStaffByID(id), kStaffSectionList(id), kUserRoleList(id), kSectionStaffAll(id))
+	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID))
 
-	s.unlinkSearch(id)
+	s.unlinkSearch(userID)
 	return nil
 }
 

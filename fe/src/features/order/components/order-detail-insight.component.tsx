@@ -32,6 +32,7 @@ import { getInProgressesByOrderItemId, processes } from "../api/order-item-proce
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
 import type { OrderItemProcessModel } from "../model/order-item-process.model";
 import type { OrderModel } from "../model/order.model";
+import { OrderCodeTitle } from "./order-code-text.component";
 
 type OrderDetailInsightProps = {
   detail?: OrderModel | null;
@@ -509,7 +510,12 @@ export function OrderDetailInsight({ detail, loading }: OrderDetailInsightProps)
             <Stack direction="row" alignItems="center" spacing={1}>
               <InsightsOutlinedIcon fontSize="small" />
               <Typography variant="subtitle1" fontWeight={700}>
-                Insight điều hành
+                <OrderCodeTitle
+                  prefix="Insight điều hành -"
+                  code={detail?.codeLatest || detail?.code}
+                  originalCode={detail?.code}
+                  fallback="Insight điều hành"
+                />
               </Typography>
             </Stack>
             <Typography variant="body2" color="text.secondary">

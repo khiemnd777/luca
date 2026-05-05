@@ -99,6 +99,7 @@ func (OrderItemProcessInProgress) Edges() []ent.Edge {
 			Ref("in_progresses").
 			Field("process_id").
 			Unique(),
+		edge.To("dentist_reviews", OrderItemProcessDentistReview.Type),
 	}
 }
 

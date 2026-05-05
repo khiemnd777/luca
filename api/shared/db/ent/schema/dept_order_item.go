@@ -109,6 +109,7 @@ func (OrderItem) Edges() []ent.Edge {
 			Unique(),
 
 		edge.To("processes", OrderItemProcess.Type),
+		edge.To("dentist_reviews", OrderItemProcessDentistReview.Type),
 
 		edge.To("products", OrderItemProduct.Type),
 		edge.To("materials", OrderItemMaterial.Type),

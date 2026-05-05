@@ -3,13 +3,33 @@ import { createTableSchema, type ColumnDef, type FetchTableOpts } from "@core/ta
 import type { OrderItemMaterialModel } from "@features/order/model/order-item-material.model";
 import { getOrderLoanerMaterials } from "@features/order/api/order-item-material.api";
 import { materialStatusLabel } from "../../material/utils/material.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
+import { IconButton, Stack, Tooltip } from "@mui/material";
+import OpenInNewRoundedIcon from "@mui/icons-material/OpenInNewRounded";
+import { navigate } from "@root/core/navigation/navigate";
 
 const columns: ColumnDef<OrderItemMaterialModel>[] = [
   {
     key: "orderItemCode",
     header: "Mã đơn hàng",
-    type: "link",
-    url: (r) => `/order/${r.orderId}/historical/${r.orderItemId}`,
+    render: (row) => (
+      <Stack direction="row" spacing={0.5} alignItems="center" minWidth={0}>
+        <OrderCodeText code={row.orderItemCode} />
+        {row.orderId && row.orderItemId ? (
+          <Tooltip title="Mở chi tiết">
+            <IconButton
+              size="small"
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(`/order/${row.orderId}/historical/${row.orderItemId}`);
+              }}
+            >
+              <OpenInNewRoundedIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+        ) : null}
+      </Stack>
+    ),
   },
   { key: "materialName", header: "Tên vật tư", sortable: true },
   { key: "clinicName", header: "Nha khoa", sortable: true },

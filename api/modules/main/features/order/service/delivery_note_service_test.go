@@ -293,6 +293,74 @@ func TestDeliveryNoteTemplate_HidesEmptyPhoneNumbers(t *testing.T) {
 	}
 }
 
+func TestDeliveryNoteTemplate_RendersDentistReviewRequestNotes(t *testing.T) {
+	tpl, err := getDeliveryNoteTemplate()
+	if err != nil {
+		t.Fatalf("getDeliveryNoteTemplate: %v", err)
+	}
+
+	viewData := buildDeliveryNoteViewData(DeliveryNote{
+		Company: DeliveryNoteCompany{Name: "Test Company"},
+		Order: DeliveryNoteOrder{
+			Number: "ORD-004",
+			Date:   time.Date(2026, time.April, 4, 10, 30, 0, 0, time.UTC),
+		},
+		Items: []DeliveryNoteItem{
+			{
+				Description: "Rang su Zirconia",
+				Quantity:    1,
+			},
+		},
+		DentistReviews: []DeliveryNoteDentistReview{
+			{
+				ProductName: "Zirconia",
+				ProcessName: "Len su",
+				RequestNote: "Check mau A2\nCheck form rang 11",
+			},
+		},
+	}, deliveryNotePaperSizeA5)
+
+	var html bytes.Buffer
+	if err := tpl.Execute(&html, viewData); err != nil {
+		t.Fatalf("execute delivery note template: %v", err)
+	}
+
+	rendered := html.String()
+	wantSnippets := []string{
+		"Mẫu gửi cho nha sĩ",
+		"Ghi chú cho nha sĩ:",
+		"Sản phẩm: Zirconia",
+		"Công đoạn: Len su",
+		"Check mau A2",
+		"Check form rang 11",
+	}
+	for _, snippet := range wantSnippets {
+		if !strings.Contains(rendered, snippet) {
+			t.Fatalf("expected rendered delivery note to contain %q", snippet)
+		}
+	}
+}
+
+func TestNormalizeDeliveryNoteDentistReviews_TrimsAndSkipsEmptyNotes(t *testing.T) {
+	got := normalizeDeliveryNoteDentistReviews([]DeliveryNoteDentistReview{
+		{ProductName: "  Zirconia  ", ProcessName: "  Len su  ", RequestNote: "  Check mau A2  "},
+		{ProductName: "PMMA", ProcessName: "Thu sap", RequestNote: "   "},
+	})
+
+	if len(got) != 1 {
+		t.Fatalf("expected one non-empty dentist review note, got %d", len(got))
+	}
+	if got[0].ProductName != "Zirconia" {
+		t.Fatalf("expected trimmed product name, got %q", got[0].ProductName)
+	}
+	if got[0].ProcessName != "Len su" {
+		t.Fatalf("expected trimmed process name, got %q", got[0].ProcessName)
+	}
+	if got[0].RequestNote != "Check mau A2" {
+		t.Fatalf("expected trimmed request note, got %q", got[0].RequestNote)
+	}
+}
+
 func TestResolveDeliveryNoteShowAmounts_DefaultsToTrue(t *testing.T) {
 	if !resolveDeliveryNoteShowAmounts(nil) {
 		t.Fatal("expected nil show_amounts to default to true")

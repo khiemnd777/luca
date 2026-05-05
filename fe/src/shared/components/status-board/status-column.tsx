@@ -7,6 +7,8 @@ import StatusCard from "./status-card";
 interface Props<T> {
   label: string;
   statusValue: string;
+  disableDrop?: boolean;
+  disableDrag?: boolean;
   items: BoardItem<T>[];
   activeId?: number | null;
   renderCard: (id: number, status: string, obj: T) => React.ReactNode;
@@ -17,6 +19,8 @@ interface Props<T> {
 export default function StatusColumn<T>({
   label,
   statusValue,
+  disableDrop,
+  disableDrag,
   items,
   activeId,
   renderCard,
@@ -25,6 +29,7 @@ export default function StatusColumn<T>({
   const { setNodeRef } = useDroppable({
     id: `col-${statusValue}`,
     data: { status: statusValue },
+    disabled: disableDrop,
   });
 
   const theme = useTheme();
@@ -49,7 +54,15 @@ export default function StatusColumn<T>({
         {label}
       </Typography>
       {items.map((it) => (
-        <StatusCard key={it.id} item={it} activeId={activeId} render={renderCard} dragHandleColor={it.color ?? undefined} onClick={onCardClick} />
+        <StatusCard
+          key={it.id}
+          item={it}
+          activeId={activeId}
+          render={renderCard}
+          dragHandleColor={it.color ?? undefined}
+          disableDragHandle={disableDrag}
+          onClick={onCardClick}
+        />
       ))}
     </Box>
   );

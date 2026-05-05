@@ -28,11 +28,8 @@ export type ImageUploadFieldProps = {
   imagePreviewHeight?: number;
 
   /**
-   * Nếu cung cấp → component:
-   *  - Hiện preview ngay (optimistic)
-   *  - Upload nền
-   *  - Tự thay/append URL thật vào value
-   *  Hỗ trợ callback onProgress cho từng file.
+   * Nếu cung cấp, AutoForm sẽ gọi uploader trong submit phase.
+   * Component này chỉ giữ File để preview local, không upload khi chọn file.
    */
   uploader?: (files: File[], onProgress?: (p: UploadProgress) => void) => Promise<string[]>;
 
@@ -44,14 +41,6 @@ export type ImageUploadFieldProps = {
    *  - Có uploader: cuối cùng chỉ còn URL thật
    */
   onChange: (val: ImageUploadList | ImageUploadValue | null) => void;
-};
-
-type OptimisticItem = {
-  id: string;        // định danh file (name|size|lastModified)
-  url: string;       // objectURL để preview
-  file: File;
-  progress: number;  // 0..100
-  canceled?: boolean;
 };
 
 export function ImageUploadField(props: ImageUploadFieldProps) {
@@ -66,16 +55,11 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
     accept = "image/*",
     imagePreviewAspectRatio = "1 / 1",
     imagePreviewHeight = 96,
-    uploader,
     value,
     onChange,
   } = props;
 
   const inputRef = React.useRef<HTMLInputElement | null>(null);
-  const latestValueRef = React.useRef<typeof value>(value);
-  React.useEffect(() => {
-    latestValueRef.current = value;
-  }, [value]);
 
   // Normalize value → array
   const list = React.useMemo<ImageUploadList>(() => {
@@ -86,18 +70,6 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
   const urls = React.useMemo(() => list.filter((x): x is string => typeof x === "string"), [list]);
   const files = React.useMemo(() => list.filter((x): x is File => x instanceof File), [list]);
 
-  // Optimistic previews khi có uploader
-  const [optimistic, setOptimistic] = React.useState<OptimisticItem[]>([]);
-
-  // Cleanup objectURL cho optimistic previews
-  React.useEffect(() => {
-    return () => {
-      optimistic.forEach((it) => URL.revokeObjectURL(it.url));
-    };
-  }, [optimistic]);
-
-  const fileId = (f: File) => `${f.name}|${f.size}|${f.lastModified}`;
-
   const openPicker = () => inputRef.current?.click();
 
   const handleFiles = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,75 +78,8 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
 
     const limited = (multiple ? picked : [picked[0]]).slice(0, maxFiles);
 
-    if (!uploader) {
-      // Không có uploader → giữ File trong value
-      const next = multiple ? [...urls, ...files, ...limited] : (urls[0] ?? files[0] ?? limited[0] ?? null);
-      onChange(next as any);
-    } else {
-      // Có uploader → preview ngay + upload nền + tự thay URL
-      const newOptimistics: OptimisticItem[] = limited.map((f) => ({
-        id: fileId(f),
-        url: URL.createObjectURL(f),
-        file: f,
-        progress: 0,
-      }));
-
-      setOptimistic((prev) => {
-        if (multiple) return [...prev, ...newOptimistics];
-        // single: replace ngay để ẩn ảnh cũ tức thì (tránh "2 ảnh" gây cảm giác lag)
-        // => chỉ hiển thị optimistic mới, không render urls cũ trong lúc upload
-        prev.forEach((it) => URL.revokeObjectURL(it.url));
-        return [...newOptimistics];
-      });
-
-      // Upload nền
-      void (async () => {
-        try {
-          const onProg = (p: UploadProgress) => {
-            setOptimistic((prev) => {
-              // cập nhật progress theo index của batch này
-              const copy = [...prev];
-              const base = multiple ? prev.length - newOptimistics.length : 0;
-              const idx = base + p.index;
-              if (copy[idx]) copy[idx] = { ...copy[idx], progress: p.progress };
-              return copy;
-            });
-          };
-
-          // Lọc item chưa bị cancel
-          const batchItems = () => {
-            // map theo id (đảm bảo uniqueness)
-            const map = new Map<string, OptimisticItem>();
-            [...newOptimistics].forEach((n) => map.set(n.id, n));
-            return Array.from(map.values()).filter((it) => !it.canceled);
-          };
-          const batch = batchItems().map((it) => it.file);
-          if (batch.length === 0) return;
-
-          const uploadedUrls = await uploader(batch, onProg);
-
-          // Khi xong, thay/append vào value
-          const cur = latestValueRef.current;
-          const curList = cur == null ? [] : Array.isArray(cur) ? cur : [cur];
-          const curUrls = curList.filter((x): x is string => typeof x === "string");
-
-          const nextValue = multiple ? [...curUrls, ...uploadedUrls] : (uploadedUrls[0] ?? null);
-          onChange(nextValue as any);
-        } catch (err) {
-          // Có thể thêm onUploadError nếu cần
-          // console.error(err);
-        } finally {
-          // Gỡ optimistic của batch
-          setOptimistic((prev) => {
-            const ids = new Set(newOptimistics.map((n) => n.id));
-            prev.forEach((it) => {
-              if (ids.has(it.id)) URL.revokeObjectURL(it.url);
-            });
-            return prev.filter((it) => !ids.has(it.id));
-          });
-        }
-      })();
-    }
+    const next = multiple ? [...urls, ...files, ...limited] : (limited[0] ?? urls[0] ?? files[0] ?? null);
+    onChange(next);
 
     if (inputRef.current) inputRef.current.value = "";
   };
@@ -182,39 +87,25 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
   const removeAt = (idx: number, isUrl: boolean) => {
     if (isUrl) {
       const newUrls = urls.filter((_, i) => i !== idx);
-      const next = props.multiple ? newUrls : (newUrls[0] ?? null);
-      onChange(next as any);
+      const next = multiple ? newUrls : (newUrls[0] ?? null);
+      onChange(next);
       return;
     }
 
-    if (!uploader) {
-      const newFiles = files.filter((_, i) => i !== idx);
-      const next = multiple ? [...urls, ...newFiles] : (urls[0] ?? newFiles[0] ?? null);
-      onChange(next as any);
-      return;
-    }
-
-    const opt = optimistic[idx];
-    if (opt) {
-      URL.revokeObjectURL(opt.url);
-      setOptimistic((prev) => prev.filter((_, i) => i !== idx));
-      opt.canceled = true;
-    }
+    const newFiles = files.filter((_, i) => i !== idx);
+    const next = multiple ? [...urls, ...newFiles] : (urls[0] ?? newFiles[0] ?? null);
+    onChange(next);
   };
 
-  const filePreviewsNoUploader = React.useMemo(
-    () => (!uploader ? files.map((f) => URL.createObjectURL(f)) : []),
-    [files, uploader]
+  const filePreviews = React.useMemo(
+    () => files.map((f) => URL.createObjectURL(f)),
+    [files]
   );
   React.useEffect(() => {
-    if (uploader) return;
-    return () => filePreviewsNoUploader.forEach((u) => URL.revokeObjectURL(u));
-  }, [filePreviewsNoUploader, uploader]);
+    return () => filePreviews.forEach((u) => URL.revokeObjectURL(u));
+  }, [filePreviews]);
 
   // ===== Render =====
-  // Với single + uploader: nếu có optimistic → ẩn urls cũ (tránh hiệu ứng 2 ảnh)
-  const showUrls = !(uploader && !multiple && optimistic.length > 0);
-
   return (
     <React.Fragment key={name}>
       <input
@@ -252,44 +143,28 @@ export function ImageUploadField(props: ImageUploadFieldProps) {
         }}
       >
         {/* 1) URL thật */}
-        {showUrls &&
-          urls.map((u, i) => (
-            <Thumb
-              key={`url-${i}-${u}`}
-              src={u}
-              alt={`image-${i}`}
-              onRemove={() => removeAt(i, true)}
-              aspectRatio={imagePreviewAspectRatio}
-              height={imagePreviewHeight}
-            />
-          ))}
+        {urls.map((u, i) => (
+          <Thumb
+            key={`url-${i}-${u}`}
+            src={u}
+            alt={`image-${i}`}
+            onRemove={() => removeAt(i, true)}
+            aspectRatio={imagePreviewAspectRatio}
+            height={imagePreviewHeight}
+          />
+        ))}
 
-        {/* 2) Không có uploader → preview từ File trong value */}
-        {!uploader &&
-          filePreviewsNoUploader.map((u, i) => (
-            <Thumb
-              key={`file-${i}`}
-              src={u}
-              alt={`file-${i}`}
-              onRemove={() => removeAt(i, false)}
-              aspectRatio={imagePreviewAspectRatio}
-              height={imagePreviewHeight}
-            />
-          ))}
-
-        {/* 3) Có uploader → preview optimistic kèm progress */}
-        {uploader &&
-          optimistic.map((it, i) => (
-            <Thumb
-              key={`optim-${it.id}-${i}`}
-              src={it.url}
-              alt={it.file.name}
-              onRemove={() => removeAt(i, false)}
-              progress={it.progress}
-              aspectRatio={imagePreviewAspectRatio}
-              height={imagePreviewHeight}
-            />
-          ))}
+        {/* 2) Preview từ File trong value */}
+        {filePreviews.map((u, i) => (
+          <Thumb
+            key={`file-${i}`}
+            src={u}
+            alt={`file-${i}`}
+            onRemove={() => removeAt(i, false)}
+            aspectRatio={imagePreviewAspectRatio}
+            height={imagePreviewHeight}
+          />
+        ))}
       </Box>
     </React.Fragment>
   );
@@ -299,7 +174,7 @@ function makeFallbackUrl(src?: string | null, defaultSeed = "user"): string {
   let initialsSeed = defaultSeed;
   if (src) {
     try {
-      const parts = src.split(/[\/\\]/);
+      const parts = src.split(/[/\\]/);
       const last = parts[parts.length - 1];
       initialsSeed = last?.split(".")[0] || defaultSeed;
     } catch {

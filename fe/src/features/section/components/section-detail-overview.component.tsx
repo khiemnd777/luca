@@ -29,6 +29,7 @@ import { ResponsiveGrid } from "@shared/components/ui/responsive-grid";
 import { SectionCard } from "@shared/components/ui/section-card";
 import { formatDateTime, relTime } from "@shared/utils/datetime.utils";
 import { statusColor, statusLabel } from "@shared/utils/order.utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const numberFormatter = new Intl.NumberFormat("vi-VN");
 const ORDER_STATUS_SEQUENCE = ["received", "in_progress", "qc", "rework"] as const;
@@ -272,7 +273,7 @@ function RecentOrderRow({ item }: { item: SectionOverviewRecentOrderModel }) {
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1}>
           <Stack spacing={0.35}>
             <Typography fontWeight={700}>
-              {item.orderCode || `Đơn #${item.orderId}`}
+              <OrderCodeText code={item.orderCode} fallback={`Đơn #${item.orderId}`} />
             </Typography>
             <Typography variant="caption" color="text.secondary">
               {item.clinicName || "Chưa có nha khoa"}{item.patientName ? ` • ${item.patientName}` : ""}

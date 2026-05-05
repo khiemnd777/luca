@@ -1,5 +1,6 @@
 import ViewAgendaRoundedIcon from "@mui/icons-material/ViewAgendaRounded";
 import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
+import ViewStreamRoundedIcon from "@mui/icons-material/ViewStreamRounded";
 import AddIcon from "@mui/icons-material/Add";
 import {
   Button,
@@ -26,7 +27,7 @@ import {
   type GroupedOrderHistoricalState,
 } from "@features/order/tables/order-grouped.table";
 
-type OrderTableMode = "normal" | "grouping";
+type OrderTableMode = "normal" | "grouping" | "vertical";
 
 export function OrderListWidget() {
   const appliedFilters = useOrderAdvancedSearchStore((state) => state.appliedFilters);
@@ -194,6 +195,10 @@ export function OrderListWidget() {
             <AccountTreeOutlinedIcon fontSize="small" sx={{ mr: 0.75 }} />
             Grouping
           </ToggleButton>
+          <ToggleButton value="vertical">
+            <ViewStreamRoundedIcon fontSize="small" sx={{ mr: 0.75 }} />
+            Vertical
+          </ToggleButton>
         </ToggleButtonGroup>
         <IfPermission permissions={["order.create"]}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
@@ -204,6 +209,8 @@ export function OrderListWidget() {
     }>
       {mode === "normal" ? (
         <AutoTable key={`normal-${refreshToken}`} name="orders" params={{ advancedSearchFilters: appliedFilters }} />
+      ) : mode === "vertical" ? (
+        <AutoTable key={`vertical-${refreshToken}`} name="orders" view="vertical" params={{ advancedSearchFilters: appliedFilters }} />
       ) : (
         <AutoTable
           key={`grouping-${refreshToken}-${groupedRefreshToken}`}

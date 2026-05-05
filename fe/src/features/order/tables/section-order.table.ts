@@ -6,6 +6,8 @@ import { listBySectionID } from "@features/order/api/order.api";
 import { priorityColor, priorityLabel, statusColor, statusLabel } from "@root/shared/utils/order.utils";
 import { navigate } from "@root/core/navigation/navigate";
 import { getLatestOrderItemIdByOrderId, unlink } from "../api/order-item.api";
+import { createElement } from "react";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
@@ -22,7 +24,13 @@ const columns: ColumnDef<OrderModel>[] = [
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
     sortable: true,
   },
-  { key: "codeLatest", header: "Mã đơn", sortable: true, labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    sortable: true,
+    labelField: true,
+    render: (row) => createElement(OrderCodeText, { code: row.codeLatest || row.code }),
+  },
   // { key: "code", header: "Mã gốc", sortable: true, },
   {
     key: "remakeCount",

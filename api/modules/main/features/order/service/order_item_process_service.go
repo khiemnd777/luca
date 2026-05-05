@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/khiemnd777/noah_api/modules/main/config"
@@ -18,6 +19,7 @@ import (
 	"github.com/khiemnd777/noah_api/shared/modules/notification"
 	"github.com/khiemnd777/noah_api/shared/modules/realtime"
 	"github.com/khiemnd777/noah_api/shared/pubsub"
+	"github.com/khiemnd777/noah_api/shared/utils"
 	"github.com/khiemnd777/noah_api/shared/utils/table"
 )
 
@@ -93,6 +95,20 @@ type OrderItemProcessService interface {
 		userID int,
 		checkInOrOutData *model.OrderItemProcessInProgressDTO,
 	) (*model.OrderItemProcessInProgressDTO, error)
+	ListDentistReviews(
+		ctx context.Context,
+		deptID int,
+		orderID int64,
+		orderItemID int64,
+		status *string,
+	) ([]*model.OrderItemProcessDentistReviewDTO, error)
+	ResolveDentistReview(
+		ctx context.Context,
+		deptID int,
+		userID int,
+		reviewID int64,
+		payload *model.OrderItemProcessDentistReviewResolveDTO,
+	) (*model.OrderItemProcessDentistReviewDTO, error)
 	Assign(
 		ctx context.Context,
 		deptID,
@@ -282,8 +298,14 @@ func (s *orderItemProcessService) CheckInOrOut(
 	userID int,
 	checkInOrOutData *model.OrderItemProcessInProgressDTO,
 ) (*model.OrderItemProcessInProgressDTO, error) {
+	if checkInOrOutData != nil && checkInOrOutData.ID > 0 && checkInOrOutData.RequiresDentistReview {
+		if strings.TrimSpace(utils.SafeString(checkInOrOutData.DentistReviewRequestNote)) == "" {
+			return nil, fmt.Errorf("dentist review request note is required")
+		}
+	}
+
 	var err error
-	dto, _, orderstatus, orderitem, err := s.inprogressRepo.CheckInOrOut(ctx, checkInOrOutData)
+	dto, processStatus, orderstatus, orderitem, err := s.inprogressRepo.CheckInOrOut(ctx, userID, checkInOrOutData)
 	if err != nil {
 		return nil, err
 	}
@@ -330,8 +352,8 @@ func (s *orderItemProcessService) CheckInOrOut(
 	cache.InvalidateKeys(keys...)
 	cache.InvalidateKeys(kOrderAll(deptID)...)
 
-	shouldNotifyNextLeader := dto.CompletedAt != nil && dto.NextProcessID != nil && dto.NextLeaderID != nil
-	shouldNotifyDepartmentAdmin := dto.CompletedAt != nil && dto.NextProcessID == nil
+	shouldNotifyNextLeader := !dto.RequiresDentistReview && dto.CompletedAt != nil && dto.NextProcessID != nil && dto.NextLeaderID != nil
+	shouldNotifyDepartmentAdmin := !dto.RequiresDentistReview && dto.CompletedAt != nil && dto.NextProcessID == nil
 
 	// notify to next process's leader
 	if shouldNotifyNextLeader {
@@ -391,7 +413,7 @@ func (s *orderItemProcessService) CheckInOrOut(
 		}
 	}
 
-	if dto.CompletedAt != nil && dto.NextProcessID != nil && orderstatus != nil && "completed" == *orderstatus && orderitem != nil {
+	if !dto.RequiresDentistReview && dto.CompletedAt != nil && dto.NextProcessID != nil && orderstatus != nil && "completed" == *orderstatus && orderitem != nil {
 		pubsub.PublishAsync("dashboard:daily:turnaround:stats", &model.CaseDailyStatsUpsert{
 			DepartmentID: deptID,
 			CompletedAt:  *dto.CompletedAt,
@@ -430,7 +452,31 @@ func (s *orderItemProcessService) CheckInOrOut(
 	realtime.BroadcastToDept(deptID, "dashboard:production_planning", nil)
 	realtime.BroadcastToDept(deptID, "order:changed", nil)
 
-	if dto.CompletedAt != nil && dto.NextProcessID != nil {
+	if dto.RequiresDentistReview && dto.DentistReviewID != nil {
+		pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+			UserID:   userID,
+			Module:   "order",
+			Action:   "dentist_review:create",
+			TargetID: *dto.OrderID,
+			Data: map[string]any{
+				"order_id":            dto.OrderID,
+				"order_item_id":       dto.OrderItemID,
+				"user_id":             userID,
+				"review_id":           dto.DentistReviewID,
+				"order_item_code":     dto.OrderItemCode,
+				"product_id":          dto.ProductID,
+				"product_code":        dto.ProductCode,
+				"product_name":        dto.ProductName,
+				"section_id":          dto.SectionID,
+				"section_name":        dto.SectionName,
+				"process_id":          dto.ProcessID,
+				"process_name":        dto.ProcessName,
+				"status":              processStatus,
+				"review_status":       dto.DentistReviewStatus,
+				"review_request_note": dto.DentistReviewRequestNote,
+			},
+		})
+	} else if dto.CompletedAt != nil && dto.NextProcessID != nil {
 		pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
 			UserID:   userID,
 			Module:   "order",
@@ -481,6 +527,155 @@ func (s *orderItemProcessService) CheckInOrOut(
 	}
 
 	return dto, nil
+}
+
+func (s *orderItemProcessService) ListDentistReviews(
+	ctx context.Context,
+	deptID int,
+	orderID int64,
+	orderItemID int64,
+	status *string,
+) ([]*model.OrderItemProcessDentistReviewDTO, error) {
+	if deptID <= 0 {
+		return nil, fmt.Errorf("invalid department id")
+	}
+	if orderID <= 0 {
+		return nil, fmt.Errorf("invalid order id")
+	}
+	if orderItemID <= 0 {
+		return nil, fmt.Errorf("invalid order item id")
+	}
+	if status != nil {
+		trimmed := strings.TrimSpace(*status)
+		if trimmed == "" {
+			status = nil
+		} else {
+			status = &trimmed
+		}
+	}
+	return s.inprogressRepo.ListDentistReviews(ctx, deptID, orderID, orderItemID, status)
+}
+
+func (s *orderItemProcessService) ResolveDentistReview(
+	ctx context.Context,
+	deptID int,
+	userID int,
+	reviewID int64,
+	payload *model.OrderItemProcessDentistReviewResolveDTO,
+) (*model.OrderItemProcessDentistReviewDTO, error) {
+	if reviewID <= 0 {
+		return nil, fmt.Errorf("invalid dentist review id")
+	}
+	if payload == nil {
+		return nil, fmt.Errorf("payload is required")
+	}
+	result := strings.TrimSpace(payload.Result)
+	if result != "approved" && result != "rejected" {
+		return nil, fmt.Errorf("invalid dentist review result")
+	}
+
+	review, dto, orderstatus, orderitem, err := s.inprogressRepo.ResolveDentistReview(ctx, deptID, reviewID, result, payload.Note, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	s.invalidateOrderProcessCaches(deptID, review, dto)
+
+	if result == "approved" && dto != nil && dto.CompletedAt != nil && dto.NextProcessID != nil && orderstatus != nil && "completed" == *orderstatus && orderitem != nil {
+		pubsub.PublishAsync("dashboard:daily:turnaround:stats", &model.CaseDailyStatsUpsert{
+			DepartmentID: deptID,
+			CompletedAt:  *dto.CompletedAt,
+			ReceivedAt:   orderitem.CreatedAt,
+		})
+		realtime.BroadcastToDept(deptID, "dashboard:daily:turnaround:stats", nil)
+
+		pubsub.PublishAsync("dashboard:daily:remake:stats", &model.CaseDailyRemakeStatsUpsert{
+			DepartmentID: deptID,
+			CompletedAt:  *dto.CompletedAt,
+			IsRemake:     orderitem.RemakeCount > 0,
+		})
+		realtime.BroadcastToDept(deptID, "dashboard:daily:remake:stats", nil)
+
+		pubsub.PublishAsync("dashboard:daily:completed:stats", &model.CaseDailyCompletedStatsUpsert{
+			DepartmentID: deptID,
+			CompletedAt:  *dto.CompletedAt,
+		})
+		realtime.BroadcastToDept(deptID, "dashboard:daily:completed:stats", nil)
+
+		pubsub.PublishAsync("dashboard:daily:active:stats", &model.CaseDailyActiveStatsUpsert{
+			DepartmentID: deptID,
+			StatAt:       time.Now(),
+		})
+		realtime.BroadcastToDept(deptID, "dashboard:daily:active:stats", nil)
+	}
+
+	realtime.BroadcastAll("order:inprogress", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:statuses", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:due_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:active_today", nil)
+	realtime.BroadcastToDept(deptID, "dashboard:production_planning", nil)
+	realtime.BroadcastToDept(deptID, "order:changed", nil)
+
+	var targetID int64
+	if review.OrderID != nil {
+		targetID = *review.OrderID
+	}
+	pubsub.PublishAsync("log:create", auditlogmodel.AuditLogRequest{
+		UserID:   userID,
+		Module:   "order",
+		Action:   "dentist_review:resolve",
+		TargetID: targetID,
+		Data: map[string]any{
+			"order_id":        review.OrderID,
+			"order_item_id":   review.OrderItemID,
+			"user_id":         userID,
+			"review_id":       review.ID,
+			"result":          result,
+			"order_item_code": review.OrderItemCode,
+			"product_id":      review.ProductID,
+			"product_code":    review.ProductCode,
+			"product_name":    review.ProductName,
+			"process_id":      review.ProcessID,
+			"process_name":    review.ProcessName,
+			"review_status":   review.Status,
+			"response_note":   review.ResponseNote,
+			"order_status":    orderstatus,
+		},
+	})
+
+	return review, nil
+}
+
+func (s *orderItemProcessService) invalidateOrderProcessCaches(
+	deptID int,
+	review *model.OrderItemProcessDentistReviewDTO,
+	dto *model.OrderItemProcessInProgressDTO,
+) {
+	var keys []string
+	if review != nil && review.OrderID != nil {
+		keys = append(keys, kOrderByID(*review.OrderID), kOrderByIDAll(*review.OrderID))
+		if review.OrderItemID > 0 {
+			keys = append(keys, fmt.Sprintf("order:id:%d:oid:%d:processes", *review.OrderID, review.OrderItemID))
+			keys = append(keys, fmt.Sprintf("order:id:%d:oid:%d:inprogresses", *review.OrderID, review.OrderItemID))
+		}
+	}
+	if review != nil && review.OrderItemID > 0 {
+		keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d", review.OrderItemID))
+		if review.ProductID != nil {
+			keys = append(keys, fmt.Sprintf("order:process:checkout:latest:oid:%d:pid:%d", review.OrderItemID, *review.ProductID))
+		}
+	}
+	if dto != nil {
+		keys = append(keys, fmt.Sprintf("order:process:inprogress:id%d", dto.ID))
+		if dto.AssignedID != nil {
+			keys = append(keys, fmt.Sprintf("order:assigned:dpt%d:%d:*", deptID, *dto.AssignedID))
+		}
+	}
+	if review != nil && review.ProcessID != nil {
+		keys = append(keys, fmt.Sprintf("order:process:id%d:*", *review.ProcessID))
+	}
+	cache.InvalidateKeys(keys...)
+	cache.InvalidateKeys(kOrderAll(deptID)...)
 }
 
 func (s *orderItemProcessService) Assign(ctx context.Context, deptID, userID int, inprogressID int64, assignedID *int64, assignedName *string, note *string) (*model.OrderItemProcessInProgressDTO, error) {

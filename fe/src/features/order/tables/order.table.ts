@@ -15,10 +15,12 @@ import { useDebounce } from "@root/core/hooks/use-debounce";
 import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
 import { OrderRiskChip } from "@features/order/components/order-risk-chip.component";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<OrderModel>[] = [
   {
     key: "statusLatest",
+    header: "Trạng thái",
     type: "color",
     width: 110,
     accessor: (row) => ({ text: statusLabel(row.statusLatest), color: statusColor(row.statusLatest) }),
@@ -26,12 +28,19 @@ const columns: ColumnDef<OrderModel>[] = [
   },
   {
     key: "priorityLatest",
+    header: "Ưu tiên",
     type: "color",
     width: 95,
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
     sortable: true,
   },
-  { key: "codeLatest", header: "Mã đơn", sortable: true, labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    sortable: true,
+    labelField: true,
+    render: (row) => createElement(OrderCodeText, { code: row.codeLatest || row.code }),
+  },
   {
     key: "riskBucket",
     header: "Due/Risk",
@@ -83,7 +92,7 @@ registerTable("orders", () => {
       return list(tableOpts);
     },
     initialPageSize: 10,
-    initialSort: { by: "created_at", dir: "desc" },
+    initialSort: { by: "delivery_date", dir: "asc" },
     // allowUpdating: ["order.update"],
     // allowDeleting: ["order.delete"],
     // onView: (row: OrderModel) => { navigate(`/order/${row.id}`) },

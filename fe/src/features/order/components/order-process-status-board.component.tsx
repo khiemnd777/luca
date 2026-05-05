@@ -24,7 +24,11 @@ import {
   buildSectionNameLabel,
 } from "../utils/order.utils";
 
-export function OrderProcessesStatusBoard() {
+type OrderProcessesStatusBoardProps = {
+  refreshKey?: number;
+};
+
+export function OrderProcessesStatusBoard({ refreshKey = 0 }: OrderProcessesStatusBoardProps) {
   const { orderId, orderItemId } = useParams();
   const [inProgressOpen, setInProgressOpen] = React.useState(false);
   const [selectedProcessId, setSelectedProcessId] = React.useState<number | null>(null);
@@ -48,9 +52,9 @@ export function OrderProcessesStatusBoard() {
       const data = await processes(Number(orderId), realOrderItemId);
       return data;
     })();
-  }, [orderId, orderItemId],
+  }, [orderId, orderItemId, refreshKey],
     {
-      key: `order-processes-board`,
+      key: `order-processes-board:${orderId ?? ""}:${orderItemId ?? ""}:${refreshKey}`,
     });
 
   return (
@@ -78,6 +82,7 @@ export function OrderProcessesStatusBoard() {
         statuses={[
           { label: "Đang chờ", value: "waiting" },
           { label: "Đang gia công", value: "in_progress" },
+          { label: "Chờ nha sĩ kiểm tra", value: "waiting_dentist_review", disableDrop: true, disableDrag: true },
           { label: "Kiểm thử", value: "qc" },
           { label: "Làm lại", value: "rework" },
           { label: "Hoàn thành", value: "completed" },

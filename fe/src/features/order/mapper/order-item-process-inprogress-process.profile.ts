@@ -23,5 +23,10 @@ mapper.register<OrderItemProcessInProgressProcessModel>({
     sectionName: null,
     sectionId: null,
     color: null,
+    requiresDentistReview: null,
+    dentistReviewRequestNote: null,
+    dentistReviewId: null,
+    dentistReviewStatus: null,
+    dentistReviewResponseNote: null,
   }),
 });

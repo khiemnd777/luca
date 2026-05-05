@@ -5,6 +5,7 @@ import {
   registerNotificationRenderer,
   type NotificationRenderer,
 } from "@core/notification/notification-renderer";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type OrderCheckinNotificationData = {
   orderId?: number | string;
@@ -31,13 +32,13 @@ const OrderCheckinNotificationRenderer: NotificationRenderer<
 > = (notification, ctx) => {
   const data = notification.data;
 
-  const title = `Đơn hàng #${data?.orderItemCode} mới liên quan đến bộ phận bạn phụ trách`;
+  const title = (
+    <>
+      Đơn hàng #<OrderCodeText code={data?.orderItemCode} /> mới liên quan đến bộ phận bạn phụ trách
+    </>
+  );
 
   const bodyLines: string[] = [];
-
-  if (data?.orderItemCode) {
-    bodyLines.push(`Mã: ${data.orderItemCode}`);
-  }
 
   const relatedSections = normalizeList(data?.relatedSectionNames);
   if (relatedSections.length > 0) {
@@ -50,8 +51,13 @@ const OrderCheckinNotificationRenderer: NotificationRenderer<
   }
 
   const body =
-    bodyLines.length > 0 ? (
+    bodyLines.length > 0 || data?.orderItemCode ? (
       <Box>
+        {data?.orderItemCode ? (
+          <div>
+            Mã: <OrderCodeText code={data.orderItemCode} />
+          </div>
+        ) : null}
         {bodyLines.map((line, index) => (
           <div key={`${line}-${index}`}>{line}</div>
         ))}

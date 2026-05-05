@@ -27,5 +27,12 @@ mapper.register<OrderItemProcessInProgressModel>({
     completedAt: null,
     updatedAt: "",
     availableTargets: null,
+    mode: null,
+    requiresDentistReview: null,
+    dentistReviewRequestNote: null,
+    dentistReviewId: null,
+    dentistReviewStatus: null,
+    dentistReviewResponseNote: null,
+    dentistReview: null,
   }),
 });

@@ -8,6 +8,7 @@ import { useWebSocket } from "@root/core/network/websocket/use-web-socket";
 import { invalidate } from "@root/core/hooks/use-async";
 import { useEffect } from "react";
 import { registerWS } from "@root/core/network/websocket/ws-widgets";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 const columns: ColumnDef<NewestOrderModel>[] = [
   // {
@@ -22,7 +23,12 @@ const columns: ColumnDef<NewestOrderModel>[] = [
     width: 95,
     accessor: (row) => ({ text: priorityLabel(row.priorityLatest), color: priorityColor(row.priorityLatest) }),
   },
-  { key: "codeLatest", header: "Mã đơn", labelField: true },
+  {
+    key: "codeLatest",
+    header: "Mã đơn",
+    labelField: true,
+    render: (row) => <OrderCodeText code={row.codeLatest} />,
+  },
   // { key: "code", header: "Mã gốc" },
   { key: "createdAt", header: "Ngày tạo đơn", type: "datetime" },
 ];
