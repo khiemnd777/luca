@@ -31,6 +31,7 @@ func (h *OrderItemProcessHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/staff/:staff_id/order/processes/in-progresses/timeline", h.GetInProgressesByStaffTimeline)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes", h.Processes)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/in-progresses", h.GetInProgressesByOrderItemID)
+	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/dentist-reviews", h.ListDentistReviews)
 	app.RouterGet(router, "/:dept_id<int>/order/processes/in-progress/:in_progress_id<int>", h.GetInProgressByID)
 	app.RouterGet(router, "/:dept_id<int>/order/processes/:process_id<int>/in-progresses", h.GetInProgressesByProcessID)
 	app.RouterGet(router, "/:dept_id<int>/order/:order_id<int>/historical/:order_item_id<int>/processes/check-out/latest", h.GetCheckoutLatest)
@@ -98,6 +99,29 @@ func (h *OrderItemProcessHandler) GetInProgressesByOrderItemID(c *fiber.Ctx) err
 	}
 
 	res, err := h.svc.GetInProgressesByOrderItemID(c.UserContext(), int64(orderID), int64(orderItemID))
+	if err != nil {
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(res)
+}
+
+func (h *OrderItemProcessHandler) ListDentistReviews(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "order.development"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	orderID, orderItemID, err := h.parseOrderParams(c)
+	if err != nil {
+		return err
+	}
+
+	var status *string
+	if raw := utils.GetQueryAsString(c, "status"); raw != "" {
+		status = &raw
+	}
+
+	deptID, _ := utils.GetDeptIDInt(c)
+	res, err := h.svc.ListDentistReviews(c.UserContext(), deptID, int64(orderID), int64(orderItemID), status)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

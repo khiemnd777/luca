@@ -8,7 +8,7 @@ import type { AutoFormRef } from "@root/core/form/form.types";
 import { SafeButton } from "@shared/components/button/safe-button";
 import { id as getById } from "../api/order.api";
 import { Section } from "@root/shared/components/ui/section";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Stack } from "@mui/material";
 import { useAsync } from "@root/core/hooks/use-async";
 import { OrderProcessesStatusBoard } from "../components/order-process-status-board.component";
 import { generateTitle } from "../utils/order.utils";
@@ -31,11 +31,13 @@ import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-butto
 import { useAuthStore } from "@store/auth-store";
 import { OrderPrescriptionFilesSection } from "../components/order-prescription-files-section.component";
 import { OrderDetailInsight } from "../components/order-detail-insight.component";
+import { OrderDentistReviewPanel } from "../components/order-dentist-review-panel.component";
 
 export function OrderDetailBodyWidget() {
   const { orderId } = useParams();
   const frmOrderEditRef = React.useRef<AutoFormRef>(null);
   const canUpdateOrder = useAuthStore((state) => state.hasPermission("order.update"));
+  const [processRefreshKey, setProcessRefreshKey] = React.useState(0);
 
   const { data: detail, loading } = useAsync<OrderModel | null>(() => {
     if (!orderId) return Promise.resolve(null);
@@ -52,6 +54,7 @@ export function OrderDetailBodyWidget() {
     const value = detail?.id ?? (orderId ? Number(orderId) : undefined);
     return typeof value === "number" && !Number.isNaN(value) ? value : undefined;
   }, [detail?.id, orderId]);
+  const orderItemTargetId = detail?.latestOrderItem?.id;
 
   return (
     <>
@@ -125,11 +128,16 @@ export function OrderDetailBodyWidget() {
               icon: <TaskAltOutlinedIcon />,
               value: "process",
               content: (
-                <Box>
+                <Stack spacing={2}>
+                  <OrderDentistReviewPanel
+                    orderId={orderTargetId}
+                    orderItemId={orderItemTargetId}
+                    onResolved={() => setProcessRefreshKey((value) => value + 1)}
+                  />
                   <SectionCard title={title ?? ""}>
-                    <OrderProcessesStatusBoard />
+                    <OrderProcessesStatusBoard refreshKey={processRefreshKey} />
                   </SectionCard>
-                </Box>
+                </Stack>
               ),
             },
             {

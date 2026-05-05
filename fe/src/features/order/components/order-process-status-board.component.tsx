@@ -24,7 +24,11 @@ import {
   buildSectionNameLabel,
 } from "../utils/order.utils";
 
-export function OrderProcessesStatusBoard() {
+type OrderProcessesStatusBoardProps = {
+  refreshKey?: number;
+};
+
+export function OrderProcessesStatusBoard({ refreshKey = 0 }: OrderProcessesStatusBoardProps) {
   const { orderId, orderItemId } = useParams();
   const [inProgressOpen, setInProgressOpen] = React.useState(false);
   const [selectedProcessId, setSelectedProcessId] = React.useState<number | null>(null);
@@ -48,9 +52,9 @@ export function OrderProcessesStatusBoard() {
       const data = await processes(Number(orderId), realOrderItemId);
       return data;
     })();
-  }, [orderId, orderItemId],
+  }, [orderId, orderItemId, refreshKey],
     {
-      key: `order-processes-board`,
+      key: `order-processes-board:${orderId ?? ""}:${orderItemId ?? ""}:${refreshKey}`,
     });
 
   return (

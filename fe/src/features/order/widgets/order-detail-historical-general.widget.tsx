@@ -9,7 +9,7 @@ import type { AutoFormRef } from "@root/core/form/form.types";
 import { SafeButton } from "@shared/components/button/safe-button";
 import { getByOrderIdAndOrderItemId } from "../api/order.api";
 import { Section } from "@root/shared/components/ui/section";
-import { Box, CircularProgress } from "@mui/material";
+import { Box, CircularProgress, Stack } from "@mui/material";
 import type { OrderModel } from "../model/order.model";
 import { useAsync } from "@root/core/hooks/use-async";
 import { OrderProcessesStatusBoard } from "../components/order-process-status-board.component";
@@ -23,10 +23,12 @@ import TimelineOutlinedIcon from "@mui/icons-material/TimelineOutlined";
 import InsightsOutlinedIcon from "@mui/icons-material/InsightsOutlined";
 import { OrderDetailPrintQRSlipButton } from "./order-detail-print-qr-slip-button";
 import { OrderDetailInsight } from "../components/order-detail-insight.component";
+import { OrderDentistReviewPanel } from "../components/order-dentist-review-panel.component";
 
 export function OrderDetailHistoricalGeneralWidget() {
   const { orderId, orderItemId } = useParams();
   const frmOrderEditRef = React.useRef<AutoFormRef>(null);
+  const [processRefreshKey, setProcessRefreshKey] = React.useState(0);
 
   const { data: detail, loading } = useAsync<OrderModel | null>(
     () => {
@@ -45,6 +47,10 @@ export function OrderDetailHistoricalGeneralWidget() {
     const value = detail?.id ?? (orderId ? Number(orderId) : undefined);
     return typeof value === "number" && !Number.isNaN(value) ? value : undefined;
   }, [detail?.id, orderId]);
+  const orderItemTargetId = React.useMemo(() => {
+    const value = orderItemId ? Number(orderItemId) : detail?.latestOrderItem?.id;
+    return typeof value === "number" && !Number.isNaN(value) ? value : undefined;
+  }, [detail?.latestOrderItem?.id, orderItemId]);
 
   return (
     <>
@@ -118,11 +124,16 @@ export function OrderDetailHistoricalGeneralWidget() {
               icon: <TaskAltOutlinedIcon />,
               value: "process",
               content: (
-                <Box>
+                <Stack spacing={2}>
+                  <OrderDentistReviewPanel
+                    orderId={orderTargetId}
+                    orderItemId={orderItemTargetId}
+                    onResolved={() => setProcessRefreshKey((value) => value + 1)}
+                  />
                   <SectionCard title={title ?? ""}>
-                    <OrderProcessesStatusBoard />
+                    <OrderProcessesStatusBoard refreshKey={processRefreshKey} />
                   </SectionCard>
-                </Box>
+                </Stack>
               ),
             },
             {

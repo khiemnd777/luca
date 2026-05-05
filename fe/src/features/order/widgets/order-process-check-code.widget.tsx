@@ -8,14 +8,8 @@ import type { AutoFormRef } from "@root/core/form/form.types";
 import { useAsync } from "@root/core/hooks/use-async";
 import {
   Alert,
-  Divider,
-  FormControl,
-  FormControlLabel,
-  FormLabel,
   CircularProgress,
   MenuItem,
-  Radio,
-  RadioGroup,
   Stack,
   TextField,
   Typography,
@@ -23,7 +17,6 @@ import {
 import {
   getCheckoutLatest,
   prepareCheckInOrOutByCode,
-  resolveDentistReview,
 } from "../api/order-item-process.api";
 import type { OrderItemProcessInProgressModel } from "../model/order-item-process-inprogress.model";
 import type { OrderItemProcessInProgressProcessModel } from "../model/order-item-process-inprogress-process.model";
@@ -48,8 +41,6 @@ export function OrderProcessCheckCodeWidget() {
   const isMobile = useIsMobile();
   const [selectedTargetKey, setSelectedTargetKey] = React.useState<string | null>(null);
   const [step, setStep] = React.useState<CheckCodeStep>("check-in");
-  const [reviewResult, setReviewResult] = React.useState<"approved" | "rejected">("approved");
-  const [reviewNote, setReviewNote] = React.useState("");
 
   React.useEffect(() => {
     const handler = (nextCode: string) => {
@@ -64,7 +55,6 @@ export function OrderProcessCheckCodeWidget() {
     data: preparedData,
     loading: loadingPrepared,
     error: preparedDataError,
-    reload: reloadPreparedData,
   } =
     useAsync<OrderItemProcessInProgressModel | null>(() => {
       if (!orderCode) return Promise.resolve(null);
@@ -129,26 +119,6 @@ export function OrderProcessCheckCodeWidget() {
     return codeTitle ? `Mã: ${codeTitle}` : "Đơn hàng";
   }, [currentTarget?.orderItemCode]);
 
-  const handleResolveDentistReview = React.useCallback(async () => {
-    const reviewId = currentTarget?.dentistReviewId ?? currentTarget?.dentistReview?.id;
-    if (!reviewId) {
-      toast.error("Không tìm thấy mã yêu cầu nha sĩ check");
-      return;
-    }
-
-    try {
-      await resolveDentistReview(reviewId, {
-        result: reviewResult,
-        note: reviewNote,
-      });
-      toast.success("Ghi nhận kết quả thành công");
-      await reloadPreparedData();
-    } catch (err) {
-      toast.error("Ghi nhận kết quả thất bại");
-      throw err;
-    }
-  }, [currentTarget?.dentistReview?.id, currentTarget?.dentistReviewId, reloadPreparedData, reviewNote, reviewResult]);
-
   return (
     <>
       {preparedData ? (
@@ -207,11 +177,6 @@ export function OrderProcessCheckCodeWidget() {
                     target={currentTarget}
                     previousProcess={checkoutLatestData}
                     loadingPreviousProcess={loadingCheckoutLatest}
-                    result={reviewResult}
-                    note={reviewNote}
-                    onResultChange={setReviewResult}
-                    onNoteChange={setReviewNote}
-                    onResolve={handleResolveDentistReview}
                   />
                   <Spacer />
                 </>
@@ -291,22 +256,12 @@ type DentistReviewPendingPanelProps = {
   target: OrderItemProcessInProgressModel;
   previousProcess?: OrderItemProcessInProgressProcessModel | null;
   loadingPreviousProcess: boolean;
-  result: "approved" | "rejected";
-  note: string;
-  onResultChange: (result: "approved" | "rejected") => void;
-  onNoteChange: (note: string) => void;
-  onResolve: () => Promise<void>;
 };
 
 function DentistReviewPendingPanel({
   target,
   previousProcess,
   loadingPreviousProcess,
-  result,
-  note,
-  onResultChange,
-  onNoteChange,
-  onResolve,
 }: DentistReviewPendingPanelProps) {
   const requestNote =
     target.dentistReviewRequestNote ??
@@ -317,7 +272,7 @@ function DentistReviewPendingPanel({
     <SectionCard title="Chờ nha sĩ check">
       <Stack spacing={2}>
         <Alert severity="info" variant="outlined">
-          Chờ Admin ghi nhận kết quả
+          Công đoạn này đang chờ Admin ghi nhận kết quả nha sĩ check trong màn Chi tiết đơn hàng.
         </Alert>
 
         <Stack spacing={1}>
@@ -332,38 +287,6 @@ function DentistReviewPendingPanel({
           />
           <ReviewInfoRow label="Công đoạn hiện tại" value={buildProcessNameLabel(target) || "—"} />
           <ReviewInfoRow label="Nội dung cần nha sĩ check" value={requestNote || "—"} preserveLineBreaks />
-        </Stack>
-
-        <Divider />
-
-        <FormControl>
-          <FormLabel>Kết quả</FormLabel>
-          <RadioGroup
-            row
-            value={result}
-            onChange={(event) => onResultChange(event.target.value as "approved" | "rejected")}
-          >
-            <FormControlLabel value="approved" control={<Radio size="small" />} label="Đạt" />
-            <FormControlLabel value="rejected" control={<Radio size="small" />} label="Không đạt" />
-          </RadioGroup>
-        </FormControl>
-
-        <TextField
-          fullWidth
-          multiline
-          minRows={3}
-          size="small"
-          label="Ghi chú phản hồi"
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-        />
-
-        <Stack direction="row" justifyContent="flex-end">
-          <IfPermission permissions={["order.development"]}>
-            <SafeButton variant="contained" onClick={onResolve}>
-              Ghi nhận kết quả
-            </SafeButton>
-          </IfPermission>
         </Stack>
       </Stack>
     </SectionCard>

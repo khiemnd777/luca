@@ -29,6 +29,7 @@ type OrderItemProcessInProgressRepository interface {
 	Assign(ctx context.Context, inprogressID int64, assignedID *int64, assignedName *string, note *string) (*model.OrderItemProcessInProgressDTO, *string, *string, *generated.OrderItem, error)
 	CheckIn(ctx context.Context, tx *generated.Tx, orderItemID int64, orderID *int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
 	CheckOut(ctx context.Context, tx *generated.Tx, orderItemID int64, note *string) (*model.OrderItemProcessInProgressDTO, error)
+	ListDentistReviews(ctx context.Context, deptID int, orderID int64, orderItemID int64, status *string) ([]*model.OrderItemProcessDentistReviewDTO, error)
 	ResolveDentistReview(ctx context.Context, deptID int, reviewID int64, result string, note *string, resolvedBy int) (*model.OrderItemProcessDentistReviewDTO, *model.OrderItemProcessInProgressDTO, *string, *generated.OrderItem, error)
 	GetLatest(ctx context.Context, tx *generated.Tx, orderItemID int64) (*model.OrderItemProcessInProgressDTO, error)
 	GetCheckoutLatest(ctx context.Context, tx *generated.Tx, orderItemID int64, productID *int) (*model.OrderItemProcessInProgressAndProcessDTO, error)
@@ -867,6 +868,43 @@ func (r *orderItemProcessInProgressRepository) GetLatest(ctx context.Context, tx
 	}
 	dto := mapper.MapAs[*generated.OrderItemProcessInProgress, *model.OrderItemProcessInProgressDTO](entity)
 	return dto, nil
+}
+
+func (r *orderItemProcessInProgressRepository) ListDentistReviews(
+	ctx context.Context,
+	deptID int,
+	orderID int64,
+	orderItemID int64,
+	status *string,
+) ([]*model.OrderItemProcessDentistReviewDTO, error) {
+	predicates := []predicate.OrderItemProcessDentistReview{
+		orderitemprocessdentistreview.OrderItemID(orderItemID),
+		orderitemprocessdentistreview.HasOrderItemWith(
+			orderitem.IDEQ(orderItemID),
+			orderitem.HasOrderWith(
+				order.IDEQ(orderID),
+				order.DepartmentIDEQ(deptID),
+			),
+		),
+	}
+	if status != nil && strings.TrimSpace(*status) != "" {
+		predicates = append(predicates, orderitemprocessdentistreview.StatusEQ(strings.TrimSpace(*status)))
+	}
+
+	items, err := r.dentistReviewClient(nil).
+		Query().
+		Where(predicates...).
+		Order(orderitemprocessdentistreview.ByCreatedAt(sql.OrderDesc())).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*model.OrderItemProcessDentistReviewDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, mapDentistReview(item))
+	}
+	return out, nil
 }
 
 func (r *orderItemProcessInProgressRepository) ResolveDentistReview(

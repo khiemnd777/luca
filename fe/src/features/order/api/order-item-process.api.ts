@@ -148,6 +148,21 @@ export async function getInProgressesByOrderItemId(orderId: number, orderItemId:
   return result;
 }
 
+export async function dentistReviews(
+  orderId: number,
+  orderItemId: number,
+  status?: "pending" | "approved" | "rejected",
+): Promise<OrderItemProcessDentistReviewModel[]> {
+  const { departmentApiPath } = useAuthStore.getState();
+  const { data } = await apiClient.get<any[]>(
+    `${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/dentist-reviews`,
+    {
+      params: status ? { status } : undefined,
+    },
+  );
+  return Array.isArray(data) ? data.map(mapDentistReview) : [];
+}
+
 export async function getCheckoutLatest(orderId: number, orderItemId: number, productId?: number | null): Promise<OrderItemProcessInProgressProcessModel> {
   const { departmentApiPath } = useAuthStore.getState();
   const { data } = await apiClient.get<any>(`${departmentApiPath()}/order/${orderId}/historical/${orderItemId}/processes/check-out/latest`, {

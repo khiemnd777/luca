@@ -95,6 +95,13 @@ type OrderItemProcessService interface {
 		userID int,
 		checkInOrOutData *model.OrderItemProcessInProgressDTO,
 	) (*model.OrderItemProcessInProgressDTO, error)
+	ListDentistReviews(
+		ctx context.Context,
+		deptID int,
+		orderID int64,
+		orderItemID int64,
+		status *string,
+	) ([]*model.OrderItemProcessDentistReviewDTO, error)
 	ResolveDentistReview(
 		ctx context.Context,
 		deptID int,
@@ -520,6 +527,33 @@ func (s *orderItemProcessService) CheckInOrOut(
 	}
 
 	return dto, nil
+}
+
+func (s *orderItemProcessService) ListDentistReviews(
+	ctx context.Context,
+	deptID int,
+	orderID int64,
+	orderItemID int64,
+	status *string,
+) ([]*model.OrderItemProcessDentistReviewDTO, error) {
+	if deptID <= 0 {
+		return nil, fmt.Errorf("invalid department id")
+	}
+	if orderID <= 0 {
+		return nil, fmt.Errorf("invalid order id")
+	}
+	if orderItemID <= 0 {
+		return nil, fmt.Errorf("invalid order item id")
+	}
+	if status != nil {
+		trimmed := strings.TrimSpace(*status)
+		if trimmed == "" {
+			status = nil
+		} else {
+			status = &trimmed
+		}
+	}
+	return s.inprogressRepo.ListDentistReviews(ctx, deptID, orderID, orderItemID, status)
 }
 
 func (s *orderItemProcessService) ResolveDentistReview(

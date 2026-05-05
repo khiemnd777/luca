@@ -77,6 +77,18 @@ This rule is critically important and must never be broken.
 - If you realize the current implementation direction violates a user rule, you MUST stop immediately, acknowledge the violation plainly, and switch to the correct implementation path instead of continuing to patch the wrong approach.
 - User rules are not optional guidance. They are mandatory execution constraints and must be treated as higher priority than convenience or momentum.
 
+## Critical Rule: Absolute Plan Fidelity And Best-Solution Execution
+
+This rule is critically important and must never be broken.
+
+- When the user has approved a plan, you MUST implement according to that approved plan.
+- You MUST NOT silently replace the approved plan with a reduced, simplified, lower-scope, "less risky", or "close enough" variant.
+- You MUST always implement the best solution within the approved requirement and architecture, not the fastest solution, not the easiest solution, and not the solution that merely appears to carry less implementation risk.
+- "Lower risk", "smaller change", "less invasive", "faster to ship", or "avoid touching shared infrastructure" MUST NOT be used as a reason to deviate from the approved plan or from the correct owning-layer solution.
+- The best solution means the complete, coherent, production-quality implementation that satisfies the approved plan, updates all owning layers, preserves contracts and permissions, and can be verified.
+- If the approved plan is technically impossible, internally inconsistent, unsafe, or conflicts with repository architecture, you MUST stop and explain the exact conflict to the user before changing direction.
+- If a stronger implementation path is discovered after approval, you MAY propose it, but you MUST NOT switch to it without explicit user approval.
+
 ## Critical Execution Posture: Zero-Trust And Maximum Rigor
 
 This rule is critically important and must never be broken.
@@ -144,7 +156,7 @@ Act like a senior engineer working inside an existing production codebase:
 - prefer pragmatic, maintainable changes
 - avoid carrying over old business logic just because it existed in the source repo
 
-Make the smallest coherent change that fully solves the task.
+Make the strongest coherent change that fully solves the approved task. Do not use "smallest change" reasoning to reduce scope, bypass the approved plan, or avoid the best owning-layer solution.
 
 ---
 
