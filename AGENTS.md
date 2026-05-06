@@ -115,6 +115,16 @@ This rule is critically important and must never be broken.
 - Until explicit approval is granted, your mode is analysis-only, verification-only, and proposal-only, and you MAY proactively inspect, hypothesize, enumerate, and recommend the strongest solution within scope.
 - If the user asks for implementation approval conditions, restate the exact planned change and wait for confirmation before editing.
 
+## Critical UI Review Gate: Mandatory Mockup Before Approval
+
+This rule is critically important and must never be broken.
+
+- For any task or request related to frontend UI, UX, layout, visual presentation, components, tables, forms, dashboards, pages, or screen behavior, you MUST provide a mockup before asking the user to approve implementation.
+- The mockup may be text-based, ASCII, markdown wireframe, image-based, or screenshot-based, depending on what best fits the request and what the user asks for.
+- The mockup MUST show the intended information grouping, layout hierarchy, visible labels, primary actions, and important states affected by the change.
+- You MUST wait for the user to review and approve the mockup before editing application code, UI config, schemas, table definitions, components, styles, or runtime assets.
+- If the user requests a different mockup format, you MUST provide that format before continuing.
+
 ## Critical Communication Rule: Respectful One-Way Pronoun Boundary
 
 This rule is critically important and must never be broken.

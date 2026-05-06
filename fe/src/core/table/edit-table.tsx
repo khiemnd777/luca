@@ -287,6 +287,12 @@ function getCellValue<T>(row: T, col: ColumnDef<T>) {
 
 type RenderRow = { id?: string | number } & Record<string, unknown>;
 type RenderColumn = ColumnDef<RenderRow>;
+type VerticalDetailGroup = {
+  key: string;
+  label: string | null;
+  order: number;
+  columns: RenderColumn[];
+};
 
 function getRenderRowID(row: unknown, fallbackIndex: number): string {
   const id = typeof row === "object" && row !== null && "id" in row
@@ -445,6 +451,7 @@ function VerticalBodyRow({
   titleColumn,
   summaryColumns,
   detailColumns,
+  detailGroups,
   hasActions,
   isClickableRow,
   rowHoverBackground,
@@ -461,6 +468,7 @@ function VerticalBodyRow({
   titleColumn?: RenderColumn;
   summaryColumns: RenderColumn[];
   detailColumns: RenderColumn[];
+  detailGroups: VerticalDetailGroup[] | null;
   hasActions: boolean;
   isClickableRow: boolean;
   rowHoverBackground: string;
@@ -502,7 +510,7 @@ function VerticalBodyRow({
           borderColor: "divider",
         }}
       >
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+        <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
           {titleColumn ? (
             <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
               <ReceiptLongRoundedIcon fontSize="small" color="primary" sx={{ flexShrink: 0 }} />
@@ -524,31 +532,88 @@ function VerticalBodyRow({
         ) : null}
       </Box>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: {
-            xs: "1fr",
-            sm: "repeat(2, minmax(0, 1fr))",
-            lg: "repeat(4, minmax(0, 1fr))",
-          },
-          columnGap: 2,
-          rowGap: 1,
-          px: 1.5,
-          py: 1.25,
-        }}
-      >
-        {detailColumns.map((col) => (
-          <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
-              {getColumnHeader(col)}
-            </Typography>
-            <Box sx={{ fontSize, minWidth: 0 }}>
-              {renderCell(row, col)}
+      {detailGroups ? (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              md: "repeat(2, minmax(0, 1fr))",
+              lg: "repeat(4, minmax(0, 1fr))",
+            },
+            columnGap: 3,
+            rowGap: 1.5,
+            px: 1.5,
+            py: 1.25,
+          }}
+        >
+          {detailGroups.map((group) => (
+            <Box key={group.key} sx={{ minWidth: 0 }}>
+              {group.label ? (
+                <Typography
+                  variant="caption"
+                  sx={{
+                    display: "block",
+                    mb: 0.75,
+                    pb: 0.5,
+                    borderBottom: "1px solid",
+                    borderColor: "divider",
+                    color: "text.primary",
+                    fontWeight: 700,
+                  }}
+                >
+                  {group.label.toLocaleUpperCase("vi-VN")}
+                </Typography>
+              ) : null}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr",
+                  columnGap: 2,
+                  rowGap: 1,
+                }}
+              >
+                {group.columns.map((col) => (
+                  <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
+                      {getColumnHeader(col)}
+                    </Typography>
+                    <Box sx={{ fontSize, minWidth: 0 }}>
+                      {renderCell(row, col)}
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
             </Box>
-          </Box>
-        ))}
-      </Box>
+          ))}
+        </Box>
+      ) : (
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: {
+              xs: "1fr",
+              sm: "repeat(2, minmax(0, 1fr))",
+              lg: "repeat(4, minmax(0, 1fr))",
+            },
+            columnGap: 2,
+            rowGap: 1,
+            px: 1.5,
+            py: 1.25,
+          }}
+        >
+          {detailColumns.map((col) => (
+            <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
+                {getColumnHeader(col)}
+              </Typography>
+              <Box sx={{ fontSize, minWidth: 0 }}>
+                {renderCell(row, col)}
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
     </Box>
   );
 }
@@ -559,6 +624,7 @@ const MemoVerticalBodyRow = React.memo(VerticalBodyRow, (prev, next) => (
   && prev.titleColumn === next.titleColumn
   && prev.summaryColumns === next.summaryColumns
   && prev.detailColumns === next.detailColumns
+  && prev.detailGroups === next.detailGroups
   && prev.hasActions === next.hasActions
   && prev.isClickableRow === next.isClickableRow
   && prev.rowHoverBackground === next.rowHoverBackground
@@ -1342,6 +1408,45 @@ export function EditTable<T extends { id?: string | number }>({
     () => columns.filter((col) => col !== titleColumn && !summaryColumns.includes(col)),
     [columns, summaryColumns, titleColumn]
   );
+  const verticalDetailGroups = React.useMemo<VerticalDetailGroup[] | null>(() => {
+    if (!detailColumns.some((col) => col.verticalGroup)) return null;
+
+    const groups: VerticalDetailGroup[] = [];
+    const groupIndex = new Map<string, VerticalDetailGroup>();
+
+    for (const col of detailColumns) {
+      const resolvedGroup = resolveLocalizedText(col.verticalGroup, t);
+      const key = resolvedGroup || "__ungrouped";
+      let group = groupIndex.get(key);
+
+      if (!group) {
+        group = {
+          key,
+          label: resolvedGroup || null,
+          order: col.verticalGroupOrder ?? Number.MAX_SAFE_INTEGER,
+          columns: [],
+        };
+        groupIndex.set(key, group);
+        groups.push(group);
+      } else if (col.verticalGroupOrder != null && col.verticalGroupOrder < group.order) {
+        group.order = col.verticalGroupOrder;
+      }
+
+      group.columns.push(col as unknown as RenderColumn);
+    }
+
+    groups.sort((a, b) => a.order - b.order);
+
+    for (const group of groups) {
+      group.columns.sort((a, b) => {
+        const aOrder = a.verticalOrder ?? Number.MAX_SAFE_INTEGER;
+        const bOrder = b.verticalOrder ?? Number.MAX_SAFE_INTEGER;
+        return aOrder - bOrder;
+      });
+    }
+
+    return groups;
+  }, [detailColumns, t]);
 
   const renderPagination = () => {
     if (hidePagination) return null;
@@ -1494,6 +1599,7 @@ export function EditTable<T extends { id?: string | number }>({
                     titleColumn={titleColumn as unknown as RenderColumn}
                     summaryColumns={summaryColumns as unknown as RenderColumn[]}
                     detailColumns={detailColumns as unknown as RenderColumn[]}
+                    detailGroups={verticalDetailGroups}
                     hasActions={hasActions}
                     isClickableRow={isClickableRow}
                     rowHoverBackground={rowHoverBackground}

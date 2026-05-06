@@ -92,6 +92,11 @@ export type ColumnDef<T> = {
   labelField?: boolean;
   present?: (row: T) => string;
 
+  // Vertical view
+  verticalGroup?: LocalizedText;
+  verticalGroupOrder?: number;
+  verticalOrder?: number;
+
   // Image
   shape?: ImageShape;
 
