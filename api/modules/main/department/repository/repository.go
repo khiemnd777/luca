@@ -159,6 +159,18 @@ func (r *departmentRepo) GetByID(ctx context.Context, id int) (*model.Department
 	}
 
 	departmentDTO := mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity)
+	if entity.ParentID != nil && *entity.ParentID > 0 {
+		parent, err := r.db.Department.Query().
+			Where(
+				department.ID(*entity.ParentID),
+				department.Deleted(false),
+			).
+			Only(ctx)
+		if err != nil {
+			return nil, err
+		}
+		departmentDTO.Parent = mapper.MapAs[*generated.Department, *model.DepartmentDTO](parent)
+	}
 
 	return departmentDTO, nil
 }
@@ -168,10 +180,13 @@ func (r *departmentRepo) GetChildByID(ctx context.Context, parentDeptID, childDe
 }
 
 func (r *departmentRepo) getChildByID(ctx context.Context, tx *generated.Tx, parentDeptID, childDeptID int) (*model.DepartmentDTO, error) {
-	query := r.db.Department.Query()
-	if tx != nil {
-		query = tx.Department.Query()
+	newDepartmentQuery := func() *generated.DepartmentQuery {
+		if tx != nil {
+			return tx.Department.Query()
+		}
+		return r.db.Department.Query()
 	}
+	query := newDepartmentQuery()
 
 	entity, err := query.
 		Where(
@@ -184,7 +199,18 @@ func (r *departmentRepo) getChildByID(ctx context.Context, tx *generated.Tx, par
 		return nil, err
 	}
 
-	return mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity), nil
+	dto := mapper.MapAs[*generated.Department, *model.DepartmentDTO](entity)
+	parent, err := newDepartmentQuery().
+		Where(
+			department.ID(parentDeptID),
+			department.Deleted(false),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	dto.Parent = mapper.MapAs[*generated.Department, *model.DepartmentDTO](parent)
+	return dto, nil
 }
 
 func (r *departmentRepo) GetBySlug(ctx context.Context, slug string) (*model.DepartmentDTO, error) {

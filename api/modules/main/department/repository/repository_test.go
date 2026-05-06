@@ -75,6 +75,9 @@ func TestDepartmentRepositoryChildScopedReadUpdateDelete(t *testing.T) {
 	if got.ID != child.ID {
 		t.Fatalf("GetChildByID() id = %d, want %d", got.ID, child.ID)
 	}
+	if got.Parent == nil || got.Parent.ID != parent.ID || got.Parent.Name != parent.Name {
+		t.Fatalf("GetChildByID() parent = %+v, want parent %d/%q", got.Parent, parent.ID, parent.Name)
+	}
 
 	if _, err := repo.GetChildByID(ctx, parent.ID, otherChild.ID); !generated.IsNotFound(err) {
 		t.Fatalf("mismatched GetChildByID() error = %v, want ent not found", err)
@@ -113,4 +116,23 @@ func TestDepartmentRepositoryChildScopedReadUpdateDelete(t *testing.T) {
 		t.Fatalf("DeleteChild() error = %v", err)
 	}
 	requireDepartmentState(t, ctx, db, child.ID, "Updated Child", parent.ID, true)
+}
+
+func TestDepartmentRepositoryGetByIDIncludesParentForChild(t *testing.T) {
+	ctx := context.Background()
+	repo, db := newDepartmentTestRepo(t)
+
+	parent := createDepartment(t, ctx, db, "Parent", nil)
+	child := createDepartment(t, ctx, db, "Child", &parent.ID)
+
+	got, err := repo.GetByID(ctx, child.ID)
+	if err != nil {
+		t.Fatalf("GetByID() error = %v", err)
+	}
+	if got.ID != child.ID {
+		t.Fatalf("GetByID() id = %d, want %d", got.ID, child.ID)
+	}
+	if got.Parent == nil || got.Parent.ID != parent.ID || got.Parent.Name != parent.Name {
+		t.Fatalf("GetByID() parent = %+v, want parent %d/%q", got.Parent, parent.ID, parent.Name)
+	}
 }

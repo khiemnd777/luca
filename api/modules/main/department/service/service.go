@@ -49,11 +49,11 @@ func NewDepartmentService(repo repository.DepartmentRepository, deps *module.Mod
 }
 
 func keyDept(id int) string {
-	return fmt.Sprintf("department:%d", id)
+	return fmt.Sprintf("department:v2:%d", id)
 }
 
 func keyDeptChild(parentDeptID, childDeptID int) string {
-	return fmt.Sprintf("department:child:%d:%d", parentDeptID, childDeptID)
+	return fmt.Sprintf("department:child:v2:%d:%d", parentDeptID, childDeptID)
 }
 
 func keyDeptSlug(slug string) string {

@@ -26,8 +26,7 @@ export async function list(tableOpts: FetchTableOpts): Promise<ListResult<Deparm
 }
 
 export async function getById(deptId?: number): Promise<DeparmentModel> {
-  const { departmentApiPath } = useAuthStore.getState();
-  const { data } = await apiClient.get<unknown>(`${departmentApiPath()}/child/${deptId}`);
+  const { data } = await apiClient.get<unknown>(`${deptPath(deptId)}/detail`);
   return mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");
 }
 
@@ -55,9 +54,10 @@ export async function create(deptId: number, model: DeparmentModel): Promise<Dep
 }
 
 export async function update(deptId: number, model: DeparmentModel): Promise<DeparmentModel> {
-  const { departmentApiPath } = useAuthStore.getState();
+  const parentId = Number(model.parentId ?? 0);
+  const path = parentId > 0 ? `${deptPath(parentId)}/child/${deptId}` : `${deptPath(deptId)}/detail`;
   const { data } = await apiClient.put<unknown>(
-    `${departmentApiPath()}/child/${deptId}`,
+    path,
     buildDepartmentMutationWirePayload(model as unknown as Record<string, unknown>),
   );
   const result = mapper.map<unknown, DeparmentModel>("Department", data, "dto_to_model");

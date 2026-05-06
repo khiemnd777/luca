@@ -20,9 +20,14 @@ import (
 type departmentServiceStub struct {
 	createInput model.DepartmentDTO
 
+	getID int
+
 	getChildParentID int
 	getChildID       int
 	getChildErr      error
+
+	updateInput  model.DepartmentDTO
+	updateUserID int
 
 	updateChildParentID int
 	updateChildInput    model.DepartmentDTO
@@ -34,8 +39,10 @@ func (s *departmentServiceStub) Create(_ context.Context, input model.Department
 	return &s.createInput, nil
 }
 
-func (s *departmentServiceStub) Update(context.Context, model.DepartmentDTO, int) (*model.DepartmentDTO, error) {
-	panic("unexpected call to Update")
+func (s *departmentServiceStub) Update(_ context.Context, input model.DepartmentDTO, userID int) (*model.DepartmentDTO, error) {
+	s.updateInput = input
+	s.updateUserID = userID
+	return &input, nil
 }
 
 func (s *departmentServiceStub) UpdateChild(_ context.Context, parentDeptID int, input model.DepartmentDTO, userID int) (*model.DepartmentDTO, error) {
@@ -45,8 +52,9 @@ func (s *departmentServiceStub) UpdateChild(_ context.Context, parentDeptID int,
 	return &input, nil
 }
 
-func (s *departmentServiceStub) GetByID(context.Context, int) (*model.DepartmentDTO, error) {
-	panic("unexpected call to GetByID")
+func (s *departmentServiceStub) GetByID(_ context.Context, id int) (*model.DepartmentDTO, error) {
+	s.getID = id
+	return &model.DepartmentDTO{ID: id, Name: "Root"}, nil
 }
 
 func (s *departmentServiceStub) GetChildByID(_ context.Context, parentDeptID, childDeptID int) (*model.DepartmentDTO, error) {
@@ -126,6 +134,24 @@ func TestGetByIDUsesParentAndChildRouteParams(t *testing.T) {
 	}
 }
 
+func TestGetDepartmentByIDUsesRouteDepartmentID(t *testing.T) {
+	svc := &departmentServiceStub{}
+	app, h := newDepartmentHandlerTestApp(svc, "department.view")
+	app.Get("/:dept_id/detail", h.GetDepartmentByID)
+
+	req := httptest.NewRequest(http.MethodGet, "/10/detail", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.getID != 10 {
+		t.Fatalf("handler id = %d, want 10", svc.getID)
+	}
+}
+
 func TestGetByIDChildScopeMissReturns404(t *testing.T) {
 	svc := &departmentServiceStub{getChildErr: service.ErrDepartmentChildNotFound}
 	app, h := newDepartmentHandlerTestApp(svc, "department.view")
@@ -185,5 +211,27 @@ func TestUpdatePassesParentScopeAndNormalizesParentID(t *testing.T) {
 	}
 	if svc.updateChildUserID != 77 {
 		t.Fatalf("update user id = %d, want 77", svc.updateChildUserID)
+	}
+}
+
+func TestUpdateDepartmentUsesRouteDepartmentID(t *testing.T) {
+	svc := &departmentServiceStub{}
+	app, h := newDepartmentHandlerTestApp(svc, "department.update")
+	app.Put("/:dept_id/detail", h.UpdateDepartment)
+
+	req := httptest.NewRequest(http.MethodPut, "/10/detail", bytes.NewBufferString(`{"id":99,"name":"Root"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.updateInput.ID != 10 {
+		t.Fatalf("update id = %d, want 10", svc.updateInput.ID)
+	}
+	if svc.updateUserID != 77 {
+		t.Fatalf("update user id = %d, want 77", svc.updateUserID)
 	}
 }

@@ -4,6 +4,7 @@ import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import SaveOutlinedIcon from "@mui/icons-material/SaveOutlined";
 import SyncAltOutlinedIcon from "@mui/icons-material/SyncAltOutlined";
+import { Box, Divider, Stack, Typography } from "@mui/material";
 import { registerSlot } from "@core/module/registry";
 import { IfPermission } from "@core/auth/if-permission";
 import type { AutoFormRef } from "@core/form/form.types";
@@ -22,8 +23,53 @@ import { useAuthStore } from "@store/auth-store";
 import { createDepartmentDetailStaffTableSchema } from "@features/staff/tables/department-detail-staff.table";
 import { DashboardOverview } from "@features/dashboard/components/dashboard-overview";
 import { DashboardProvider } from "@features/dashboard/context/dashboard-context";
+import type { DeparmentModel } from "@features/department/model/department.model";
+import { formatDepartmentPhoneNumbers } from "@features/department/utils/department-phone.utils";
 
 const DEPARTMENT_DETAIL_STAFFS_TABLE = "department-detail-staffs";
+
+function DetailField({ label, value }: { label: string; value?: React.ReactNode }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.secondary">
+        {label}
+      </Typography>
+      <Typography
+        variant="body2"
+        sx={{
+          mt: 0.25,
+          fontWeight: 500,
+          overflowWrap: "anywhere",
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {value || "—"}
+      </Typography>
+    </Box>
+  );
+}
+
+function DepartmentReadonlyFields({ department }: { department?: DeparmentModel | null }) {
+  return (
+    <Box
+      sx={{
+        display: "grid",
+        gridTemplateColumns: { xs: "1fr", md: "repeat(2, minmax(0, 1fr))" },
+        gap: 2,
+      }}
+    >
+      <DetailField label="Tên chi nhánh" value={department?.name} />
+      <DetailField label="Số điện thoại" value={formatDepartmentPhoneNumbers(department)} />
+      <DetailField label="Email" value={department?.email} />
+      <DetailField label="Mã số thuế" value={department?.tax} />
+      <DetailField label="Địa chỉ" value={department?.address} />
+      <DetailField
+        label="Trạng thái"
+        value={department?.active === undefined ? undefined : department.active ? "Kích hoạt" : "Tạm ngưng"}
+      />
+    </Box>
+  );
+}
 
 export function DeparmentDetailWidget() {
   const { departmentId } = useParams();
@@ -96,12 +142,32 @@ export function DeparmentDetailWidget() {
             </>
           }
         >
-          <AutoForm
-            key={`${resolvedDepartmentId}-${formVersion}`}
-            name="department"
-            ref={formRef}
-            initial={{ id: departmentId }}
-          />
+          <Stack spacing={2.5}>
+            {detail?.parentId ? (
+              <Box>
+                <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700 }}>
+                  Chi nhánh cha
+                </Typography>
+                <DepartmentReadonlyFields department={detail.parent} />
+              </Box>
+            ) : null}
+
+            {detail?.parentId ? <Divider /> : null}
+
+            <Box>
+              {detail?.parentId ? (
+                <Typography variant="subtitle2" sx={{ mb: 1.25, fontWeight: 700 }}>
+                  Chi nhánh con
+                </Typography>
+              ) : null}
+              <AutoForm
+                key={`${resolvedDepartmentId}-${formVersion}`}
+                name="department"
+                ref={formRef}
+                initial={{ id: departmentId }}
+              />
+            </Box>
+          </Stack>
         </SectionCard>
       ),
     },
