@@ -58,6 +58,7 @@ export function DeparmentDetailWidget() {
         <DashboardProvider
           departmentId={resolvedDepartmentId}
           cacheNamespace={`department-${resolvedDepartmentId || "unknown"}`}
+          showProductionPlanning={false}
         >
           <DashboardOverview />
         </DashboardProvider>
