@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Alert,
+  Box,
   Button,
   Chip,
   Dialog,
@@ -15,7 +16,13 @@ import {
   Typography,
 } from "@mui/material";
 import { SectionCard } from "@shared/components/ui/section-card";
-import type { ProductionPlanningConfig, ProductionPlanningOverview, ProductionPlanningRecommendation } from "../model/dashboard.model";
+import type {
+  ProductionPlanningBottleneck,
+  ProductionPlanningConfig,
+  ProductionPlanningOverview,
+  ProductionPlanningRecommendation,
+  ProductionPlanningRiskItem,
+} from "../model/dashboard.model";
 import { formatDateTime12 } from "@root/shared/utils/datetime.utils";
 import { formatPlanningMinutes, planningRiskColor, planningRiskLabel } from "@root/shared/utils/order.utils";
 import { navigate } from "@root/core/navigation/navigate";
@@ -27,6 +34,13 @@ type Props = {
   overview: ProductionPlanningOverview | null;
   loading?: boolean;
 };
+
+const RISK_ITEM_LIMIT = 6;
+const BOTTLENECK_LIMIT = 5;
+const RECOMMENDATION_LIMIT = 3;
+const EMPTY_RISK_ITEMS: ProductionPlanningRiskItem[] = [];
+const EMPTY_BOTTLENECKS: ProductionPlanningBottleneck[] = [];
+const EMPTY_RECOMMENDATIONS: ProductionPlanningRecommendation[] = [];
 
 export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
   const [applyingId, setApplyingId] = React.useState<string | null>(null);
@@ -40,7 +54,7 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
     return () => window.clearInterval(timer);
   }, []);
 
-  const applyRecommendation = async (recommendation: ProductionPlanningRecommendation) => {
+  const applyRecommendation = React.useCallback(async (recommendation: ProductionPlanningRecommendation) => {
     setApplyingId(recommendation.id);
     try {
       await applyProductionPlanningRecommendation(recommendation.id);
@@ -48,12 +62,24 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
     } finally {
       setApplyingId(null);
     }
-  };
+  }, []);
 
   const summary = overview?.summary;
-  const items = overview?.riskItems ?? [];
-  const bottlenecks = overview?.bottlenecks ?? [];
-  const recommendations = overview?.recommendations ?? [];
+  const riskItems = overview?.riskItems ?? EMPTY_RISK_ITEMS;
+  const visibleRiskItems = React.useMemo(
+    () => riskItems.slice(0, RISK_ITEM_LIMIT),
+    [riskItems],
+  );
+  const bottlenecks = overview?.bottlenecks ?? EMPTY_BOTTLENECKS;
+  const visibleBottlenecks = React.useMemo(
+    () => bottlenecks.slice(0, BOTTLENECK_LIMIT),
+    [bottlenecks],
+  );
+  const recommendations = overview?.recommendations ?? EMPTY_RECOMMENDATIONS;
+  const visibleRecommendations = React.useMemo(
+    () => recommendations.slice(0, RECOMMENDATION_LIMIT),
+    [recommendations],
+  );
   const canManage = hasAnyPermissions("production_planning.manage");
 
   const openConfig = () => {
@@ -101,59 +127,18 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
 
         <Stack spacing={1}>
           <Typography variant="subtitle2" fontWeight={700}>Top rủi ro</Typography>
-          {items.length === 0 ? (
+          {riskItems.length === 0 ? (
             <Typography variant="body2" color="text.secondary">Chưa có dữ liệu rủi ro sản xuất.</Typography>
-          ) : items.slice(0, 6).map((item) => (
-            <Stack
-              key={`${item.orderId}:${item.orderItemId}:${item.inProgressId ?? 0}`}
-              spacing={0.75}
-              sx={{ cursor: "pointer" }}
-              onClick={() => navigate(`/order/${item.orderId}`)}
-            >
-              <Stack direction="row" justifyContent="space-between" spacing={1}>
-                <Typography variant="body2" fontWeight={700}>
-                  {item.orderItemCode || item.orderCode || `#${item.orderId}`}
-                </Typography>
-                <Chip
-                  size="small"
-                  label={`${planningRiskLabel(item.riskBucket)} · ${formatPlanningMinutes(item.remainingMinutes)}`}
-                  sx={{ bgcolor: planningRiskColor(item.riskBucket), color: "#fff" }}
-                />
-              </Stack>
-              <Typography variant="caption" color="text.secondary">
-                {[item.sectionName, item.processName, item.assignedName].filter(Boolean).join(" • ") || "Chưa có công đoạn"}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                ETA {item.eta ? formatDateTime12(item.eta) : "chưa đủ cấu hình"} · Giao {item.deliveryAt ? formatDateTime12(item.deliveryAt) : "––"}
-              </Typography>
-            </Stack>
-          ))}
+          ) : (
+            <RiskItemList items={visibleRiskItems} />
+          )}
         </Stack>
 
         <Divider />
 
         <Stack spacing={1}>
           <Typography variant="subtitle2" fontWeight={700}>Bottleneck</Typography>
-          {bottlenecks.slice(0, 5).map((item) => (
-            <Stack key={item.key} spacing={0.5}>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
-                <Typography variant="body2">{item.label}</Typography>
-                <Stack direction="row" spacing={0.75} flexShrink={0}>
-                  <Chip size="small" variant="outlined" label={`${item.activeCount} việc`} />
-                  <Chip
-                    size="small"
-                    label={`risk ${item.topRiskScore}%`}
-                    color={item.topRiskScore >= 80 ? "error" : item.topRiskScore >= 50 ? "warning" : "primary"}
-                  />
-                </Stack>
-              </Stack>
-              <LinearProgress
-                variant="determinate"
-                value={Math.min(100, item.topRiskScore)}
-                color={item.topRiskScore >= 80 ? "error" : item.topRiskScore >= 50 ? "warning" : "primary"}
-              />
-            </Stack>
-          ))}
+          <BottleneckList items={visibleBottlenecks} />
         </Stack>
 
         {recommendations.length > 0 ? (
@@ -161,21 +146,11 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
             <Divider />
             <Stack spacing={1}>
               <Typography variant="subtitle2" fontWeight={700}>Đề xuất điều phối</Typography>
-              {recommendations.slice(0, 3).map((item) => (
-                <Stack key={item.id} direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                  <Typography variant="body2">
-                    Gán cho {item.targetName}
-                  </Typography>
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    disabled={applyingId === item.id}
-                    onClick={() => applyRecommendation(item)}
-                  >
-                    Áp dụng
-                  </Button>
-                </Stack>
-              ))}
+              <RecommendationList
+                applyingId={applyingId}
+                items={visibleRecommendations}
+                onApply={applyRecommendation}
+              />
             </Stack>
           </>
         ) : null}
@@ -253,3 +228,232 @@ export function ProductionPlanningOverviewCard({ overview, loading }: Props) {
 function MetricChip({ label, value, color }: { label: string; value: number; color: "error" | "warning" | "success" | "secondary" }) {
   return <Chip size="small" color={color} label={`${label}: ${value}`} />;
 }
+
+function useFlipListAnimation(rowIds: string[]) {
+  const rowElementsRef = React.useRef(new Map<string, HTMLElement>());
+  const previousRowRectsRef = React.useRef(new Map<string, DOMRect>());
+
+  React.useLayoutEffect(() => {
+    const reduceMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const currentRowIds = new Set(rowIds);
+    const nextRects = new Map<string, DOMRect>();
+
+    rowIds.forEach((rowId) => {
+      const element = rowElementsRef.current.get(rowId);
+      if (!element) return;
+
+      const rect = element.getBoundingClientRect();
+      nextRects.set(rowId, rect);
+
+      const previousRect = previousRowRectsRef.current.get(rowId);
+      if (!previousRect || reduceMotion) return;
+
+      const deltaX = previousRect.left - rect.left;
+      const deltaY = previousRect.top - rect.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+
+      element.animate(
+        [
+          { transform: `translate(${deltaX}px, ${deltaY}px)` },
+          { transform: "translate(0, 0)" },
+        ],
+        {
+          duration: 220,
+          easing: "cubic-bezier(0.2, 0, 0, 1)",
+        },
+      );
+    });
+
+    previousRowRectsRef.current = nextRects;
+    rowElementsRef.current.forEach((_, rowId) => {
+      if (!currentRowIds.has(rowId)) {
+        rowElementsRef.current.delete(rowId);
+      }
+    });
+  }, [rowIds]);
+
+  return React.useCallback((rowId: string) => (element: HTMLElement | null) => {
+    if (element) {
+      rowElementsRef.current.set(rowId, element);
+    } else {
+      rowElementsRef.current.delete(rowId);
+    }
+  }, []);
+}
+
+function riskItemKey(item: ProductionPlanningRiskItem) {
+  return `${item.orderId}:${item.orderItemId}:${item.inProgressId ?? 0}`;
+}
+
+function recommendationEqual(
+  previous: ProductionPlanningRecommendation,
+  next: ProductionPlanningRecommendation,
+) {
+  return previous.id === next.id
+    && previous.targetName === next.targetName
+    && previous.status === next.status
+    && previous.reason === next.reason;
+}
+
+function riskItemEqual(previous: ProductionPlanningRiskItem, next: ProductionPlanningRiskItem) {
+  return previous.orderId === next.orderId
+    && previous.orderItemId === next.orderItemId
+    && previous.inProgressId === next.inProgressId
+    && previous.orderCode === next.orderCode
+    && previous.orderItemCode === next.orderItemCode
+    && previous.processName === next.processName
+    && previous.sectionName === next.sectionName
+    && previous.assignedName === next.assignedName
+    && previous.eta === next.eta
+    && previous.deliveryAt === next.deliveryAt
+    && previous.remainingMinutes === next.remainingMinutes
+    && previous.riskBucket === next.riskBucket;
+}
+
+function bottleneckEqual(previous: ProductionPlanningBottleneck, next: ProductionPlanningBottleneck) {
+  return previous.key === next.key
+    && previous.label === next.label
+    && previous.activeCount === next.activeCount
+    && previous.topRiskScore === next.topRiskScore;
+}
+
+function RiskItemList({ items }: { items: ProductionPlanningRiskItem[] }) {
+  const rowIds = React.useMemo(() => items.map(riskItemKey), [items]);
+  const setRowElement = useFlipListAnimation(rowIds);
+
+  return (
+    <>
+      {items.map((item) => {
+        const rowId = riskItemKey(item);
+        return (
+          <Box key={rowId} ref={setRowElement(rowId)}>
+            <RiskItemRow item={item} />
+          </Box>
+        );
+      })}
+    </>
+  );
+}
+
+const RiskItemRow = React.memo(function RiskItemRow({ item }: { item: ProductionPlanningRiskItem }) {
+  return (
+    <Stack
+      spacing={0.75}
+      sx={{ cursor: "pointer" }}
+      onClick={() => navigate(`/order/${item.orderId}`)}
+    >
+      <Stack direction="row" justifyContent="space-between" spacing={1}>
+        <Typography variant="body2" fontWeight={700}>
+          {item.orderItemCode || item.orderCode || `#${item.orderId}`}
+        </Typography>
+        <Chip
+          size="small"
+          label={`${planningRiskLabel(item.riskBucket)} · ${formatPlanningMinutes(item.remainingMinutes)}`}
+          sx={{ bgcolor: planningRiskColor(item.riskBucket), color: "#fff" }}
+        />
+      </Stack>
+      <Typography variant="caption" color="text.secondary">
+        {[item.sectionName, item.processName, item.assignedName].filter(Boolean).join(" • ") || "Chưa có công đoạn"}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        ETA {item.eta ? formatDateTime12(item.eta) : "chưa đủ cấu hình"} · Giao {item.deliveryAt ? formatDateTime12(item.deliveryAt) : "––"}
+      </Typography>
+    </Stack>
+  );
+}, (previous, next) => riskItemEqual(previous.item, next.item));
+
+function BottleneckList({ items }: { items: ProductionPlanningBottleneck[] }) {
+  const rowIds = React.useMemo(() => items.map((item) => item.key), [items]);
+  const setRowElement = useFlipListAnimation(rowIds);
+
+  return (
+    <>
+      {items.map((item) => (
+        <Box key={item.key} ref={setRowElement(item.key)}>
+          <BottleneckRow item={item} />
+        </Box>
+      ))}
+    </>
+  );
+}
+
+const BottleneckRow = React.memo(function BottleneckRow({ item }: { item: ProductionPlanningBottleneck }) {
+  const progressColor = item.topRiskScore >= 80 ? "error" : item.topRiskScore >= 50 ? "warning" : "primary";
+
+  return (
+    <Stack spacing={0.5}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" gap={1}>
+        <Typography variant="body2">{item.label}</Typography>
+        <Stack direction="row" spacing={0.75} flexShrink={0}>
+          <Chip size="small" variant="outlined" label={`${item.activeCount} việc`} />
+          <Chip
+            size="small"
+            label={`risk ${item.topRiskScore}%`}
+            color={progressColor}
+          />
+        </Stack>
+      </Stack>
+      <LinearProgress
+        variant="determinate"
+        value={Math.min(100, item.topRiskScore)}
+        color={progressColor}
+      />
+    </Stack>
+  );
+}, (previous, next) => bottleneckEqual(previous.item, next.item));
+
+function RecommendationList({
+  applyingId,
+  items,
+  onApply,
+}: {
+  applyingId: string | null;
+  items: ProductionPlanningRecommendation[];
+  onApply: (item: ProductionPlanningRecommendation) => void;
+}) {
+  const rowIds = React.useMemo(() => items.map((item) => item.id), [items]);
+  const setRowElement = useFlipListAnimation(rowIds);
+
+  return (
+    <>
+      {items.map((item) => (
+        <Box key={item.id} ref={setRowElement(item.id)}>
+          <RecommendationRow
+            applying={applyingId === item.id}
+            item={item}
+            onApply={onApply}
+          />
+        </Box>
+      ))}
+    </>
+  );
+}
+
+const RecommendationRow = React.memo(function RecommendationRow({
+  applying,
+  item,
+  onApply,
+}: {
+  applying: boolean;
+  item: ProductionPlanningRecommendation;
+  onApply: (item: ProductionPlanningRecommendation) => void;
+}) {
+  return (
+    <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+      <Typography variant="body2">
+        Gán cho {item.targetName}
+      </Typography>
+      <Button
+        size="small"
+        variant="outlined"
+        disabled={applying}
+        onClick={() => onApply(item)}
+      >
+        Áp dụng
+      </Button>
+    </Stack>
+  );
+}, (previous, next) => previous.applying === next.applying
+  && previous.onApply === next.onApply
+  && recommendationEqual(previous.item, next.item));
