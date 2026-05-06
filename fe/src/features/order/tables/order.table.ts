@@ -52,6 +52,9 @@ const columns: ColumnDef<OrderModel>[] = [
   {
     key: "remakeCount",
     header: "Làm lại",
+    verticalGroup: "Vận hành",
+    verticalGroupOrder: 2,
+    verticalOrder: 1,
     accessor: (row) => row.remakeCount ? `${row.remakeCount} lần` : '––',
     sortable: true,
   },
@@ -63,22 +66,28 @@ const columns: ColumnDef<OrderModel>[] = [
   //     mode: "whole",
   //   }
   // },
-  { key: "clinicName", header: "Nha khoa", sortable: true, },
-  { key: "dentistName", header: "Nha sĩ", sortable: true, },
-  { key: "patientName", header: "Bệnh nhân", sortable: true, },
+  { key: "clinicName", header: "Nha khoa", verticalGroup: "Khách hàng", verticalGroupOrder: 1, verticalOrder: 1, sortable: true, },
+  { key: "dentistName", header: "Nha sĩ", verticalGroup: "Khách hàng", verticalGroupOrder: 1, verticalOrder: 2, sortable: true, },
+  { key: "patientName", header: "Bệnh nhân", verticalGroup: "Khách hàng", verticalGroupOrder: 1, verticalOrder: 3, sortable: true, },
   {
     key: "processNameLatest",
     header: "Công đoạn",
+    verticalGroup: "Vận hành",
+    verticalGroupOrder: 2,
+    verticalOrder: 2,
+    accessor: (row) => row.processNameLatest || "––",
   },
   {
     key: "totalPrice",
     type: "currency",
     header: "Thành tiền",
+    verticalGroup: "Tài chính",
+    verticalGroupOrder: 3,
     sortable: true,
   },
-  { key: "deliveryDate", header: "Ngày giao", type: "datetime", sortable: true, },
-  { key: "updatedAt", header: "Cập nhật lúc", type: "datetime", sortable: true, },
-  { key: "createdAt", header: "Ngày tạo đơn", type: "datetime", sortable: true, },
+  { key: "deliveryDate", header: "Ngày giao", verticalGroup: "Vận hành", verticalGroupOrder: 2, verticalOrder: 3, type: "datetime", sortable: true, },
+  { key: "updatedAt", header: "Cập nhật lúc", verticalGroup: "Theo dõi", verticalGroupOrder: 4, verticalOrder: 2, type: "datetime", sortable: true, },
+  { key: "createdAt", header: "Ngày tạo đơn", verticalGroup: "Theo dõi", verticalGroupOrder: 4, verticalOrder: 1, type: "datetime", sortable: true, },
 ];
 
 registerTable("orders", () => {

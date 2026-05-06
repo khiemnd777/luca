@@ -32,17 +32,16 @@ type OrderTableMode = "normal" | "grouping" | "vertical";
 export function OrderListWidget() {
   const appliedFilters = useOrderAdvancedSearchStore((state) => state.appliedFilters);
   const refreshToken = useOrderAdvancedSearchStore((state) => state.refreshToken);
-  const [mode, setMode] = React.useState<OrderTableMode>("grouping");
+  const [mode, setMode] = React.useState<OrderTableMode>("vertical");
   const [collapsedIds, setCollapsedIds] = React.useState<Set<number>>(new Set());
   const [historicalState, setHistoricalState] = React.useState<Record<number, GroupedOrderHistoricalState>>({});
-  const [groupedRefreshToken, setGroupedRefreshToken] = React.useState(0);
   const historicalStateRef = React.useRef(historicalState);
   const historicalRequestsRef = React.useRef(new Map<number, Promise<GroupedOrderHistoricalState>>());
   const { lastMessage } = useWebSocket();
   const reloadGroupedOrders = useDebounce(() => {
     setHistoricalState({});
     historicalRequestsRef.current.clear();
-    setGroupedRefreshToken((value) => value + 1);
+    setCollapsedIds((prev) => new Set(prev));
   }, 1500);
 
   React.useEffect(() => {
@@ -74,6 +73,11 @@ export function OrderListWidget() {
 
       return list(opts);
     },
+    [appliedFilters]
+  );
+
+  const orderTableParams = React.useMemo(
+    () => ({ advancedSearchFilters: appliedFilters }),
     [appliedFilters]
   );
 
@@ -177,6 +181,14 @@ export function OrderListWidget() {
     [mode]
   );
 
+  const createOrderButton = (
+    <IfPermission permissions={["order.create"]}>
+      <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
+        openFormDialog("order-new");
+      }} >Tạo Đơn Hàng Mới</Button>
+    </IfPermission>
+  );
+
   return (
     <SectionCard title="Quản lý đơn hàng" extra={
       <>
@@ -200,21 +212,23 @@ export function OrderListWidget() {
             Vertical
           </ToggleButton>
         </ToggleButtonGroup>
-        <IfPermission permissions={["order.create"]}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => {
-            openFormDialog("order-new");
-          }} >Tạo đơn hàng mới</Button>
-        </IfPermission>
+        {createOrderButton}
       </>
     }>
       {mode === "normal" ? (
-        <AutoTable key={`normal-${refreshToken}`} name="orders" params={{ advancedSearchFilters: appliedFilters }} />
+        <AutoTable name="orders" params={orderTableParams} reloadKey={refreshToken} />
       ) : mode === "vertical" ? (
-        <AutoTable key={`vertical-${refreshToken}`} name="orders" view="vertical" params={{ advancedSearchFilters: appliedFilters }} />
+        <AutoTable
+          name="orders"
+          view="vertical"
+          params={orderTableParams}
+          reloadKey={refreshToken}
+          verticalHeaderExtra={createOrderButton}
+        />
       ) : (
         <AutoTable
-          key={`grouping-${refreshToken}-${groupedRefreshToken}`}
           schema={groupedSchema}
+          reloadKey={refreshToken}
         />
       )}
     </SectionCard>

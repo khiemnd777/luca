@@ -13,6 +13,7 @@ export interface DeparmentModel {
   email?: string | null;
   tax?: string | null;
   parentId?: number | null;
+  parent?: DeparmentModel | null;
   createdAt?: string | null;
   updatedAt?: string | null;
 }

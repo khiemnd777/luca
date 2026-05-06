@@ -184,14 +184,59 @@ type Props<T extends { id?: string | number }> = {
   schema: TableSchema<T>;
   schemaName?: string;
   params?: Record<string, any>;
+  reloadKey?: unknown;
   view?: TableViewMode;
+  verticalHeaderExtra?: React.ReactNode;
 };
+
+function getStableRowID(row: { id?: string | number } | null | undefined): string | null {
+  if (row?.id == null) return null;
+  return String(row.id);
+}
+
+function getRowSignature(row: unknown): string {
+  try {
+    return JSON.stringify(row);
+  } catch {
+    return "";
+  }
+}
+
+function mergeStableRows<T extends { id?: string | number }>(
+  previousRows: T[],
+  nextRows: T[],
+  previousSignatures: Map<string, string>,
+): { rows: T[]; signatures: Map<string, string> } {
+  const previousByID = new Map<string, T>();
+  previousRows.forEach((row) => {
+    const rowID = getStableRowID(row);
+    if (rowID) previousByID.set(rowID, row);
+  });
+
+  const nextSignatures = new Map<string, string>();
+  const mergedRows = nextRows.map((row) => {
+    const rowID = getStableRowID(row);
+    if (!rowID) return row;
+
+    const signature = getRowSignature(row);
+    nextSignatures.set(rowID, signature);
+
+    const previousRow = previousByID.get(rowID);
+    if (previousRow && previousSignatures.get(rowID) === signature) {
+      return previousRow;
+    }
+
+    return row;
+  });
+
+  return { rows: mergedRows, signatures: nextSignatures };
+}
 
 export function ForwardSchemaTable<T extends { id?: string | number }>(
   props: Props<T>,
   ref: React.ForwardedRef<SchemaTableRef>
 ) {
-  const { schema, schemaName, params, view } = props;
+  const { schema, schemaName, params, reloadKey, view, verticalHeaderExtra } = props;
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(schema.initialPageSize ?? 20);
@@ -200,6 +245,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
 
   const [rows, setRows] = React.useState<T[]>([]);
   const [total, setTotal] = React.useState<number>(0);
+  const rowSignaturesRef = React.useRef(new Map<string, string>());
 
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [confirming, setConfirming] = React.useState(false);
@@ -214,7 +260,12 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         direction: sortDir,
         ...params,
       });
-      setRows(res.items ?? []);
+      const nextRows = res.items ?? [];
+      setRows((previousRows) => {
+        const merged = mergeStableRows(previousRows, nextRows, rowSignaturesRef.current);
+        rowSignaturesRef.current = merged.signatures;
+        return merged.rows;
+      });
       setTotal(res.total ?? 0);
       await Promise.resolve(schema.afterReload?.({
         limit: pageSize,
@@ -225,7 +276,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
       }));
       return res;
     },
-    [schema, page, pageSize, sortBy, sortDir, params],
+    [schema, page, pageSize, sortBy, sortDir, params, reloadKey],
     { key: schemaName }
   );
 
@@ -293,7 +344,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         page={page}
         pageSize={pageSize}
         total={total}
-        loading={loading}
+        loading={loading && rows.length === 0}
         onPageChange={(p) => setPage(p)}
         onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
         onRowClick={schema.onRowClick}
@@ -310,6 +361,7 @@ export function ForwardSchemaTable<T extends { id?: string | number }>(
         stickyTopOffset={schema.stickyTopOffset ?? 0}
         hidePagination={schema.hidePagination ?? false}
         view={view ?? schema.defaultView ?? "table"}
+        verticalHeaderExtra={verticalHeaderExtra}
 
         // actions
         onView={hasAnyPermissions(...(schema.allowUpdating ?? [])) ? schema.onView : undefined}
