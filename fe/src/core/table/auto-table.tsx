@@ -9,12 +9,13 @@ type Props<T extends { id?: string | number }> = {
   name?: string;
   schema?: TableSchema<T>;
   params?: Record<string, any>;
+  reloadKey?: unknown;
   view?: TableViewMode;
   verticalHeaderExtra?: React.ReactNode;
 };
 
 export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
-  ({ name, schema: schemaProp, params, view, verticalHeaderExtra }, ref) => {
+  ({ name, schema: schemaProp, params, reloadKey, view, verticalHeaderExtra }, ref) => {
     const schema = React.useMemo(() => {
       if (schemaProp) return schemaProp;
       if (name) return getTableSchema(name);
@@ -34,6 +35,7 @@ export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
         schema={schema}
         schemaName={name}
         params={params}
+        reloadKey={reloadKey}
         view={view}
         verticalHeaderExtra={verticalHeaderExtra}
       />

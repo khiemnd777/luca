@@ -35,14 +35,13 @@ export function OrderListWidget() {
   const [mode, setMode] = React.useState<OrderTableMode>("vertical");
   const [collapsedIds, setCollapsedIds] = React.useState<Set<number>>(new Set());
   const [historicalState, setHistoricalState] = React.useState<Record<number, GroupedOrderHistoricalState>>({});
-  const [groupedRefreshToken, setGroupedRefreshToken] = React.useState(0);
   const historicalStateRef = React.useRef(historicalState);
   const historicalRequestsRef = React.useRef(new Map<number, Promise<GroupedOrderHistoricalState>>());
   const { lastMessage } = useWebSocket();
   const reloadGroupedOrders = useDebounce(() => {
     setHistoricalState({});
     historicalRequestsRef.current.clear();
-    setGroupedRefreshToken((value) => value + 1);
+    setCollapsedIds((prev) => new Set(prev));
   }, 1500);
 
   React.useEffect(() => {
@@ -74,6 +73,11 @@ export function OrderListWidget() {
 
       return list(opts);
     },
+    [appliedFilters]
+  );
+
+  const orderTableParams = React.useMemo(
+    () => ({ advancedSearchFilters: appliedFilters }),
     [appliedFilters]
   );
 
@@ -212,19 +216,19 @@ export function OrderListWidget() {
       </>
     }>
       {mode === "normal" ? (
-        <AutoTable key={`normal-${refreshToken}`} name="orders" params={{ advancedSearchFilters: appliedFilters }} />
+        <AutoTable name="orders" params={orderTableParams} reloadKey={refreshToken} />
       ) : mode === "vertical" ? (
         <AutoTable
-          key={`vertical-${refreshToken}`}
           name="orders"
           view="vertical"
-          params={{ advancedSearchFilters: appliedFilters }}
+          params={orderTableParams}
+          reloadKey={refreshToken}
           verticalHeaderExtra={createOrderButton}
         />
       ) : (
         <AutoTable
-          key={`grouping-${refreshToken}-${groupedRefreshToken}`}
           schema={groupedSchema}
+          reloadKey={refreshToken}
         />
       )}
     </SectionCard>

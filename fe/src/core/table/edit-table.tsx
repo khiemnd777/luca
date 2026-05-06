@@ -285,6 +285,292 @@ function getCellValue<T>(row: T, col: ColumnDef<T>) {
   return (row as any)[k];
 }
 
+type RenderRow = { id?: string | number } & Record<string, unknown>;
+type RenderColumn = ColumnDef<RenderRow>;
+
+function getRenderRowID(row: unknown, fallbackIndex: number): string {
+  const id = typeof row === "object" && row !== null && "id" in row
+    ? (row as { id?: string | number }).id
+    : undefined;
+  return String(id ?? fallbackIndex);
+}
+
+function TableBodyRow({
+  row,
+  rowId,
+  columns,
+  gridTemplateColumns,
+  hasActions,
+  baseLeftOffset,
+  leftOffsets,
+  rightOffsets,
+  dense,
+  isClickableRow,
+  rowHoverBackground,
+  stickyCellBackground,
+  stickyHoverBackground,
+  stickyBoundaryColor,
+  bodyCellBorderSx,
+  fontSize,
+  renderActionButtons,
+  renderCell,
+  getRowA11yProps,
+  registerRowElement,
+}: {
+  row: RenderRow;
+  rowId: string;
+  columns: RenderColumn[];
+  gridTemplateColumns: string;
+  hasActions: boolean;
+  baseLeftOffset: number;
+  leftOffsets: number[];
+  rightOffsets: number[];
+  dense: boolean;
+  isClickableRow: boolean;
+  rowHoverBackground: string;
+  stickyCellBackground: string;
+  stickyHoverBackground: string;
+  stickyBoundaryColor: string;
+  bodyCellBorderSx: Record<string, unknown>;
+  fontSize: React.CSSProperties["fontSize"];
+  renderActionButtons: (row?: RenderRow) => React.ReactNode;
+  renderCell: (row: RenderRow, col: RenderColumn) => React.ReactNode;
+  getRowA11yProps: (row: RenderRow) => Record<string, unknown>;
+  registerRowElement: (rowId: string) => (node: HTMLElement | null) => void;
+}) {
+  return (
+    <Box
+      role="row"
+      data-row-id={rowId}
+      ref={registerRowElement(rowId)}
+      {...getRowA11yProps(row)}
+      sx={{
+        display: "grid",
+        gridTemplateColumns,
+        alignItems: "stretch",
+        cursor: isClickableRow ? "pointer" : undefined,
+        "&:hover > [role='cell']:not([data-sticky='true'])": {
+          backgroundColor: rowHoverBackground,
+        },
+        "& > [role='cell'][data-sticky='true']": {
+          backgroundColor: stickyCellBackground,
+        },
+        "&:hover > [role='cell'][data-sticky='true']": {
+          backgroundColor: stickyHoverBackground,
+        },
+      }}
+    >
+      {hasActions && (
+        <Box
+          role="cell"
+          data-sticky="true"
+          sx={{
+            position: "sticky",
+            left: 0,
+            zIndex: STICKY_Z_INDEX.actions,
+            backgroundColor: stickyCellBackground,
+            whiteSpace: "nowrap",
+            px: 1.5,
+            py: dense ? 0.75 : 1,
+            ...bodyCellBorderSx,
+            borderRight: "1px solid",
+            borderRightColor: stickyBoundaryColor,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
+          {renderActionButtons(row)}
+        </Box>
+      )}
+
+      {columns.map((c, colIdx) => {
+        const left = c.stickyLeft ? baseLeftOffset + (leftOffsets[colIdx] ?? 0) : undefined;
+        const right = c.stickyRight ? (rightOffsets[colIdx] ?? 0) : undefined;
+        return (
+          <Box
+            key={String(c.key)}
+            role="cell"
+            data-sticky={c.stickyLeft || c.stickyRight ? "true" : undefined}
+            sx={{
+              position: (c.stickyLeft || c.stickyRight) ? "sticky" : "static",
+              left,
+              right,
+              zIndex: (c.stickyLeft || c.stickyRight) ? STICKY_Z_INDEX.sticky : STICKY_Z_INDEX.normal,
+              backgroundColor: (c.stickyLeft || c.stickyRight) ? stickyCellBackground : undefined,
+              whiteSpace: "nowrap",
+              minWidth: 0,
+              px: 1.5,
+              py: dense ? 0.75 : 1,
+              ...bodyCellBorderSx,
+              display: "flex",
+              alignItems: "center",
+              fontSize,
+              lineHeight: 1.35,
+            }}
+          >
+            {renderCell(row, c)}
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}
+
+const MemoTableBodyRow = React.memo(TableBodyRow, (prev, next) => (
+  prev.row === next.row
+  && prev.rowId === next.rowId
+  && prev.columns === next.columns
+  && prev.gridTemplateColumns === next.gridTemplateColumns
+  && prev.hasActions === next.hasActions
+  && prev.baseLeftOffset === next.baseLeftOffset
+  && prev.leftOffsets === next.leftOffsets
+  && prev.rightOffsets === next.rightOffsets
+  && prev.dense === next.dense
+  && prev.isClickableRow === next.isClickableRow
+  && prev.rowHoverBackground === next.rowHoverBackground
+  && prev.stickyCellBackground === next.stickyCellBackground
+  && prev.stickyHoverBackground === next.stickyHoverBackground
+  && prev.stickyBoundaryColor === next.stickyBoundaryColor
+  && prev.fontSize === next.fontSize
+  && prev.renderActionButtons === next.renderActionButtons
+  && prev.renderCell === next.renderCell
+  && prev.getRowA11yProps === next.getRowA11yProps
+  && prev.registerRowElement === next.registerRowElement
+));
+
+function VerticalBodyRow({
+  row,
+  rowId,
+  titleColumn,
+  summaryColumns,
+  detailColumns,
+  hasActions,
+  isClickableRow,
+  rowHoverBackground,
+  fontSize,
+  renderActionButtons,
+  renderCell,
+  getColumnHeader,
+  getRowA11yProps,
+  stopRowClick,
+  registerRowElement,
+}: {
+  row: RenderRow;
+  rowId: string;
+  titleColumn?: RenderColumn;
+  summaryColumns: RenderColumn[];
+  detailColumns: RenderColumn[];
+  hasActions: boolean;
+  isClickableRow: boolean;
+  rowHoverBackground: string;
+  fontSize: React.CSSProperties["fontSize"];
+  renderActionButtons: (row?: RenderRow) => React.ReactNode;
+  renderCell: (row: RenderRow, col: RenderColumn) => React.ReactNode;
+  getColumnHeader: (col: RenderColumn) => string;
+  getRowA11yProps: (row: RenderRow) => Record<string, unknown>;
+  stopRowClick: (event: React.SyntheticEvent) => void;
+  registerRowElement: (rowId: string) => (node: HTMLElement | null) => void;
+}) {
+  return (
+    <Box
+      key={rowId}
+      role="row"
+      data-row-id={rowId}
+      ref={registerRowElement(rowId)}
+      {...getRowA11yProps(row)}
+      sx={{
+        border: "1px solid",
+        borderColor: "divider",
+        borderRadius: 1,
+        bgcolor: "background.paper",
+        cursor: isClickableRow ? "pointer" : undefined,
+        overflow: "hidden",
+        "&:hover": {
+          backgroundColor: rowHoverBackground,
+        },
+      }}
+    >
+      <Box
+        sx={{
+          px: 1.5,
+          py: 1,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 1,
+          borderBottom: "1px solid",
+          borderColor: "divider",
+        }}
+      >
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+          {titleColumn ? (
+            <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
+              <ReceiptLongRoundedIcon fontSize="small" color="primary" sx={{ flexShrink: 0 }} />
+              <Typography component="div" variant="body2" sx={{ fontWeight: 700, minWidth: 0 }}>
+                {renderCell(row, titleColumn)}
+              </Typography>
+            </Stack>
+          ) : null}
+          {summaryColumns.map((col) => (
+            <Box key={String(col.key)} sx={{ display: "inline-flex" }}>
+              {renderCell(row, col)}
+            </Box>
+          ))}
+        </Stack>
+        {hasActions ? (
+          <Box onClick={stopRowClick} sx={{ flexShrink: 0 }}>
+            {renderActionButtons(row)}
+          </Box>
+        ) : null}
+      </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: {
+            xs: "1fr",
+            sm: "repeat(2, minmax(0, 1fr))",
+            lg: "repeat(4, minmax(0, 1fr))",
+          },
+          columnGap: 2,
+          rowGap: 1,
+          px: 1.5,
+          py: 1.25,
+        }}
+      >
+        {detailColumns.map((col) => (
+          <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
+              {getColumnHeader(col)}
+            </Typography>
+            <Box sx={{ fontSize, minWidth: 0 }}>
+              {renderCell(row, col)}
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  );
+}
+
+const MemoVerticalBodyRow = React.memo(VerticalBodyRow, (prev, next) => (
+  prev.row === next.row
+  && prev.rowId === next.rowId
+  && prev.titleColumn === next.titleColumn
+  && prev.summaryColumns === next.summaryColumns
+  && prev.detailColumns === next.detailColumns
+  && prev.hasActions === next.hasActions
+  && prev.isClickableRow === next.isClickableRow
+  && prev.rowHoverBackground === next.rowHoverBackground
+  && prev.fontSize === next.fontSize
+  && prev.renderActionButtons === next.renderActionButtons
+  && prev.renderCell === next.renderCell
+  && prev.getColumnHeader === next.getColumnHeader
+  && prev.getRowA11yProps === next.getRowA11yProps
+  && prev.stopRowClick === next.stopRowClick
+  && prev.registerRowElement === next.registerRowElement
+));
+
 type SortableRowRenderProps = {
   setNodeRef?: (node: HTMLElement | null) => void;
   transformStyle?: React.CSSProperties;
@@ -428,6 +714,8 @@ export function EditTable<T extends { id?: string | number }>({
   const verticalHeaderSentinelRef = React.useRef<HTMLDivElement | null>(null);
   const verticalHeaderRef = React.useRef<HTMLDivElement | null>(null);
   const [isVerticalHeaderSticky, setIsVerticalHeaderSticky] = React.useState(false);
+  const rowElementsRef = React.useRef(new Map<string, HTMLElement>());
+  const previousRowRectsRef = React.useRef(new Map<string, DOMRect>());
   const verticalHeaderTopRadius = isVerticalHeaderSticky
     ? 0
     : Number(theme.shape.borderRadius) * tableRadius;
@@ -604,6 +892,14 @@ export function EditTable<T extends { id?: string | number }>({
     };
   }, [handleRowClick, isClickableRow]);
 
+  const registerRowElement = React.useCallback((rowId: string) => (node: HTMLElement | null) => {
+    if (node) {
+      rowElementsRef.current.set(rowId, node);
+      return;
+    }
+    rowElementsRef.current.delete(rowId);
+  }, []);
+
 
   // ==== sort state (uncontrolled for client-side) ====
   const [orderBy, setOrderBy] = React.useState<string | null>(controlledSortBy ?? null);
@@ -736,29 +1032,28 @@ export function EditTable<T extends { id?: string | number }>({
   );
 
   // ==== compute sticky offsets ====
-  const leftOffsets: number[] = [];
-  const rightOffsets: number[] = [];
-  {
+  const { leftOffsets, rightOffsets } = React.useMemo(() => {
+    const nextLeftOffsets: number[] = [];
+    const nextRightOffsets: number[] = [];
     let acc = 0;
     columns.forEach((c, i) => {
       if (c.stickyLeft) {
         const w = resolveColWidth(c, i);
-        leftOffsets[i] = acc;
+        nextLeftOffsets[i] = acc;
         acc += isNaN(w) ? 0 : w;
       }
     });
-  }
-  {
-    let acc = 0;
+    acc = 0;
     for (let i = columns.length - 1; i >= 0; i--) {
       const c = columns[i];
       if (c.stickyRight) {
         const w = resolveColWidth(c, i);
-        rightOffsets[i] = acc;
+        nextRightOffsets[i] = acc;
         acc += isNaN(w) ? 0 : w;
       }
     }
-  }
+    return { leftOffsets: nextLeftOffsets, rightOffsets: nextRightOffsets };
+  }, [columns, resolveColWidth]);
 
   const gridTemplateColumns = syncedGridTemplateColumns ?? baseGridTemplateColumns;
 
@@ -788,9 +1083,43 @@ export function EditTable<T extends { id?: string | number }>({
   const displayRows = enableDnd ? dndRows : sortedRows;
 
   const rowIds = React.useMemo(
-    () => displayRows.map((r, idx) => String((r as any).id ?? idx)),
+    () => displayRows.map((r, idx) => getRenderRowID(r, idx)),
     [displayRows]
   );
+
+  React.useLayoutEffect(() => {
+    const reduceMotion = typeof window !== "undefined"
+      && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const nextRects = new Map<string, DOMRect>();
+
+    rowIds.forEach((rowId) => {
+      const element = rowElementsRef.current.get(rowId);
+      if (!element) return;
+
+      const rect = element.getBoundingClientRect();
+      nextRects.set(rowId, rect);
+
+      const previousRect = previousRowRectsRef.current.get(rowId);
+      if (!previousRect || reduceMotion) return;
+
+      const deltaX = previousRect.left - rect.left;
+      const deltaY = previousRect.top - rect.top;
+      if (Math.abs(deltaX) < 0.5 && Math.abs(deltaY) < 0.5) return;
+
+      element.animate(
+        [
+          { transform: `translate(${deltaX}px, ${deltaY}px)` },
+          { transform: "translate(0, 0)" },
+        ],
+        {
+          duration: 220,
+          easing: "cubic-bezier(0.2, 0, 0, 1)",
+        },
+      );
+    });
+
+    previousRowRectsRef.current = nextRects;
+  }, [rowIds, view]);
 
   const handleDragEnd = React.useCallback(
     (event: DragEndEvent) => {
@@ -809,7 +1138,7 @@ export function EditTable<T extends { id?: string | number }>({
   );
 
   // ==== renderers for types ====
-  const renderCell = (row: T, col: ColumnDef<T>) => {
+  const renderCell = React.useCallback((row: T, col: ColumnDef<T>) => {
     if (col.render) return col.render(row);
 
     const val = getCellValue(row, col);
@@ -992,7 +1321,7 @@ export function EditTable<T extends { id?: string | number }>({
       default:
         return <TruncatedCell content={val as string} tooltip={String(val ?? "")} />;
     }
-  };
+  }, []);
 
   const getColumnHeader = React.useCallback((col: ColumnDef<T>) => {
     return resolveLocalizedText(col.header, t) || String(col.key);
@@ -1155,83 +1484,29 @@ export function EditTable<T extends { id?: string | number }>({
             </Box>
           ) : (
             <Stack spacing={1.25} sx={{ p: 1.5 }}>
-              {sortedRows.map((row, rowIdx) => (
-                <Box
-                  key={row.id ?? rowIdx}
-                  role="row"
-                  {...getRowA11yProps(row)}
-                  sx={{
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 1,
-                    bgcolor: "background.paper",
-                    cursor: isClickableRow ? "pointer" : undefined,
-                    overflow: "hidden",
-                    "&:hover": {
-                      backgroundColor: rowHoverBackground,
-                    },
-                  }}
-                >
-                  <Box
-                    sx={{
-                      px: 1.5,
-                      py: 1,
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 1,
-                      borderBottom: "1px solid",
-                      borderColor: "divider",
-                    }}
-                  >
-                    <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
-                      {titleColumn ? (
-                        <Stack direction="row" spacing={0.5} alignItems="center" sx={{ minWidth: 0 }}>
-                          <ReceiptLongRoundedIcon fontSize="small" color="primary" sx={{ flexShrink: 0 }} />
-                          <Typography component="div" variant="body2" sx={{ fontWeight: 700, minWidth: 0 }}>
-                            {renderCell(row, titleColumn)}
-                          </Typography>
-                        </Stack>
-                      ) : null}
-                      {summaryColumns.map((col) => (
-                        <Box key={String(col.key)} sx={{ display: "inline-flex" }}>
-                          {renderCell(row, col)}
-                        </Box>
-                      ))}
-                    </Stack>
-                    {hasActions ? (
-                      <Box onClick={stopRowClick} sx={{ flexShrink: 0 }}>
-                        {renderActionButtons(row)}
-                      </Box>
-                    ) : null}
-                  </Box>
-
-                  <Box
-                    sx={{
-                      display: "grid",
-                      gridTemplateColumns: {
-                        xs: "1fr",
-                        sm: "repeat(2, minmax(0, 1fr))",
-                        lg: "repeat(4, minmax(0, 1fr))",
-                      },
-                      columnGap: 2,
-                      rowGap: 1,
-                      px: 1.5,
-                      py: 1.25,
-                    }}
-                  >
-                    {detailColumns.map((col) => (
-                      <Box key={String(col.key)} role="cell" sx={{ minWidth: 0 }}>
-                        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.25 }}>
-                          {getColumnHeader(col)}
-                        </Typography>
-                        <Box sx={{ fontSize: theme.typography.body2.fontSize, minWidth: 0 }}>
-                          {renderCell(row, col)}
-                        </Box>
-                      </Box>
-                    ))}
-                  </Box>
-                </Box>
-              ))}
+              {sortedRows.map((row, rowIdx) => {
+                const rowId = getRenderRowID(row, rowIdx);
+                return (
+                  <MemoVerticalBodyRow
+                    key={rowId}
+                    row={row as unknown as RenderRow}
+                    rowId={rowId}
+                    titleColumn={titleColumn as unknown as RenderColumn}
+                    summaryColumns={summaryColumns as unknown as RenderColumn[]}
+                    detailColumns={detailColumns as unknown as RenderColumn[]}
+                    hasActions={hasActions}
+                    isClickableRow={isClickableRow}
+                    rowHoverBackground={rowHoverBackground}
+                    fontSize={theme.typography.body2.fontSize}
+                    renderActionButtons={renderActionButtons as unknown as (row?: RenderRow) => React.ReactNode}
+                    renderCell={renderCell as unknown as (row: RenderRow, col: RenderColumn) => React.ReactNode}
+                    getColumnHeader={getColumnHeader as unknown as (col: RenderColumn) => string}
+                    getRowA11yProps={getRowA11yProps as unknown as (row: RenderRow) => Record<string, unknown>}
+                    stopRowClick={stopRowClick}
+                    registerRowElement={registerRowElement}
+                  />
+                );
+              })}
             </Stack>
           )}
         </Box>
@@ -1590,84 +1865,34 @@ export function EditTable<T extends { id?: string | number }>({
                 </SortableContext>
               </DndContext>
             ) : (
-              sortedRows.map((r, rowIdx) => (
-                <Box
-                  role="row"
-                  key={(r as any).id ?? rowIdx}
-                  {...getRowA11yProps(r)}
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns,
-                    alignItems: "stretch",
-                    cursor: isClickableRow ? "pointer" : undefined,
-                    "&:hover > [role='cell']:not([data-sticky='true'])": {
-                      backgroundColor: rowHoverBackground,
-                    },
-                    "& > [role='cell'][data-sticky='true']": {
-                      backgroundColor: stickyCellBackground,
-                    },
-                    "&:hover > [role='cell'][data-sticky='true']": {
-                      backgroundColor: stickyHoverBackground,
-                    },
-                  }}
-                >
-                  {/* Actions cell, sticky-left */}
-                  {hasActions && (
-                    <Box
-                      role="cell"
-                      data-sticky="true"
-                      sx={{
-                        position: "sticky",
-                        left: 0,
-                        zIndex: STICKY_Z_INDEX.actions,
-                        backgroundColor: stickyCellBackground,
-                        whiteSpace: "nowrap",
-                        px: 1.5,
-                        py: dense ? 0.75 : 1,
-                        ...bodyCellBorderSx,
-                        borderRight: "1px solid",
-                        borderRightColor: stickyBoundaryColor,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      {renderActionButtons(r)}
-                    </Box>
-                  )}
-
-                  {/* Columns */}
-                  {columns.map((c, colIdx) => {
-                    const left = c.stickyLeft ? baseLeftOffset + (leftOffsets[colIdx] ?? 0) : undefined;
-                    const right = c.stickyRight ? (rightOffsets[colIdx] ?? 0) : undefined;
-                    return (
-                    <Box
-                      key={String(c.key)}
-                      role="cell"
-                      data-sticky={c.stickyLeft || c.stickyRight ? "true" : undefined}
-                      sx={{
-                        position: (c.stickyLeft || c.stickyRight) ? "sticky" : "static",
-                        left,
-                        right,
-                        zIndex: (c.stickyLeft || c.stickyRight) ? STICKY_Z_INDEX.sticky : STICKY_Z_INDEX.normal,
-                        backgroundColor: (c.stickyLeft || c.stickyRight) ? stickyCellBackground : undefined,
-                        whiteSpace: "nowrap",
-                        minWidth: 0,
-                        px: 1.5,
-                        py: dense ? 0.75 : 1,
-                        ...bodyCellBorderSx,
-                        display: "flex",
-                        alignItems: "center",
-                        fontSize: theme.typography.body2.fontSize,
-                        lineHeight: 1.35,
-                        }}
-                      >
-                        {renderCell(r, c)}
-                      </Box>
-                    );
-                  })}
-                </Box>
-              ))
+              sortedRows.map((r, rowIdx) => {
+                const rowId = getRenderRowID(r, rowIdx);
+                return (
+                  <MemoTableBodyRow
+                    key={rowId}
+                    row={r as unknown as RenderRow}
+                    rowId={rowId}
+                    columns={columns as unknown as RenderColumn[]}
+                    gridTemplateColumns={gridTemplateColumns}
+                    hasActions={hasActions}
+                    baseLeftOffset={baseLeftOffset}
+                    leftOffsets={leftOffsets}
+                    rightOffsets={rightOffsets}
+                    dense={dense}
+                    isClickableRow={isClickableRow}
+                    rowHoverBackground={rowHoverBackground}
+                    stickyCellBackground={stickyCellBackground}
+                    stickyHoverBackground={stickyHoverBackground}
+                    stickyBoundaryColor={stickyBoundaryColor}
+                    bodyCellBorderSx={bodyCellBorderSx}
+                    fontSize={theme.typography.body2.fontSize}
+                    renderActionButtons={renderActionButtons as unknown as (row?: RenderRow) => React.ReactNode}
+                    renderCell={renderCell as unknown as (row: RenderRow, col: RenderColumn) => React.ReactNode}
+                    getRowA11yProps={getRowA11yProps as unknown as (row: RenderRow) => Record<string, unknown>}
+                    registerRowElement={registerRowElement}
+                  />
+                );
+              })
             ))
           )}
         </Box>
