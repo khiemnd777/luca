@@ -10,6 +10,8 @@ Rules:
 - Verify the nearest source files before editing.
 - Keep claims evidence-backed with real paths.
 - Do not infer business behavior from names alone.
+- When a user names a Vietnamese UI/business label, resolve ownership through registered frontend route metadata (`label`, `title`, `path`) before choosing a module.
+- Do not infer ownership from English folder names, API namespace prefixes, or route prefixes alone. In particular, `/api/department` is the `api/modules/main` namespace and does not mean every feature below it owns "Chi nhánh" behavior.
 - Update this file when module, feature, ownership, registration, or FE/API navigation changes land.
 - Update `docs/tech-stack-inventory.md` when runtime, dependency, infrastructure, CI/CD, deployment, or tooling changes land.
 - For staff, user, or department identity flows, read `docs/identity-contract.md` before editing.
@@ -20,6 +22,41 @@ Status values:
 - `Feature files only`: feature-owned files exist, but no `index.tsx` registration was confirmed.
 - `Platform`: shared/runtime capability or cross-cutting module.
 - `Verify before edit`: path exists, but ownership or runtime use needs local tracing.
+
+## UI Label Ownership Index
+
+Use this section when the user refers to a screen or business concept by its displayed UI label. These rows are routing aids backed by frontend route registration; verify the listed source files before editing implementation details.
+
+| UI Label / Screen Term | Registered FE Owner | Path Evidence | Likely API Owner | Notes |
+| --- | --- | --- | --- | --- |
+| `Dashboard` | `fe/src/features/dashboard` | `fe/src/features/dashboard/index.tsx` (`label: "Dashboard"`, `path: "/"`) | `api/modules/main/features/dashboard` | Dashboard subfeatures share local presentation/context code. |
+| `Tài khoản` | `fe/src/features/auth` | `fe/src/features/auth/index.tsx` (`title: "Tài khoản"`, `path: "/account"`) | `api/modules/auth`, `api/modules/profile` | Verify whether the task touches auth credentials or profile data. |
+| `Chi nhánh` | `fe/src/features/department` | `fe/src/features/department/index.tsx` (`label: "Chi nhánh"`, `path: "/department"`) | `api/modules/main/department` | Owns branch/department tree behavior and parent-child branch relations. Read `docs/identity-contract.md` for identity-sensitive work. |
+| `Phòng ban` | `fe/src/features/section` | `fe/src/features/section/index.tsx` (`label: "Phòng ban"`, `path: "/section"`) | `api/modules/main/features/section` | Do not confuse with `department` / `Chi nhánh`. |
+| `Nha khoa` | `fe/src/features/clinic` | `fe/src/features/clinic/index.tsx` (`label: "Nha khoa"`, `path: "/clinic"`) | `api/modules/main/features/clinic` | Do not treat `clinic` as `Chi nhánh` unless the user explicitly says they mean the clinic entity. |
+| `Nha sĩ` | `fe/src/features/clinic` route child; feature files under `fe/src/features/dentist` | `fe/src/features/clinic/index.tsx` (`label: "Nha sĩ"`, `path: "/dentist"`) | `api/modules/main/features/dentist` | FE route is registered under the clinic module; implementation files live in the dentist feature. |
+| `Bệnh nhân` | `fe/src/features/clinic` route child; feature files under `fe/src/features/patient` | `fe/src/features/clinic/index.tsx` (`label: "Bệnh nhân"`, `path: "/patient"`) | `api/modules/main/features/patient` | FE route is registered under the clinic module; implementation files live in the patient feature. |
+| `Nhân sự` | `fe/src/features/staff` | `fe/src/features/staff/index.tsx` (`label: "Nhân sự"`, `path: "/staff"`) | `api/modules/main/features/staff`, `api/modules/user` when account identity is involved | Read `docs/identity-contract.md`; distinguish `users.id` from `staffs.id`. |
+| `Danh mục` | `fe/src/features/category` | `fe/src/features/category/index.tsx` (`label: "Danh mục"`, `path: "/category"`) | `api/modules/main/features/category` | Parent UI route also registers category-adjacent child screens. |
+| `Kiểu phục hình` | `fe/src/features/category` route child; feature files under `fe/src/features/restoration_type` | `fe/src/features/category/index.tsx` (`label: "Kiểu phục hình"`, `path: "/restoration-type"`) | `api/modules/main/features/restoration_type` | FE route is registered under the category module; implementation files live in restoration type. |
+| `Công nghệ` | `fe/src/features/category` route child; feature files under `fe/src/features/technique` | `fe/src/features/category/index.tsx` (`label: "Công nghệ"`, `path: "/technique"`) | `api/modules/main/features/technique` | FE route is registered under the category module; implementation files live in technique. |
+| `Vật liệu` | `fe/src/features/category` route child; feature files under `fe/src/features/raw_material` | `fe/src/features/category/index.tsx` (`label: "Vật liệu"`, `path: "/raw-material"`) | `api/modules/main/features/raw_material` | Do not confuse with `Vật tư` / `material`. |
+| `Thương hiệu` | `fe/src/features/category` route child; feature files under `fe/src/features/brand_name` | `fe/src/features/category/index.tsx` (`label: "Thương hiệu"`, `path: "/brand-name"`) | `api/modules/main/features/brand` | FE folder is `brand_name`; backend feature is `brand`. |
+| `Vật tư` | `fe/src/features/material` | `fe/src/features/material/index.tsx` (`label: "Vật tư"`, `path: "/material"`) | `api/modules/main/features/material` | Do not confuse with `Vật liệu` / `raw_material`. |
+| `Sản phẩm` | `fe/src/features/product` | `fe/src/features/product/index.tsx` (`label: "Sản phẩm"`, `path: "/product"`) | `api/modules/main/features/product` | Verify category/product contract before mapper or import changes. |
+| `Đơn hàng` | `fe/src/features/order` | `fe/src/features/order/index.tsx` (`label: "Đơn hàng"`, `path: "/order"`) | `api/modules/main/features/order` | Check jobs, middleware, templates, and FE mappers before contract edits. |
+| `Xác nhận giao hàng` | `fe/src/features/order` | `fe/src/features/order/index.tsx` (`label: "Xác nhận giao hàng"`, `path: "/delivery/qr/:token"`) | `api/modules/main/features/order` | Public/tokenized delivery QR flow; verify auth/token behavior before changes. |
+| `Gia công` | `fe/src/features/order` | `fe/src/features/order/index.tsx` (`label: "Gia công"`, `path: "/check-code"`) | `api/modules/main/features/order` | Processing/check-code workflow under order ownership. |
+| `Tiến trình` | `fe/src/features/order` | `fe/src/features/order/index.tsx` (`label: "Tiến trình"`, `path: "/in-progresses"`) | `api/modules/main/features/order` | In-progress workflow under order ownership. |
+| `Khách hàng` | `fe/src/features/customer` | `fe/src/features/customer/index.tsx` (`label: "Khách hàng"`, `path: "/customer"`) | `api/modules/main/features/customer` | Verify customer-specific contract before edit. |
+| `Khuyến mãi` | `fe/src/features/promotion` | `fe/src/features/promotion/index.tsx` (`label: "Khuyến mãi"`, `path: "/promotion"`) | `api/modules/main/features/promotion` | Check engine, validator, context builder, and scope behavior. |
+| `Quyền hạn` | `fe/src/features/rbac` | `fe/src/features/rbac/index.tsx` (`label: "Quyền hạn"`, `path: "/rbac"`) | `api/modules/rbac` | Permission-sensitive; verify backend authorization, not only UI visibility. |
+| `Thiết lập` | `fe/src/features/settings` | `fe/src/features/settings/index.tsx` (`label: "Thiết lập"`, `path: "/settings"`) | Verify feature-local API usage | Settings may touch profile/config-like data; inspect nearest API wrapper first. |
+| `Metadata` | `fe/src/features/metadata` | `fe/src/features/metadata/index.tsx` (`label: "Metadata"`, `path: "/metadata"`) | `api/modules/metadata` | Verify collection/field/import/export model before edit. |
+| `Import mapping` | `fe/src/features/metadata` | `fe/src/features/metadata/index.tsx` (`label: "Import mapping"`, `path: "/import-profiles/"`) | `api/modules/metadata` | Import profile and mapping flow under metadata ownership. |
+| `Thông báo` | `fe/src/features/notification` | `fe/src/features/notification/index.tsx` (`label: "Thông báo"`, `path: "/notification"`) | `api/modules/notification` | Verify realtime/push side effects before edit. |
+| `System Logs` | `fe/src/features/observability_logs` | `fe/src/features/observability_logs/index.tsx` (`label: "System Logs"`, `path: "/admin/system-logs"`) | `api/modules/observability` | Verify Loki/query shape before edit. |
+| `Tìm kiếm` | `fe/src/features/search` | `fe/src/features/search/index.tsx` (`label: "Tìm kiếm"`, `path: "/search"`) | `api/modules/search` | Verify search guard/indexing assumptions before edit. |
 
 ## Backend Runtime Modules
 
