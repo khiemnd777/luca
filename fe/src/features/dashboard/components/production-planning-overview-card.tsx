@@ -1,6 +1,7 @@
 import React from "react";
 import {
   Alert,
+  alpha,
   Box,
   Button,
   Chip,
@@ -29,6 +30,7 @@ import { navigate } from "@root/core/navigation/navigate";
 import { applyProductionPlanningRecommendation, saveProductionPlanningConfig } from "../api/dashboard.api";
 import { invalidate } from "@root/core/hooks/use-async";
 import { hasAnyPermissions } from "@root/core/auth/rbac-utils";
+import { OrderCodeText } from "@features/order/components/order-code-text.component";
 
 type Props = {
   overview: ProductionPlanningOverview | null;
@@ -340,12 +342,22 @@ const RiskItemRow = React.memo(function RiskItemRow({ item }: { item: Production
   return (
     <Stack
       spacing={0.75}
-      sx={{ cursor: "pointer" }}
+      sx={(theme) => ({
+        cursor: "pointer",
+        mx: -1,
+        px: 1,
+        py: 0.75,
+        borderRadius: 1,
+        transition: "background-color 120ms ease",
+        "&:hover": {
+          bgcolor: alpha(theme.palette.primary.main, 0.06),
+        },
+      })}
       onClick={() => navigate(`/order/${item.orderId}`)}
     >
       <Stack direction="row" justifyContent="space-between" spacing={1}>
         <Typography variant="body2" fontWeight={700}>
-          {item.orderItemCode || item.orderCode || `#${item.orderId}`}
+          <OrderCodeText code={item.orderItemCode || item.orderCode} fallback={`#${item.orderId}`} />
         </Typography>
         <Chip
           size="small"
