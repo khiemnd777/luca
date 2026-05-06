@@ -68,6 +68,7 @@ export type EditTableProps<T> = {
   stickyTopOffset?: number;
   hidePagination?: boolean;
   view?: TableViewMode;
+  verticalHeaderExtra?: React.ReactNode;
 
   /** Drag & Drop reorder (client-side) */
   onReorder?: (newRows: T[], from: number, to: number) => void;
@@ -335,6 +336,37 @@ const STICKY_Z_INDEX = {
   sticky: 5,
   normal: 1,
 } as const;
+
+function getNearestScrollContainer(element: HTMLElement | null): HTMLElement | Window {
+  if (!element) return window;
+
+  let parent = element.parentElement;
+  while (parent) {
+    const style = window.getComputedStyle(parent);
+    const overflowY = style.overflowY;
+    if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+      return parent;
+    }
+    parent = parent.parentElement;
+  }
+
+  return window;
+}
+
+function getScrollTop(container: HTMLElement | Window): number {
+  if (container instanceof Window) return window.scrollY;
+  return container.scrollTop;
+}
+
+function getElementTopInScrollContainer(element: HTMLElement, container: HTMLElement | Window): number {
+  const elementTop = element.getBoundingClientRect().top;
+  if (container instanceof Window) {
+    return elementTop + window.scrollY;
+  }
+
+  return elementTop - container.getBoundingClientRect().top + container.scrollTop;
+}
+
 export function EditTable<T extends { id?: string | number }>({
   rows, columns, page, pageSize, total = null, loading = false,
   onPageChange,
@@ -355,6 +387,7 @@ export function EditTable<T extends { id?: string | number }>({
   stickyTopOffset = 0,
   hidePagination = false,
   view = "table",
+  verticalHeaderExtra,
   onReorder,
 }: EditTableProps<T>) {
   const { t } = useI18n();
@@ -392,6 +425,64 @@ export function EditTable<T extends { id?: string | number }>({
     ? alpha(theme.palette.common.white, 0.08)
     : alpha(theme.palette.primary.main, 0.12);
   const tableRadius = 2;
+  const verticalHeaderSentinelRef = React.useRef<HTMLDivElement | null>(null);
+  const verticalHeaderRef = React.useRef<HTMLDivElement | null>(null);
+  const [isVerticalHeaderSticky, setIsVerticalHeaderSticky] = React.useState(false);
+  const verticalHeaderTopRadius = isVerticalHeaderSticky
+    ? 0
+    : Number(theme.shape.borderRadius) * tableRadius;
+  const verticalHeaderTopOffset = isVerticalHeaderSticky
+    ? `calc(${stickyTopOffset}px - ${theme.spacing(2)})`
+    : stickyTopOffset;
+
+  React.useEffect(() => {
+    if (view !== "vertical" || !stickyHeader) {
+      setIsVerticalHeaderSticky(false);
+      return;
+    }
+
+    let rafId: number | null = null;
+    let resizeObserver: ResizeObserver | null = null;
+    const scrollContainer = getNearestScrollContainer(verticalHeaderRef.current);
+
+    const measure = () => {
+      rafId = null;
+      const sentinelEl = verticalHeaderSentinelRef.current;
+      if (!sentinelEl) {
+        setIsVerticalHeaderSticky(false);
+        return;
+      }
+
+      const scrollTop = getScrollTop(scrollContainer);
+      const stickyStart = getElementTopInScrollContainer(sentinelEl, scrollContainer) - stickyTopOffset;
+      setIsVerticalHeaderSticky(scrollTop > stickyStart + 0.5);
+    };
+    const scheduleMeasure = () => {
+      if (rafId != null) return;
+      rafId = window.requestAnimationFrame(measure);
+    };
+
+    measure();
+    scrollContainer.addEventListener("scroll", scheduleMeasure, { passive: true });
+    window.addEventListener("resize", scheduleMeasure);
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(scheduleMeasure);
+      if (scrollContainer instanceof Window) {
+        resizeObserver.observe(document.documentElement);
+      } else {
+        resizeObserver.observe(scrollContainer);
+      }
+    }
+
+    return () => {
+      if (rafId != null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      scrollContainer.removeEventListener("scroll", scheduleMeasure);
+      window.removeEventListener("resize", scheduleMeasure);
+      resizeObserver?.disconnect();
+    };
+  }, [stickyHeader, stickyTopOffset, view]);
 
   const handleRowClick = React.useCallback((row: T) => {
     onRowClick?.(row);
@@ -979,13 +1070,20 @@ export function EditTable<T extends { id?: string | number }>({
         variant="outlined"
         sx={{
           borderRadius: tableRadius,
-          overflow: "hidden",
+          borderTopLeftRadius: verticalHeaderTopRadius,
+          borderTopRightRadius: verticalHeaderTopRadius,
+          overflow: stickyHeader ? "visible" : "hidden",
         }}
       >
+        <Box ref={verticalHeaderSentinelRef} sx={{ height: 0 }} />
         <Box
+          ref={verticalHeaderRef}
           sx={{
             px: 1.5,
             py: 1,
+            position: stickyHeader ? "sticky" : "static",
+            top: stickyHeader ? verticalHeaderTopOffset : undefined,
+            zIndex: 4,
             display: "flex",
             alignItems: "center",
             gap: 1,
@@ -994,41 +1092,52 @@ export function EditTable<T extends { id?: string | number }>({
             color: headerTextColor,
             borderBottom: "1px solid",
             borderColor: stickyBoundaryColor,
+            borderTopLeftRadius: verticalHeaderTopRadius,
+            borderTopRightRadius: verticalHeaderTopRadius,
+            overflow: "hidden",
+            boxShadow: isVerticalHeaderSticky ? theme.shadows[2] : "none",
           }}
         >
-          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-            Sắp xếp:
-          </Typography>
-          {sortableColumns.map((col) => {
-            const key = camelToSnake(String(col.key));
-            const active = (controlledSortBy ?? orderBy) === key;
-            const direction = active ? ((controlledSortDir ?? order) ?? "asc") : "asc";
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+              Sắp xếp:
+            </Typography>
+            {sortableColumns.map((col) => {
+              const key = camelToSnake(String(col.key));
+              const active = (controlledSortBy ?? orderBy) === key;
+              const direction = active ? ((controlledSortDir ?? order) ?? "asc") : "asc";
 
-            return (
-              <Button
-                key={String(col.key)}
-                size="small"
-                variant={active ? "contained" : "outlined"}
-                color={active ? "primary" : "inherit"}
-                onClick={() => handleSortClick(col)}
-                endIcon={
-                  active ? (
-                    <Box component="span" sx={{ fontSize: 12, lineHeight: 1 }}>
-                      {direction === "asc" ? "↑" : "↓"}
-                    </Box>
-                  ) : null
-                }
-                sx={{
-                  minHeight: 30,
-                  textTransform: "none",
-                  borderRadius: 1,
-                  bgcolor: active ? undefined : "background.paper",
-                }}
-              >
-                {getColumnHeader(col)}
-              </Button>
-            );
-          })}
+              return (
+                <Button
+                  key={String(col.key)}
+                  size="small"
+                  variant={active ? "contained" : "outlined"}
+                  color={active ? "primary" : "inherit"}
+                  onClick={() => handleSortClick(col)}
+                  endIcon={
+                    active ? (
+                      <Box component="span" sx={{ fontSize: 12, lineHeight: 1 }}>
+                        {direction === "asc" ? "↑" : "↓"}
+                      </Box>
+                    ) : null
+                  }
+                  sx={{
+                    minHeight: 30,
+                    textTransform: "none",
+                    borderRadius: 1,
+                    bgcolor: active ? undefined : "background.paper",
+                  }}
+                >
+                  {getColumnHeader(col)}
+                </Button>
+              );
+            })}
+          </Stack>
+          {isVerticalHeaderSticky && verticalHeaderExtra ? (
+            <Box sx={{ flexShrink: 0, ml: "auto" }}>
+              {verticalHeaderExtra}
+            </Box>
+          ) : null}
         </Box>
 
         <Box sx={{ bgcolor: "background.default" }}>

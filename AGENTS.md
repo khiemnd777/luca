@@ -641,6 +641,7 @@ For non-trivial work:
 - run the nearest relevant tests or checks when they exist and are practical to run
 - if full automated verification is not available, trace the affected flows and report what was verified manually
 - explicitly note any unverified risk areas, especially around auth, contracts, persistence, and realtime side effects
+- Do not automatically start long-running local dev servers such as `npm run dev`. Only start a dev server when the user explicitly requests it or approves it for the current task.
 
 ---
 

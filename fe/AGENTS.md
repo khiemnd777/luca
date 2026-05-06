@@ -409,6 +409,7 @@ For non-trivial frontend work:
 - run the nearest relevant frontend checks or tests when practical
 - verify route registration, permission behavior, and affected API integration paths
 - if automated checks are unavailable, report the screens or flows inspected and any remaining risk
+- Do not automatically start long-running local dev servers such as `npm run dev`. Only start a dev server when the user explicitly requests it or approves it for the current task.
 
 ## Exclusions
 

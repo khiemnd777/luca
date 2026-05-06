@@ -10,10 +10,11 @@ type Props<T extends { id?: string | number }> = {
   schema?: TableSchema<T>;
   params?: Record<string, any>;
   view?: TableViewMode;
+  verticalHeaderExtra?: React.ReactNode;
 };
 
 export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
-  ({ name, schema: schemaProp, params, view }, ref) => {
+  ({ name, schema: schemaProp, params, view, verticalHeaderExtra }, ref) => {
     const schema = React.useMemo(() => {
       if (schemaProp) return schemaProp;
       if (name) return getTableSchema(name);
@@ -27,6 +28,15 @@ export const AutoTable = React.forwardRef<AutoTableRef, Props<any>>(
 
     if (!schema) return <div>Table schema {name ? `"${name}"` : ""} chưa được đăng ký.</div>;
 
-    return <SchemaTable ref={inner} schema={schema} schemaName={name} params={params} view={view} />;
+    return (
+      <SchemaTable
+        ref={inner}
+        schema={schema}
+        schemaName={name}
+        params={params}
+        view={view}
+        verticalHeaderExtra={verticalHeaderExtra}
+      />
+    );
   }
 );
