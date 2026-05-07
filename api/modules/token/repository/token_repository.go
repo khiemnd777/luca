@@ -69,6 +69,20 @@ func (r *TokenRepository) GetDepartmentByUserID(ctx context.Context, id int) (*i
 	return &dept.ID, nil
 }
 
+func (r *TokenRepository) IsActiveDepartmentMember(ctx context.Context, userID, departmentID int) (bool, error) {
+	return r.db.DepartmentMember.
+		Query().
+		Where(
+			departmentmember.UserIDEQ(userID),
+			departmentmember.DepartmentIDEQ(departmentID),
+			departmentmember.HasDepartmentWith(
+				department.ActiveEQ(true),
+				department.DeletedEQ(false),
+			),
+		).
+		Exist(ctx)
+}
+
 func (r *TokenRepository) GetUserByEmail(ctx context.Context, email string) (*generated.User, error) {
 	return r.db.User.Query().Where(user.Email(email)).Only(ctx)
 }

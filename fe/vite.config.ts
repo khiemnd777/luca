@@ -9,14 +9,30 @@ export default defineConfig(({ mode }) => {
   const baseAddress = appEnv.VITE_BASE_ADDRESS || "127.0.0.1:7999";
   const httpProto = appEnv.VITE_HTTP_PROTOCOL || "http";
   const target = `${httpProto}://${baseAddress}`;
+  const proxyTarget =
+    process.env.VITE_API_PROXY_TARGET ||
+    appEnv.VITE_API_PROXY_TARGET ||
+    target;
   const apiBasePath = "/api";
   const frontendOrigin = sharedEnv.APP_FE_ORIGIN || "http://localhost:5173";
   const frontendUrl = new URL(frontendOrigin);
+  const devServerHost =
+    process.env.VITE_DEV_SERVER_HOST ||
+    appEnv.VITE_DEV_SERVER_HOST ||
+    frontendUrl.hostname;
   const frontendPort = frontendUrl.port
     ? Number(frontendUrl.port)
     : frontendUrl.protocol === "https:"
       ? 443
       : 80;
+  const devServerPort = Number(
+    process.env.VITE_DEV_SERVER_PORT ||
+      appEnv.VITE_DEV_SERVER_PORT ||
+      frontendPort,
+  );
+  const usePolling =
+    process.env.CHOKIDAR_USEPOLLING === "true" ||
+    process.env.WATCHPACK_POLLING === "true";
 
   return {
     plugins: [react()],
@@ -32,13 +48,18 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      host: frontendUrl.hostname,
-      port: frontendPort,
+      host: devServerHost,
+      port: devServerPort,
       strictPort: true,
+      watch: usePolling
+        ? {
+            usePolling: true,
+          }
+        : undefined,
       proxy: {
-        // /api –> localhost:7999
+        // /api -> configured API origin, or the api service inside Docker dev.
         [apiBasePath]: {
-          target,
+          target: proxyTarget,
           changeOrigin: true,
         },
       },

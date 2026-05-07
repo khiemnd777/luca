@@ -12,6 +12,7 @@ export function buildDepartmentStaffCreateSchema() {
     passwordRequired: true,
     createDepartmentId: -1,
     reloadTableNames: ["department-detail-staffs"],
+    withExistingStaffSearch: true,
   });
 }
 

@@ -23,6 +23,7 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 
 func (h *AuthHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterPost(router, "/login", h.Login)
+	app.RouterPost(router, "/select-department", h.SelectDepartment)
 	app.RouterPost(router, "/register", h.Register)
 	app.RouterPost(router, "/refresh-token", h.Refresh)
 	app.RouterPost(router, "/logout", h.Logout)
@@ -45,8 +46,33 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 		switch {
 		case errors.Is(err, authErrors.ErrInvalidCredentials):
 			return client_error.ResponseServiceMessage(c, client_error.ServiceMessageCode, "ErrInvalidCredentials", err.Error())
+		case errors.Is(err, service.ErrInvalidDepartmentMembership):
+			return client_error.ResponseError(c, fiber.StatusUnauthorized, err, err.Error())
 		default:
 			return client_error.ResponseError(c, fiber.StatusUnauthorized, err, err.Error())
+		}
+	}
+
+	return c.JSON(tokens)
+}
+
+func (h *AuthHandler) SelectDepartment(c *fiber.Ctx) error {
+	type req struct {
+		SelectionToken string `json:"selectionToken"`
+		DepartmentID   int    `json:"department_id"`
+	}
+	var body req
+	if err := c.BodyParser(&body); err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "Invalid request")
+	}
+
+	tokens, err := h.svc.SelectDepartment(c.UserContext(), body.SelectionToken, body.DepartmentID)
+	if err != nil {
+		switch {
+		case errors.Is(err, service.ErrInvalidSelectionToken), errors.Is(err, service.ErrInvalidDepartmentMembership):
+			return client_error.ResponseError(c, fiber.StatusUnauthorized, err, err.Error())
+		default:
+			return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 		}
 	}
 

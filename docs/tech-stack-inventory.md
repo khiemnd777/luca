@@ -52,10 +52,11 @@ The frontend auto-loads feature modules from `fe/src/features/**/index.tsx` thro
 | Data | App-managed SQL migrations | Not confirmed separately | `api/shared/bootstrap/sql_migrations.go`, `api/migrations/sql/V1__baseline.sql`, `api/shared/gen/tasks.go` | Versioned SQL migrations at boot time | Active |
 | Data | MongoDB driver | v1.17.4 | `api/go.mod`, `api/config.yaml`, `api/shared/db/factory.go`, `api/shared/db/driver/mongodb.go` | Optional database provider path | Configured |
 | Data | Filesystem-backed storage | Not confirmed separately | `api/docker-compose.prod.yml`, `api/modules/photo/service/photo_file.go`, `api/shared/storage/local_storage.go` | Local file storage for photo/files | Active |
-| Infra | Docker | Not confirmed separately | `api/Dockerfile`, `api/Dockerfile.prod`, `api/docker/entrypoint.dev.sh`, `api/docker/entrypoint.prod.sh` | Backend containerization | Active |
+| Infra | Docker | Not confirmed separately | `api/Dockerfile`, `api/Dockerfile.prod`, `fe/Dockerfile.dev`, `fe/Dockerfile.prod`, `api/docker/entrypoint.dev.sh`, `api/docker/entrypoint.prod.sh` | Backend and frontend containerization | Active |
 | Infra | Docker Compose | Not confirmed separately | `api/docker-compose.yml`, `api/docker-compose.prod.yml`, `api/docker-compose.observability.yml`, `api/Makefile` | Local and production-like orchestration | Active |
 | Infra | GitHub Actions | Not confirmed separately | `.github/workflows/deploy.yml`, `docs/vps-cicd.md` | Active deploy control plane for main branch and manual dispatch | Active |
 | Infra | VPS deploy scripts | Not confirmed separately | `deploy/scripts/provision-and-deploy.sh`, `deploy/scripts/render-production-config.sh`, `deploy/scripts/setup-github-secrets.sh`, `docs/vps-cicd.md` | Source sync, production env rendering, host provisioning, and compose startup | Active |
+| Infra | Frontend development Docker | `oven/bun:1.2.22` | `fe/Dockerfile.dev`, `api/docker-compose.yml`, `fe/package.json` | Runs Vite development server through `bun run dev` with bind-mounted source and hot reload | Active |
 | Infra | Frontend production Nginx | `nginx:1.27-alpine` | `fe/Dockerfile.prod`, `fe/docker/nginx.prod.conf` | Serves built frontend assets in production compose | Active |
 | Infra | Host Nginx | Not confirmed separately | `deploy/templates/nginx-site.conf.tmpl`, `deploy/scripts/provision-and-deploy.sh`, `docs/vps-cicd.md` | Host reverse proxy for frontend, API, and WebSocket traffic | Active |
 | Infra | Certbot / Let's Encrypt | Not confirmed separately | `deploy/scripts/provision-and-deploy.sh`, `docs/vps-cicd.md` | TLS certificate issuance and renewal through host Nginx | Active |
@@ -146,14 +147,15 @@ flowchart LR
 ## 7. Infrastructure & DevOps
 
 - Backend containers are built from `golang:1.24.1-bookworm` in both `api/Dockerfile` and `api/Dockerfile.prod`.
+- Frontend development containers are built from `oven/bun:1.2.22` in `fe/Dockerfile.dev`, run `bun run dev`, mount `fe/` into `/app`, and use polling-backed Vite hot reload through `api/docker-compose.yml`.
 - Frontend production containers are built from `oven/bun:1.2.15` and served by `nginx:1.27-alpine` in `fe/Dockerfile.prod`.
-- Compose is the confirmed infrastructure entrypoint for local and production-like environments: `api/docker-compose.yml`, `api/docker-compose.prod.yml`, and `api/docker-compose.observability.yml`.
+- Compose is the confirmed infrastructure entrypoint for local and production-like environments: `api/docker-compose.yml`, `api/docker-compose.prod.yml`, and `api/docker-compose.observability.yml`. Development config is prepared by `deploy/scripts/render-development-config.sh`, which creates missing env files from samples and appends missing dev keys without overwriting local values.
 - GitHub Actions is the active repo-resident deploy control plane. `.github/workflows/deploy.yml` builds the frontend with Bun, generates Ent code, runs `go test ./...`, installs SSH deploy tools, rsyncs a source snapshot to the VPS, writes `.deploy.env` from GitHub secrets, runs `deploy/scripts/provision-and-deploy.sh`, and optionally sends SMTP deploy notifications.
 - The VPS deploy path renders production env files through `deploy/scripts/render-production-config.sh`, then starts the production stack through `api/docker-compose.prod.yml`.
 - Host Nginx configuration is generated from `deploy/templates/nginx-site.conf.tmpl`; the template reverse-proxies frontend, API, and WebSocket traffic.
 - TLS automation is handled by Certbot / Let's Encrypt in `deploy/scripts/provision-and-deploy.sh`.
 - The optional observability stack provisions Loki, Promtail, and Grafana locally.
-- `api/Makefile` wraps compose startup, observability startup, migrations, and Redis flush operations.
+- `api/Makefile` wraps compose startup, development config rendering, observability startup, migrations, and Redis flush operations.
 - `api/CICD.md` documents Drone/Firebase flows only and is legacy documentation, not the active repo pipeline.
 
 ## 8. Observability & Tooling
@@ -259,6 +261,7 @@ Primary manifests and config:
 - `.github/workflows/deploy.yml`
 - `deploy/config/project.env.example`
 - `deploy/scripts/provision-and-deploy.sh`
+- `deploy/scripts/render-development-config.sh`
 - `deploy/scripts/render-production-config.sh`
 - `deploy/scripts/setup-github-secrets.sh`
 - `deploy/templates/nginx-site.conf.tmpl`
@@ -267,6 +270,7 @@ Primary manifests and config:
 - `fe/tsconfig.json`
 - `fe/eslint.config.js`
 - `fe/vite.config.ts`
+- `fe/Dockerfile.dev`
 - `fe/Dockerfile.prod`
 - `fe/README.md`
 - `fe/bun.lock`

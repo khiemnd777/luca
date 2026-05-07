@@ -16,7 +16,7 @@ type User struct {
 
 func (User) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("email").Optional().Unique(),
+		field.String("email").Optional(),
 		field.String("password").Sensitive(),
 		field.String("name").Default(""),
 		field.String("phone").Optional(),
@@ -44,6 +44,10 @@ func (User) Indexes() []ent.Index {
 			Unique().
 			StorageKey("users_phone_active_key").
 			Annotations(entsql.IndexWhere("deleted_at IS NULL")),
+		index.Fields("email").
+			Unique().
+			StorageKey("users_email_active_key").
+			Annotations(entsql.IndexWhere("deleted_at IS NULL AND email IS NOT NULL AND email <> ''")),
 	}
 }
 

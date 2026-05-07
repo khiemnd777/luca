@@ -164,14 +164,12 @@ Most backend templates are:
 git clone <repo>
 cd noah
 
-# run backend
+# run development stack with API + frontend
 cd api
-make docker-up
+make docker-up-dev
 
-# run admin panel
-cd fe
-bun install
-bun run dev
+# frontend: http://localhost:${FRONTEND_HOST_PORT:-5173}
+# API: http://localhost:${PORT:-7998}
 ```
 
 ---

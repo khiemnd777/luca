@@ -28,7 +28,7 @@ func main() {
 		OnRegistry: func(app *fiber.App, deps *module.ModuleDeps[config.ModuleConfig]) {
 			authSecret := utils.GetAuthSecret()
 			db := deps.Ent.(*generated.Client)
-			repo := repository.NewAuthRepository(db)
+			repo := repository.NewAuthRepository(db, deps.DB)
 			svc := service.NewAuthService(repo, authSecret)
 			h := handler.NewAuthHandler(svc)
 			h.RegisterRoutes(app.Group(utils.GetModuleRoute(deps.Config.Server.Route)))

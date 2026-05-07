@@ -3,10 +3,15 @@ import { persist } from "zustand/middleware";
 import {
   ACCESS_KEY,
   REFRESH_KEY,
+  clearTokens,
   getAccessToken,
   getRefreshToken,
 } from "@core/network/token-utils";
-import { login as apiLogin, logout as apiLogout } from "@core/network/auth-api";
+import {
+  login as apiLogin,
+  logout as apiLogout,
+  selectDepartment as apiSelectDepartment,
+} from "@core/network/auth-api";
 import { fetchMe } from "@core/network/me.api";
 import { fetchMyMatrixPermissions, fetchMyRoles } from "@core/network/rbac.api";
 import type { MeModel } from "@root/core/auth/auth.types";
@@ -16,16 +21,32 @@ import type { MyDepartmentDto } from "@core/network/my-department.dto";
 import { env } from "@core/config/env";
 import { notifyLogin, notifyLogout } from "@core/network/auth-session";
 import { unlinkCurrentPushSubscriptionOnLogout } from "@root/core/notification/push-notification.manager";
+import {
+  isDepartmentSelectionRequired,
+  type DepartmentSelectionDepartment,
+} from "@core/network/auth-types";
+
+type DepartmentSelectionState = {
+  selectionToken: string;
+  departments: DepartmentSelectionDepartment[];
+} | null;
+
+type LoginResult =
+  | { requiresDepartmentSelection: false }
+  | { requiresDepartmentSelection: true; departments: DepartmentSelectionDepartment[] };
 
 type AuthState = {
   user: MeModel | null;
   department: MyDepartmentDto | null;
+  pendingDepartmentSelection: DepartmentSelectionState;
   roles: string[];              // danh sách role_name
   roleObjects?: MyRoleDto[];      // (optional) giữ full role để hiển thị
   matrixPermission?: MatrixPermission | null;
   isLoggedIn: boolean;
 
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<LoginResult>;
+  selectDepartment: (departmentId: number) => Promise<void>;
+  clearDepartmentSelection: () => void;
   logout: () => Promise<void>;
   setSession: (p: {
     accessToken: string;
@@ -49,6 +70,15 @@ type AuthState = {
 
 function hasStoredSession(): boolean {
   return !!getAccessToken() || !!getRefreshToken();
+}
+
+async function bootstrapCurrentSession(get: () => AuthState) {
+  await Promise.all([
+    get().fetchMe(),
+    get().fetchDepartment(),
+    get().fetchRoles(),
+    get().fetchMatrixPermissions()
+  ]);
 }
 
 function normalizePermission(value: string): string {
@@ -78,23 +108,58 @@ export const useAuthStore = create<AuthState>()(
     (set, get) => ({
       user: null,
       department: null,
+      pendingDepartmentSelection: null,
       roles: [],
       roleObjects: undefined,
       isLoggedIn: false,
 
       async login(email, password) {
         const data = await apiLogin(email, password);
+        if (isDepartmentSelectionRequired(data)) {
+          clearTokens();
+          set({
+            pendingDepartmentSelection: {
+              selectionToken: data.selectionToken,
+              departments: data.departments,
+            },
+            user: null,
+            department: null,
+            roles: [],
+            roleObjects: undefined,
+            matrixPermission: null,
+            isLoggedIn: false,
+          });
+          return {
+            requiresDepartmentSelection: true,
+            departments: data.departments,
+          };
+        }
+
         get().setSession({
           accessToken: data[ACCESS_KEY],
           refreshToken: data[REFRESH_KEY],
         });
         // sau khi có token -> nạp hồ sơ + roles + permissions
-        await Promise.all([
-          get().fetchMe(),
-          get().fetchDepartment(),
-          get().fetchRoles(),
-          get().fetchMatrixPermissions()
-        ]);
+        await bootstrapCurrentSession(get);
+        return { requiresDepartmentSelection: false };
+      },
+
+      async selectDepartment(departmentId) {
+        const selection = get().pendingDepartmentSelection;
+        if (!selection?.selectionToken) {
+          throw new Error("Department selection session expired");
+        }
+        const data = await apiSelectDepartment(selection.selectionToken, departmentId);
+        get().setSession({
+          accessToken: data[ACCESS_KEY],
+          refreshToken: data[REFRESH_KEY],
+        });
+        set({ pendingDepartmentSelection: null });
+        await bootstrapCurrentSession(get);
+      },
+
+      clearDepartmentSelection() {
+        set({ pendingDepartmentSelection: null });
       },
 
       async logout() {
@@ -103,7 +168,15 @@ export const useAuthStore = create<AuthState>()(
           await apiLogout();
         } finally {
           notifyLogout("user_logout");
-          set({ user: null, roles: [], roleObjects: undefined, isLoggedIn: false });
+          set({
+            user: null,
+            department: null,
+            pendingDepartmentSelection: null,
+            roles: [],
+            roleObjects: undefined,
+            matrixPermission: null,
+            isLoggedIn: false,
+          });
           window.location.href = "/login";
         }
       },
@@ -201,6 +274,16 @@ export const useAuthStore = create<AuthState>()(
         return `${env.apiBasePath}/department/${dept?.id}`;
       }
     }),
-    { name: "auth-store" }
+    {
+      name: "auth-store",
+      partialize: (state) => ({
+        user: state.user,
+        department: state.department,
+        roles: state.roles,
+        roleObjects: state.roleObjects,
+        matrixPermission: state.matrixPermission,
+        isLoggedIn: state.isLoggedIn,
+      }),
+    }
   )
 );

@@ -6,6 +6,7 @@ import RequireAuth from "@core/auth/require-auth";
 import NavigatorBinder from "@core/navigation/navigator-binder";
 
 const LoginPage = React.lazy(() => import("@core/pages/login-page"));
+const DepartmentSelectionPage = React.lazy(() => import("@core/pages/department-selection-page"));
 const ForbiddenPage = React.lazy(() => import("@core/pages/forbidden-page"));
 const NotFoundPage = React.lazy(() => import("@core/pages/not-found-page"));
 
@@ -27,6 +28,7 @@ function useAppRouter() {
   const router = useMemo(() => {
     const publicRoutes = [
       { path: "/login", element: withSuspense(<LoginPage />) },
+      { path: "/select-department", element: withSuspense(<DepartmentSelectionPage />) },
       { path: "/forbidden", element: withSuspense(<ForbiddenPage />) },
     ];
 

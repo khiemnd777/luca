@@ -86,6 +86,14 @@ export async function createForDepartment(departmentId: number | undefined, mode
   await apiClient.post<unknown>(`${basePath}/staff`, model);
 }
 
+export async function addExistingToDepartment(departmentId: number, userId: number): Promise<StaffModel> {
+  const basePath = staffDeptPath(departmentId);
+  const { data } = await apiClient.post<unknown>(`${basePath}/staff/add-existing`, {
+    user_id: userId,
+  });
+  return mapper.map<unknown, StaffModel>("Staff", data, "dto_to_model");
+}
+
 export async function update(model: StaffModel): Promise<void> {
   const { departmentApiPath } = useAuthStore.getState();
   await apiClient.put<unknown>(`${departmentApiPath()}/staff/${model.id}`, model);

@@ -21,6 +21,7 @@ function isDepartmentCorporateAdmin(row: StaffModel, corporateAdministratorId?: 
 export function createDepartmentDetailStaffTableSchema(
   departmentId: number,
   corporateAdministratorId?: number | null,
+  onCorporateAdminChanged?: () => Promise<void> | void,
 ) {
   const columns: ColumnDef<StaffModel>[] = [
     { key: "avatar", header: "Avatar", type: "image", shape: "circle", width: 80 },
@@ -72,6 +73,7 @@ export function createDepartmentDetailStaffTableSchema(
         onClick: async (row) => {
           if (!departmentId) return;
           await assignCorporateAdminToDepartment(row.id, departmentId);
+          await onCorporateAdminChanged?.();
           reloadTable("department-detail-staffs");
         },
       },
@@ -85,6 +87,7 @@ export function createDepartmentDetailStaffTableSchema(
         onClick: async (row) => {
           if (!departmentId) return;
           await unassignCorporateAdminFromDepartment(row.id, departmentId);
+          await onCorporateAdminChanged?.();
           reloadTable("department-detail-staffs");
         },
       },

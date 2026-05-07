@@ -7,7 +7,8 @@ import {
   saveAccessToken,
   saveRefreshToken,
 } from "@core/network/token-utils";
-import type { AuthResponse, RefreshTokenResponse } from "@core/network/auth-types";
+import type { AuthResponse, AuthTokenResponse, RefreshTokenResponse } from "@core/network/auth-types";
+import { isDepartmentSelectionRequired } from "@core/network/auth-types";
 import { env } from "@root/core/config/env";
 
 const baseURL = env.apiBasePath;
@@ -18,7 +19,7 @@ const authHttp = axios.create({
 });
 
 /**
- * Đăng nhập và lưu lại access/refresh token
+ * Đăng nhập. Token chỉ được lưu khi backend trả phiên đăng nhập hoàn chỉnh.
  */
 export async function login(
   email: string,
@@ -27,6 +28,23 @@ export async function login(
   const res = await authHttp.post<AuthResponse>(
     `${baseURL}/auth/login`,
     { phone_or_email: email, password }
+  );
+
+  const data = res.data;
+  if (!isDepartmentSelectionRequired(data)) {
+    saveAccessToken(data[ACCESS_KEY]);
+    saveRefreshToken(data[REFRESH_KEY]);
+  }
+  return data;
+}
+
+export async function selectDepartment(
+  selectionToken: string,
+  departmentId: number,
+): Promise<AuthTokenResponse> {
+  const res = await authHttp.post<AuthTokenResponse>(
+    `${baseURL}/auth/select-department`,
+    { selectionToken, department_id: departmentId },
   );
 
   const data = res.data;

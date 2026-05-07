@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/khiemnd777/noah_api/shared/app/client_error"
 )
 
@@ -16,20 +17,51 @@ type JWTTokenPayload struct {
 	Email        string
 	Roles        *map[string]struct{}
 	Permissions  *map[string]struct{}
+	Purpose      string
+	JTI          string
 	Exp          time.Time
 }
 
 func GenerateJWTToken(secret string, payload JWTTokenPayload) (string, error) {
+	jti := payload.JTI
+	if jti == "" {
+		jti = uuid.NewString()
+	}
 	claims := jwt.MapClaims{
 		"user_id": payload.UserID,
-		"dept_id": payload.DepartmentID,
 		"email":   payload.Email,
 		"roles":   payload.Roles,
 		"perms":   payload.Permissions,
 		"exp":     payload.Exp.Unix(),
+		"jti":     jti,
+	}
+	if payload.DepartmentID > 0 {
+		claims["dept_id"] = payload.DepartmentID
+	}
+	if payload.Purpose != "" {
+		claims["purpose"] = payload.Purpose
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
+}
+
+func GetJWTClaimsFromToken(secret, tokenStr string) (jwt.MapClaims, bool, error) {
+	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(secret), nil
+	})
+	if err != nil || !token.Valid {
+		return nil, false, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || claims["user_id"] == nil {
+		return nil, false, errors.New("invalid token claims")
+	}
+
+	return claims, true, nil
 }
 
 func GetJWTClaims(c *fiber.Ctx) (jwt.MapClaims, bool, error) {
@@ -40,19 +72,9 @@ func GetJWTClaims(c *fiber.Ctx) (jwt.MapClaims, bool, error) {
 	}
 
 	tokenStr := strings.TrimPrefix(header, "Bearer ")
-	token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errors.New("unexpected signing method")
-		}
-		return []byte(secret), nil
-	})
-	if err != nil || !token.Valid {
+	claims, ok, err := GetJWTClaimsFromToken(secret, tokenStr)
+	if !ok || err != nil {
 		return nil, false, client_error.ResponseError(c, fiber.StatusUnauthorized, err, "Invalid or expired token")
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok || claims["user_id"] == nil {
-		return nil, false, client_error.ResponseError(c, fiber.StatusUnauthorized, err, "Invalid token claims")
 	}
 
 	return claims, true, nil

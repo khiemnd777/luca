@@ -8,6 +8,7 @@ mapper.register<StaffModel>({
   defaultModel: () => ({
     id: 0,
     departmentId: null,
+    departmentName: null,
     name: "",
     email: "",
     phone: "",

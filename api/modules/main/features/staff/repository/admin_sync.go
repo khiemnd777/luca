@@ -63,6 +63,7 @@ func removeCorporateAdminRoleIfUnusedInTx(ctx context.Context, tx *generated.Tx,
 		Where(
 			department.CorporateAdministratorIDEQ(userID),
 			department.IDNEQ(excludedDepartmentID),
+			department.Deleted(false),
 		).
 		Exist(ctx)
 	if err != nil {

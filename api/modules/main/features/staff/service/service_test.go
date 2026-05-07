@@ -12,6 +12,9 @@ import (
 )
 
 type staffRepoStub struct {
+	createErr               error
+	phoneExists             bool
+	emailExists             bool
 	updateDeptID            int
 	updateInput             model.StaffDTO
 	updateErr               error
@@ -21,13 +24,28 @@ type staffRepoStub struct {
 	assignDestinationDeptID int
 	assignErr               error
 	assignDTO               *model.StaffDTO
+	addExistingDeptID       int
+	addExistingUserID       int
+	addExistingErr          error
 	deleteDeptID            int
 	deleteUserID            int
 	deleteErr               error
 }
 
 func (r *staffRepoStub) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
-	return nil, nil
+	if r.createErr != nil {
+		return nil, r.createErr
+	}
+	return &model.StaffDTO{ID: input.ID, DepartmentID: &deptID, Name: input.Name}, nil
+}
+
+func (r *staffRepoStub) AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error) {
+	r.addExistingDeptID = deptID
+	r.addExistingUserID = userID
+	if r.addExistingErr != nil {
+		return nil, r.addExistingErr
+	}
+	return &model.StaffDTO{ID: userID, DepartmentID: &deptID}, nil
 }
 
 func (r *staffRepoStub) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
@@ -72,11 +90,11 @@ func (r *staffRepoStub) GetByID(ctx context.Context, id int) (*model.StaffDTO, e
 }
 
 func (r *staffRepoStub) CheckPhoneExists(ctx context.Context, userID int, phone string) (bool, error) {
-	return false, nil
+	return r.phoneExists, nil
 }
 
 func (r *staffRepoStub) CheckEmailExists(ctx context.Context, userID int, email string) (bool, error) {
-	return false, nil
+	return r.emailExists, nil
 }
 
 func (r *staffRepoStub) List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.StaffDTO], error) {
@@ -138,6 +156,95 @@ func TestStaffServiceUpdatePropagatesStaffNotFound(t *testing.T) {
 	}
 }
 
+func TestStaffServiceCreateRejectsDuplicatePhone(t *testing.T) {
+	repo := &staffRepoStub{phoneExists: true}
+	svc := NewStaffService(repo, nil, nil)
+	password := "valid-password"
+
+	_, err := svc.Create(context.Background(), 10, model.StaffDTO{
+		Name:     "Duplicate Phone",
+		Phone:    "+84900000004",
+		Email:    "duplicate-phone@example.test",
+		Password: &password,
+	})
+	if !errors.Is(err, ErrConflict("phone already exists")) {
+		t.Fatalf("Create() error = %v, want phone conflict", err)
+	}
+}
+
+func TestStaffServiceCreateRejectsDuplicateEmail(t *testing.T) {
+	repo := &staffRepoStub{emailExists: true}
+	svc := NewStaffService(repo, nil, nil)
+	password := "valid-password"
+
+	_, err := svc.Create(context.Background(), 10, model.StaffDTO{
+		Name:     "Duplicate Email",
+		Phone:    "+84900000005",
+		Email:    "duplicate-email@example.test",
+		Password: &password,
+	})
+	if !errors.Is(err, ErrConflict("email already exists")) {
+		t.Fatalf("Create() error = %v, want email conflict", err)
+	}
+}
+
+func TestStaffServiceUpdateRejectsDuplicatePhone(t *testing.T) {
+	repo := &staffRepoStub{phoneExists: true}
+	svc := NewStaffService(repo, nil, nil)
+
+	_, err := svc.Update(context.Background(), 10, model.StaffDTO{
+		ID:     42,
+		Name:   "Duplicate Phone",
+		Phone:  "+84900000006",
+		Email:  "duplicate-phone-update@example.test",
+		Active: true,
+	})
+	if !errors.Is(err, ErrConflict("phone already exists")) {
+		t.Fatalf("Update() error = %v, want phone conflict", err)
+	}
+}
+
+func TestStaffServiceUpdateRejectsDuplicateEmail(t *testing.T) {
+	repo := &staffRepoStub{emailExists: true}
+	svc := NewStaffService(repo, nil, nil)
+
+	_, err := svc.Update(context.Background(), 10, model.StaffDTO{
+		ID:     42,
+		Name:   "Duplicate Email",
+		Phone:  "+84900000007",
+		Email:  "duplicate-email-update@example.test",
+		Active: true,
+	})
+	if !errors.Is(err, ErrConflict("email already exists")) {
+		t.Fatalf("Update() error = %v, want email conflict", err)
+	}
+}
+
+func TestStaffServiceCreatePropagatesSystemAdminRoleForbidden(t *testing.T) {
+	repo := &staffRepoStub{createErr: repository.ErrSystemAdminRoleForbidden}
+	svc := NewStaffService(repo, nil, nil)
+	password := "valid-password"
+
+	_, err := svc.Create(context.Background(), 10, model.StaffDTO{
+		Name:     "Blocked",
+		Phone:    "+84900000003",
+		Password: &password,
+	})
+	if !errors.Is(err, ErrSystemAdminRoleForbidden) {
+		t.Fatalf("Create() error = %v, want %v", err, ErrSystemAdminRoleForbidden)
+	}
+}
+
+func TestStaffServiceUpdatePropagatesSystemAdminRoleForbidden(t *testing.T) {
+	repo := &staffRepoStub{updateErr: repository.ErrSystemAdminRoleForbidden}
+	svc := NewStaffService(repo, nil, nil)
+
+	_, err := svc.Update(context.Background(), 10, model.StaffDTO{ID: 42, Name: "Blocked", Active: true})
+	if !errors.Is(err, ErrSystemAdminRoleForbidden) {
+		t.Fatalf("Update() error = %v, want %v", err, ErrSystemAdminRoleForbidden)
+	}
+}
+
 func TestStaffServiceDeletePassesDepartmentScopeToRepository(t *testing.T) {
 	repo := &staffRepoStub{}
 	svc := NewStaffService(repo, nil, nil)
@@ -182,6 +289,48 @@ func TestStaffServiceAssignPassesDepartmentScopeToRepository(t *testing.T) {
 	}
 	if dto == nil || dto.DepartmentID == nil || *dto.DepartmentID != 12 {
 		t.Fatalf("AssignStaffToDepartment() dto department id = %v, want 12", dto)
+	}
+}
+
+func TestStaffServiceAddExistingPassesDepartmentAndUserIDToRepository(t *testing.T) {
+	repo := &staffRepoStub{}
+	svc := NewStaffService(repo, nil, nil)
+
+	dto, err := svc.AddExistingStaffToDepartment(context.Background(), 10, 42)
+	if err != nil {
+		t.Fatalf("AddExistingStaffToDepartment() error = %v", err)
+	}
+	if repo.addExistingDeptID != 10 {
+		t.Fatalf("repo add existing deptID = %d, want 10", repo.addExistingDeptID)
+	}
+	if repo.addExistingUserID != 42 {
+		t.Fatalf("repo add existing userID = %d, want 42", repo.addExistingUserID)
+	}
+	if dto == nil || dto.DepartmentID == nil || *dto.DepartmentID != 10 {
+		t.Fatalf("AddExistingStaffToDepartment() dto department id = %v, want 10", dto)
+	}
+}
+
+func TestStaffServiceAddExistingPropagatesScopedErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want error
+	}{
+		{name: "staff not found", err: repository.ErrStaffNotFound, want: ErrStaffNotFound},
+		{name: "department forbidden", err: repository.ErrDepartmentScopeForbidden, want: ErrDepartmentScopeForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := &staffRepoStub{addExistingErr: tt.err}
+			svc := NewStaffService(repo, nil, nil)
+
+			_, err := svc.AddExistingStaffToDepartment(context.Background(), 10, 42)
+			if !errors.Is(err, tt.want) {
+				t.Fatalf("AddExistingStaffToDepartment() error = %v, want %v", err, tt.want)
+			}
+		})
 	}
 }
 

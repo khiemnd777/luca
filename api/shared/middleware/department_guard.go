@@ -5,6 +5,8 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/role"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/user"
 	"github.com/khiemnd777/noah_api/shared/utils"
@@ -40,8 +42,30 @@ func RequireDepartmentMember(deptIDFromPathParam string, dbEnt ...*generated.Cli
 		if !ok {
 			return fiber.NewError(fiber.StatusForbidden, "forbidden: not a member of department")
 		}
+		if len(dbEnt) > 0 && dbEnt[0] != nil {
+			member, err := hasActiveDepartmentMembership(c, dbEnt[0], userID, paramDeptID)
+			if err != nil {
+				return fiber.NewError(fiber.StatusInternalServerError, "failed to verify department membership")
+			}
+			if !member {
+				return fiber.NewError(fiber.StatusForbidden, "forbidden: not a member of department")
+			}
+		}
 		return c.Next()
 	}
+}
+
+func hasActiveDepartmentMembership(c *fiber.Ctx, db *generated.Client, userID, departmentID int) (bool, error) {
+	return db.DepartmentMember.Query().
+		Where(
+			departmentmember.UserIDEQ(userID),
+			departmentmember.DepartmentIDEQ(departmentID),
+			departmentmember.HasDepartmentWith(
+				department.ActiveEQ(true),
+				department.DeletedEQ(false),
+			),
+		).
+		Exist(c.UserContext())
 }
 
 func hasSystemAdminRole(c *fiber.Ctx, userID int, dbEnt ...*generated.Client) (bool, error) {

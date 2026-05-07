@@ -29,6 +29,9 @@ type staffServiceStub struct {
 	assignedSourceDeptID               int
 	assignedUserID                     int
 	assignedDestinationDeptID          int
+	addExistingDeptID                  int
+	addExistingUserID                  int
+	addExistingErr                     error
 	assignedCorporateAdminUserID       int
 	unassignedCorporateAdminUserID     int
 	assignedCorporateAdminDepartment   int
@@ -37,6 +40,15 @@ type staffServiceStub struct {
 
 func (s *staffServiceStub) Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	return nil, s.createErr
+}
+
+func (s *staffServiceStub) AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error) {
+	s.addExistingDeptID = deptID
+	s.addExistingUserID = userID
+	if s.addExistingErr != nil {
+		return nil, s.addExistingErr
+	}
+	return &model.StaffDTO{ID: userID, DepartmentID: &deptID}, nil
 }
 
 func (s *staffServiceStub) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
@@ -157,6 +169,150 @@ func TestCreateMapsConflictToHTTP409(t *testing.T) {
 	}
 	if res.StatusCode != fiber.StatusConflict {
 		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
+	}
+}
+
+func TestCreateMapsSystemAdminRoleForbiddenToHTTP403(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{createErr: service.ErrSystemAdminRoleForbidden}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.create"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff", h.Create)
+
+	req := httptest.NewRequest(http.MethodPost, "/1/staff", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected %d, got %d", fiber.StatusForbidden, res.StatusCode)
+	}
+}
+
+func TestUpdateMapsSystemAdminRoleForbiddenToHTTP403(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{updateErr: service.ErrSystemAdminRoleForbidden}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Put("/:dept_id/staff/:id", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/5/staff/42", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusForbidden {
+		t.Fatalf("expected %d, got %d", fiber.StatusForbidden, res.StatusCode)
+	}
+}
+
+func TestUpdateMapsConflictToHTTP409(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{updateErr: service.ErrConflict("email already exists")}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.update"})
+		return c.Next()
+	})
+	app.Put("/:dept_id/staff/:id", h.Update)
+
+	req := httptest.NewRequest(http.MethodPut, "/5/staff/42", bytes.NewBufferString(`{"name":"Nguyen Van A"}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusConflict {
+		t.Fatalf("expected %d, got %d", fiber.StatusConflict, res.StatusCode)
+	}
+}
+
+func TestAddExistingStaffUsesDepartmentAndUserIDContract(t *testing.T) {
+	app := fiber.New()
+	svc := &staffServiceStub{}
+	h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+		Ent: (*generated.Client)(nil),
+	})
+
+	app.Use(func(c *fiber.Ctx) error {
+		c.Locals("deptID", 1)
+		c.Locals("permissions", []string{"staff.create"})
+		return c.Next()
+	})
+	app.Post("/:dept_id/staff/add-existing", h.AddExistingStaffToDepartment)
+
+	req := httptest.NewRequest(http.MethodPost, "/5/staff/add-existing", bytes.NewBufferString(`{"user_id":42}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test error: %v", err)
+	}
+	if res.StatusCode != fiber.StatusOK {
+		t.Fatalf("expected %d, got %d", fiber.StatusOK, res.StatusCode)
+	}
+	if svc.addExistingDeptID != 5 {
+		t.Fatalf("expected deptID 5, got %d", svc.addExistingDeptID)
+	}
+	if svc.addExistingUserID != 42 {
+		t.Fatalf("expected users.id 42, got %d", svc.addExistingUserID)
+	}
+}
+
+func TestAddExistingStaffMapsScopedErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{name: "staff not found", err: service.ErrStaffNotFound, want: fiber.StatusNotFound},
+		{name: "department forbidden", err: service.ErrDepartmentScopeForbidden, want: fiber.StatusForbidden},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := fiber.New()
+			svc := &staffServiceStub{addExistingErr: tt.err}
+			h := NewStaffHandler(svc, &module.ModuleDeps[config.ModuleConfig]{
+				Ent: (*generated.Client)(nil),
+			})
+
+			app.Use(func(c *fiber.Ctx) error {
+				c.Locals("deptID", 1)
+				c.Locals("permissions", []string{"staff.create"})
+				return c.Next()
+			})
+			app.Post("/:dept_id/staff/add-existing", h.AddExistingStaffToDepartment)
+
+			req := httptest.NewRequest(http.MethodPost, "/5/staff/add-existing", bytes.NewBufferString(`{"user_id":42}`))
+			req.Header.Set("Content-Type", "application/json")
+			res, err := app.Test(req)
+			if err != nil {
+				t.Fatalf("app.Test error: %v", err)
+			}
+			if res.StatusCode != tt.want {
+				t.Fatalf("expected %d, got %d", tt.want, res.StatusCode)
+			}
+		})
 	}
 }
 

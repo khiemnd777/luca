@@ -9,6 +9,7 @@ import (
 	"github.com/khiemnd777/noah_api/modules/token/repository"
 	"github.com/khiemnd777/noah_api/shared/auth"
 	"github.com/khiemnd777/noah_api/shared/cache"
+	"github.com/khiemnd777/noah_api/shared/redis"
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
 
@@ -20,6 +21,7 @@ type TokenService struct {
 }
 
 var ErrInvalidRefreshToken = errors.New("invalid refresh token")
+var ErrInvalidDepartmentMembership = errors.New("invalid department membership")
 
 func userPermissionCacheKey(id int) string {
 	return fmt.Sprintf("user:%d:perms", id)
@@ -39,21 +41,30 @@ func NewTokenService(repo *repository.TokenRepository, secret string) *TokenServ
 }
 
 func (s *TokenService) GetPermissionsByUserID(ctx context.Context, id int) (*map[string]struct{}, error) {
+	if redis.GetInstance("cache") == nil {
+		return s.repo.GetPermissionsByUserID(ctx, id)
+	}
 	return cache.Get(userPermissionCacheKey(id), cache.TTLLong, func() (*map[string]struct{}, error) {
 		return s.repo.GetPermissionsByUserID(ctx, id)
 	})
 }
 
-func (s *TokenService) GetDepartmentByUserID(ctx context.Context, id int) (*int, error) {
-	return cache.Get(userDepartmentCacheKey(id), cache.TTLLong, func() (*int, error) {
-		return s.repo.GetDepartmentByUserID(ctx, id)
-	})
-}
+func (s *TokenService) GenerateTokens(ctx context.Context, id, departmentID int) (*auth.AuthTokenPair, error) {
+	if departmentID <= 0 {
+		return nil, ErrInvalidDepartmentMembership
+	}
 
-func (s *TokenService) GenerateTokens(ctx context.Context, id int) (*auth.AuthTokenPair, error) {
 	user, err := s.repo.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
+	}
+
+	isMember, err := s.repo.IsActiveDepartmentMember(ctx, id, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrInvalidDepartmentMembership
 	}
 
 	perms, err := s.GetPermissionsByUserID(ctx, id)
@@ -61,15 +72,14 @@ func (s *TokenService) GenerateTokens(ctx context.Context, id int) (*auth.AuthTo
 		return nil, errors.New("invalid credentials")
 	}
 
-	deptID, err := s.GetDepartmentByUserID(ctx, id)
-	if err != nil {
-		return nil, errors.New("invalid credentials")
-	}
+	return s.generateTokenPair(ctx, user.ID, user.Email, departmentID, perms)
+}
 
+func (s *TokenService) generateTokenPair(ctx context.Context, userID int, email string, departmentID int, perms *map[string]struct{}) (*auth.AuthTokenPair, error) {
 	access, err := utils.GenerateJWTToken(s.secret, utils.JWTTokenPayload{
-		UserID:       user.ID,
-		Email:        user.Email,
-		DepartmentID: *deptID,
+		UserID:       userID,
+		Email:        email,
+		DepartmentID: departmentID,
 		Permissions:  perms,
 		Exp:          time.Now().Add(s.accessTTL),
 	})
@@ -78,9 +88,9 @@ func (s *TokenService) GenerateTokens(ctx context.Context, id int) (*auth.AuthTo
 	}
 
 	refresh, err := utils.GenerateJWTToken(s.secret, utils.JWTTokenPayload{
-		UserID:       user.ID,
-		Email:        user.Email,
-		DepartmentID: *deptID,
+		UserID:       userID,
+		Email:        email,
+		DepartmentID: departmentID,
 		Permissions:  perms,
 		Exp:          time.Now().Add(s.refreshTTL),
 	})
@@ -88,7 +98,7 @@ func (s *TokenService) GenerateTokens(ctx context.Context, id int) (*auth.AuthTo
 		return nil, err
 	}
 
-	err = s.repo.CreateRefreshToken(ctx, user.ID, refresh, time.Now().Add(s.refreshTTL))
+	err = s.repo.CreateRefreshToken(ctx, userID, refresh, time.Now().Add(s.refreshTTL))
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +110,15 @@ func (s *TokenService) GenerateTokens(ctx context.Context, id int) (*auth.AuthTo
 }
 
 func (s *TokenService) RefreshToken(ctx context.Context, refreshToken string) (*auth.AuthTokenPair, error) {
+	claims, ok, err := utils.GetJWTClaimsFromToken(s.secret, refreshToken)
+	if !ok || err != nil {
+		return nil, ErrInvalidRefreshToken
+	}
+	departmentID, ok := claimInt(claims["dept_id"])
+	if !ok || departmentID <= 0 {
+		return nil, ErrInvalidRefreshToken
+	}
+
 	found, valid, userID, email, err := s.repo.IsRefreshTokenValid(ctx, refreshToken)
 
 	if err != nil {
@@ -110,47 +129,25 @@ func (s *TokenService) RefreshToken(ctx context.Context, refreshToken string) (*
 		return nil, ErrInvalidRefreshToken
 	}
 
+	claimUserID, ok := claimInt(claims["user_id"])
+	if !ok || claimUserID != userID {
+		return nil, ErrInvalidRefreshToken
+	}
+
+	isMember, err := s.repo.IsActiveDepartmentMember(ctx, userID, departmentID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, ErrInvalidDepartmentMembership
+	}
+
 	perms, err := s.GetPermissionsByUserID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
-	deptID, err := s.GetDepartmentByUserID(ctx, userID)
-	if err != nil {
-		return nil, errors.New("invalid credentials")
-	}
-
-	newAccessToken, tokenErr := utils.GenerateJWTToken(s.secret, utils.JWTTokenPayload{
-		UserID:       userID,
-		Email:        email,
-		DepartmentID: *deptID,
-		Permissions:  perms,
-		Exp:          time.Now().Add(s.accessTTL),
-	})
-	if tokenErr != nil {
-		return nil, tokenErr
-	}
-
-	newRefreshToken, tokenErr := utils.GenerateJWTToken(s.secret, utils.JWTTokenPayload{
-		UserID:       userID,
-		Email:        email,
-		DepartmentID: *deptID,
-		Permissions:  perms,
-		Exp:          time.Now().Add(s.refreshTTL),
-	})
-	if tokenErr != nil {
-		return nil, tokenErr
-	}
-
-	err = s.repo.CreateRefreshToken(ctx, userID, newRefreshToken, time.Now().Add(s.refreshTTL))
-	if err != nil {
-		return nil, err
-	}
-
-	return &auth.AuthTokenPair{
-		AccessToken:  newAccessToken,
-		RefreshToken: newRefreshToken,
-	}, nil
+	return s.generateTokenPair(ctx, userID, email, departmentID, perms)
 }
 
 func (s *TokenService) DeleteRefreshToken(ctx context.Context, refreshToken string) error {
@@ -159,4 +156,15 @@ func (s *TokenService) DeleteRefreshToken(ctx context.Context, refreshToken stri
 
 func (s *TokenService) CleanupExpiredRefreshTokens(ctx context.Context) error {
 	return s.repo.DeleteExpiredRefreshTokens(ctx)
+}
+
+func claimInt(raw any) (int, bool) {
+	switch v := raw.(type) {
+	case float64:
+		return int(v), true
+	case int:
+		return v, true
+	default:
+		return 0, false
+	}
 }

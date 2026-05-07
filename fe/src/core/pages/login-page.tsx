@@ -30,7 +30,11 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login?.(email, password);
+      const result = await login?.(email, password);
+      if (result?.requiresDepartmentSelection) {
+        navigate(`/select-department?redirect=${encodeURIComponent(redirect)}`, { replace: true });
+        return;
+      }
       if (hasUsableAccessToken()) {
         navigate(redirect, { replace: true });
       }

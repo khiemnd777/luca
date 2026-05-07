@@ -15,10 +15,11 @@ import { SafeButton } from "@shared/components/button/safe-button";
 import { SectionCard } from "@shared/components/ui/section-card";
 import { getById } from "@features/department/api/department.api";
 import { DepartmentSyncReviewDialog } from "@features/department/components/department-sync-review.dialog";
+import { CorporateAdminAssignmentPanel } from "@features/department/components/corporate-admin-assignment.panel";
 import { TabContainer, type TabItem } from "@shared/components/ui/tab-container";
 import { AutoTable } from "@core/table/auto-table";
 import { openFormDialog } from "@core/form/form-dialog.service";
-import { subscribeTableReload } from "@core/table/table-reload";
+import { reloadTable, subscribeTableReload } from "@core/table/table-reload";
 import { useAuthStore } from "@store/auth-store";
 import { createDepartmentDetailStaffTableSchema } from "@features/staff/tables/department-detail-staff.table";
 import { DashboardOverview } from "@features/dashboard/components/dashboard-overview";
@@ -84,8 +85,14 @@ export function DeparmentDetailWidget() {
     return await getById(resolvedDepartmentId);
   }, [resolvedDepartmentId]);
   const staffTableSchema = React.useMemo(
-    () => createDepartmentDetailStaffTableSchema(resolvedDepartmentId, detail?.corporateAdministratorId),
-    [detail?.corporateAdministratorId, resolvedDepartmentId]
+    () => createDepartmentDetailStaffTableSchema(
+      resolvedDepartmentId,
+      detail?.corporateAdministratorId,
+      async () => {
+        await reload();
+      },
+    ),
+    [detail?.corporateAdministratorId, reload, resolvedDepartmentId]
   );
 
   React.useEffect(() => {
@@ -167,6 +174,15 @@ export function DeparmentDetailWidget() {
                 initial={{ id: departmentId }}
               />
             </Box>
+
+            <CorporateAdminAssignmentPanel
+              departmentId={resolvedDepartmentId}
+              corporateAdministratorId={detail?.corporateAdministratorId}
+              onChanged={async () => {
+                await reload();
+                reloadTable(DEPARTMENT_DETAIL_STAFFS_TABLE);
+              }}
+            />
           </Stack>
         </SectionCard>
       ),

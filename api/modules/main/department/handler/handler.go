@@ -142,8 +142,11 @@ func (h *DepartmentHandler) MyFirstDepartment(c *fiber.Ctx) error {
 	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "department.view"); err != nil {
 		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 	}
-	userID, _ := utils.GetUserIDInt(c)
-	res, err := h.svc.GetFirstDepartmentOfUser(c.UserContext(), userID)
+	deptID, ok := utils.GetDeptIDInt(c)
+	if !ok || deptID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusUnauthorized, nil, "invalid department session")
+	}
+	res, err := h.svc.GetByID(c.UserContext(), deptID)
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

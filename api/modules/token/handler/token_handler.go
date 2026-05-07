@@ -38,7 +38,7 @@ func (h *TokenHandler) RefreshTokens(c *fiber.Ctx) error {
 	}
 	tokens, err := h.svc.RefreshToken(c.UserContext(), body.Token)
 	if err != nil {
-		if errors.Is(err, service.ErrInvalidRefreshToken) {
+		if errors.Is(err, service.ErrInvalidRefreshToken) || errors.Is(err, service.ErrInvalidDepartmentMembership) {
 			return client_error.ResponseError(c, fiber.StatusUnauthorized, err, err.Error())
 		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
@@ -49,7 +49,9 @@ func (h *TokenHandler) RefreshTokens(c *fiber.Ctx) error {
 
 func (h *TokenHandler) GenerateTokens(c *fiber.Ctx) error {
 	type req struct {
-		UserID int `json:"userID"`
+		UserID       int `json:"userID"`
+		DepartmentID int `json:"department_id"`
+		DeptID       int `json:"deptID"`
 	}
 
 	var body req
@@ -57,7 +59,12 @@ func (h *TokenHandler) GenerateTokens(c *fiber.Ctx) error {
 		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "Invalid request")
 	}
 
-	tokens, err := h.svc.GenerateTokens(c.UserContext(), body.UserID)
+	departmentID := body.DepartmentID
+	if departmentID == 0 {
+		departmentID = body.DeptID
+	}
+
+	tokens, err := h.svc.GenerateTokens(c.UserContext(), body.UserID, departmentID)
 
 	if err != nil {
 		return client_error.ResponseError(c, fiber.StatusUnauthorized, err, err.Error())

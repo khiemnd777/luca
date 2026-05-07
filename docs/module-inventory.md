@@ -31,12 +31,13 @@ Use this section when the user refers to a screen or business concept by its dis
 | --- | --- | --- | --- | --- |
 | `Dashboard` | `fe/src/features/dashboard` | `fe/src/features/dashboard/index.tsx` (`label: "Dashboard"`, `path: "/"`) | `api/modules/main/features/dashboard` | Dashboard subfeatures share local presentation/context code. |
 | `Tài khoản` | `fe/src/features/auth` | `fe/src/features/auth/index.tsx` (`title: "Tài khoản"`, `path: "/account"`) | `api/modules/auth`, `api/modules/profile` | Verify whether the task touches auth credentials or profile data. |
+| `Chọn chi nhánh` | `fe/src/core/pages/department-selection-page.tsx` | `fe/src/app/routes.tsx` (`path: "/select-department"`) | `api/modules/auth`, `api/modules/token`, `api/modules/main/department` | Post-login department selection for users with multiple active department memberships; identity-sensitive and permission-sensitive. |
 | `Chi nhánh` | `fe/src/features/department` | `fe/src/features/department/index.tsx` (`label: "Chi nhánh"`, `path: "/department"`) | `api/modules/main/department` | Owns branch/department tree behavior and parent-child branch relations. Read `docs/identity-contract.md` for identity-sensitive work. |
 | `Phòng ban` | `fe/src/features/section` | `fe/src/features/section/index.tsx` (`label: "Phòng ban"`, `path: "/section"`) | `api/modules/main/features/section` | Do not confuse with `department` / `Chi nhánh`. |
 | `Nha khoa` | `fe/src/features/clinic` | `fe/src/features/clinic/index.tsx` (`label: "Nha khoa"`, `path: "/clinic"`) | `api/modules/main/features/clinic` | Do not treat `clinic` as `Chi nhánh` unless the user explicitly says they mean the clinic entity. |
 | `Nha sĩ` | `fe/src/features/clinic` route child; feature files under `fe/src/features/dentist` | `fe/src/features/clinic/index.tsx` (`label: "Nha sĩ"`, `path: "/dentist"`) | `api/modules/main/features/dentist` | FE route is registered under the clinic module; implementation files live in the dentist feature. |
 | `Bệnh nhân` | `fe/src/features/clinic` route child; feature files under `fe/src/features/patient` | `fe/src/features/clinic/index.tsx` (`label: "Bệnh nhân"`, `path: "/patient"`) | `api/modules/main/features/patient` | FE route is registered under the clinic module; implementation files live in the patient feature. |
-| `Nhân sự` | `fe/src/features/staff` | `fe/src/features/staff/index.tsx` (`label: "Nhân sự"`, `path: "/staff"`) | `api/modules/main/features/staff`, `api/modules/user` when account identity is involved | Read `docs/identity-contract.md`; distinguish `users.id` from `staffs.id`. |
+| `Nhân sự` | `fe/src/features/staff` | `fe/src/features/staff/index.tsx` (`label: "Nhân sự"`, `path: "/staff"`) | `api/modules/main/features/staff`, `api/modules/user` when account identity is involved | Read `docs/identity-contract.md`; distinguish `users.id` from `staffs.id`; department detail add-existing flow links existing staff users to `department_members` without creating `users`. |
 | `Danh mục` | `fe/src/features/category` | `fe/src/features/category/index.tsx` (`label: "Danh mục"`, `path: "/category"`) | `api/modules/main/features/category` | Parent UI route also registers category-adjacent child screens. |
 | `Kiểu phục hình` | `fe/src/features/category` route child; feature files under `fe/src/features/restoration_type` | `fe/src/features/category/index.tsx` (`label: "Kiểu phục hình"`, `path: "/restoration-type"`) | `api/modules/main/features/restoration_type` | FE route is registered under the category module; implementation files live in restoration type. |
 | `Công nghệ` | `fe/src/features/category` route child; feature files under `fe/src/features/technique` | `fe/src/features/category/index.tsx` (`label: "Công nghệ"`, `path: "/technique"`) | `api/modules/main/features/technique` | FE route is registered under the category module; implementation files live in technique. |
@@ -64,7 +65,7 @@ Use this section when the user refers to a screen or business concept by its dis
 | --- | --- | --- | --- | --- |
 | `api/modules/attribute` | `/api/attribute` | Registered | `api/modules/attribute/config.yaml` | `handler/`, `service/`, `repository/`, `model/` |
 | `api/modules/auditlog` | `/api/audit` | Platform | `api/modules/auditlog/config.yaml` | `handler/`, `service/pubsub.go`, `repository/`, `ent/` |
-| `api/modules/auth` | `/api/auth` | Platform | `api/modules/auth/config.yaml` | `handler/`, `service/`, `repository/`, `model/` |
+| `api/modules/auth` | `/api/auth` | Platform | `api/modules/auth/config.yaml` | `handler/`, `service/`, `repository/`, `model/`; owns login and `/auth/select-department` post-login selection |
 | `api/modules/folder` | `/api/folder` | Registered | `api/modules/folder/config.yaml` | `handler/`, `service/`, `repository/` |
 | `api/modules/main` | `/api/department` | Registered | `api/modules/main/config.yaml`, `api/modules/main/registry/registry.go` | `department/`, `features/*/registry.go`, `registry/` |
 | `api/modules/metadata` | `/api/metadata` | Platform | `api/modules/metadata/config.yaml` | `handler/`, `service/`, `repository/`, `model/` |
@@ -102,7 +103,7 @@ These features live under `api/modules/main` and register through `api/modules/m
 | `features/raw_material` | Registered | `api/modules/main/features/raw_material/registry.go` | `handler/`, `service/`, `repository/` | `fe/src/features/raw_material` |
 | `features/restoration_type` | Registered | `api/modules/main/features/restoration_type/registry.go` | `handler/`, `service/`, `repository/` | `fe/src/features/restoration_type` |
 | `features/section` | Registered | `api/modules/main/features/section/registry.go` | `handler/`, `service/`, `repository/` | `fe/src/features/section` |
-| `features/staff` | Registered | `api/modules/main/features/staff/registry.go` | `handler/`, `service/`, `repository/`; read `docs/identity-contract.md` | `fe/src/features/staff` |
+| `features/staff` | Registered | `api/modules/main/features/staff/registry.go` | `handler/`, `service/`, `repository/`; read `docs/identity-contract.md`; owns `/staff/add-existing` department membership flow | `fe/src/features/staff` |
 | `features/supplier` | Registered | `api/modules/main/features/supplier/registry.go` | `handler/`, `service/`, `repository/` | `fe/src/features/supplier` |
 | `features/technique` | Registered | `api/modules/main/features/technique/registry.go` | `handler/`, `service/`, `repository/` | `fe/src/features/technique` |
 
@@ -144,8 +145,9 @@ These hints are conservative routing aids. Verify the FE API wrapper and backend
 | Frontend Area | Likely API Owner | Status | Notes |
 | --- | --- | --- | --- |
 | `fe/src/features/order` | `api/modules/main/features/order` | Registered | Check jobs, middleware, templates, and FE mappers before contract edits. |
-| `fe/src/features/staff` | `api/modules/main/features/staff` | Registered | Identity-sensitive; read `docs/identity-contract.md`. |
-| `fe/src/features/department` | `api/modules/main/department` | Registered | Identity-sensitive; department admin contract uses `users.id`. |
+| `fe/src/features/staff` | `api/modules/main/features/staff` | Registered | Identity-sensitive; read `docs/identity-contract.md`; department staff add-existing uses `users.id` and must not create a `users` row. |
+| `fe/src/features/department` | `api/modules/main/department` | Registered | Identity-sensitive; department admin contract uses `users.id`; corp-admin assignment UI delegates assign/unassign to staff API with `users.id`. |
+| `fe/src/core/pages/login-page.tsx`, `fe/src/core/pages/department-selection-page.tsx` | `api/modules/auth`, `api/modules/token`, `api/modules/main/department` | Platform | Login may return app tokens immediately or a one-time selection token plus active departments; selected department is embedded into issued app tokens. |
 | `fe/src/features/category` | `api/modules/main/features/category` | Registered | Verify route and mapper before edit. |
 | `fe/src/features/product` | `api/modules/main/features/product` | Registered | Verify route and mapper before edit. |
 | `fe/src/features/metadata` | `api/modules/metadata` | Platform | Verify metadata model and import/export flow before edit. |

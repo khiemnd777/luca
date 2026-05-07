@@ -2,27 +2,41 @@ SHELL := /bin/bash
 
 COMPOSE ?= docker compose
 PROD_ENV_FILE ?= .env.prod
+DEV_CONFIG_SCRIPT ?= ../deploy/scripts/render-development-config.sh
 API_SERVICE ?= api
 POSTGRES_SERVICE ?= postgres
 REDIS_SERVICE ?= redis
 
-.PHONY: docker-up docker-log docker-stop docker-restart docker-restart-observable docker-down docker-up-prod docker-up-observable docker-up-observable-prod observability-up observability-down migration migration-prod redis-clean redis-clean-prod wait-postgres wait-postgres-prod wait-redis wait-redis-prod
+.PHONY: render-dev-config docker-up docker-up-dev docker-log docker-log-dev docker-stop docker-stop-dev docker-restart docker-restart-dev docker-restart-observable docker-down docker-down-dev docker-up-prod docker-up-observable docker-up-observable-prod observability-up observability-down migration migration-prod redis-clean redis-clean-prod wait-postgres wait-postgres-prod wait-redis wait-redis-prod
 
-docker-up:
+render-dev-config:
+	$(DEV_CONFIG_SCRIPT)
+
+docker-up: docker-up-dev
+
+docker-up-dev: render-dev-config
 	$(COMPOSE) up --build -d
 
-docker-log:
+docker-log: docker-log-dev
+
+docker-log-dev:
 	$(COMPOSE) logs -f
 
-docker-stop:
+docker-stop: docker-stop-dev
+
+docker-stop-dev:
 	$(COMPOSE) stop
 
-docker-restart: docker-stop docker-up
+docker-restart: docker-restart-dev
+
+docker-restart-dev: docker-stop-dev docker-up-dev
 
 docker-restart-observable: docker-down observability-up
 	OBSERVABLE=true OBSERVABILITY_STACK_MANAGED_EXTERNALLY=true $(COMPOSE) up --build -d
 
-docker-down:
+docker-down: docker-down-dev
+
+docker-down-dev:
 	$(COMPOSE) down
 
 docker-up-prod:

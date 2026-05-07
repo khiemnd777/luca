@@ -39,6 +39,7 @@ func (h *StaffHandler) RegisterRoutes(router fiber.Router) {
 	app.RouterGet(router, "/:dept_id<int>/role/:role_name/staffs", h.ListByRoleName)
 	app.RouterGet(router, "/:dept_id<int>/staff/:id<int>", h.GetByID)
 	app.RouterPost(router, "/:dept_id<int>/staff", h.Create)
+	app.RouterPost(router, "/:dept_id<int>/staff/add-existing", h.AddExistingStaffToDepartment)
 	app.RouterPost(router, "/:dept_id<int>/staff/change-password", h.ChangePassword)
 	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/assign-department", h.AssignStaffToDepartment)
 	app.RouterPost(router, "/:dept_id<int>/staff/:id<int>/assign-corporate-admin-department", h.AssignCorporateAdminToDepartment)
@@ -208,9 +209,48 @@ func (h *StaffHandler) Create(c *fiber.Ctx) error {
 		if errors.Is(err, service.ErrConflict("")) {
 			return client_error.ResponseError(c, fiber.StatusConflict, err, err.Error())
 		}
+		if errors.Is(err, service.ErrSystemAdminRoleForbidden) {
+			return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}
 	return c.Status(fiber.StatusCreated).JSON(dto)
+}
+
+func (h *StaffHandler) AddExistingStaffToDepartment(c *fiber.Ctx) error {
+	if err := rbac.GuardAnyPermission(c, h.deps.Ent.(*generated.Client), "staff.create"); err != nil {
+		return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
+	}
+
+	type AddExistingStaffRequest struct {
+		UserID int `json:"user_id"`
+	}
+
+	var payload AddExistingStaffRequest
+	if err := c.BodyParser(&payload); err != nil {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid body")
+	}
+	if payload.UserID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, nil, "user_id is required")
+	}
+
+	deptID, err := getRouteDepartmentID(c)
+	if err != nil || deptID <= 0 {
+		return client_error.ResponseError(c, fiber.StatusBadRequest, err, "invalid department id")
+	}
+
+	dto, err := h.svc.AddExistingStaffToDepartment(c.UserContext(), deptID, payload.UserID)
+	if err != nil {
+		if errors.Is(err, service.ErrStaffNotFound) {
+			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
+		if errors.Is(err, service.ErrDepartmentScopeForbidden) {
+			return client_error.ResponseError(c, fiber.StatusForbidden, err, "forbidden")
+		}
+		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
+	}
+
+	return c.Status(fiber.StatusOK).JSON(dto)
 }
 
 func (h *StaffHandler) Update(c *fiber.Ctx) error {
@@ -235,8 +275,14 @@ func (h *StaffHandler) Update(c *fiber.Ctx) error {
 
 	dto, err := h.svc.Update(c.UserContext(), deptID, payload)
 	if err != nil {
+		if errors.Is(err, service.ErrConflict("")) {
+			return client_error.ResponseError(c, fiber.StatusConflict, err, err.Error())
+		}
 		if errors.Is(err, service.ErrStaffNotFound) {
 			return client_error.ResponseError(c, fiber.StatusNotFound, err, "staff not found")
+		}
+		if errors.Is(err, service.ErrSystemAdminRoleForbidden) {
+			return client_error.ResponseError(c, fiber.StatusForbidden, err, err.Error())
 		}
 		return client_error.ResponseError(c, fiber.StatusInternalServerError, err, err.Error())
 	}

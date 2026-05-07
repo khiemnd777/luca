@@ -22,6 +22,7 @@ import (
 
 type StaffService interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
+	AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) error
@@ -55,6 +56,7 @@ func (e ErrConflict) Is(target error) bool {
 
 var ErrStaffNotFound = repository.ErrStaffNotFound
 var ErrDepartmentScopeForbidden = repository.ErrDepartmentScopeForbidden
+var ErrSystemAdminRoleForbidden = repository.ErrSystemAdminRoleForbidden
 
 func NewStaffService(repo repository.StaffRepository, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffService {
 	return &staffService{repo: repo, deps: deps, cfMgr: cfMgr}
@@ -101,7 +103,7 @@ func kUserDepartment(userID int) string {
 }
 
 func kDepartmentByID(id int) string {
-	return fmt.Sprintf("department:%d", id)
+	return fmt.Sprintf("department:v2:%d", id)
 }
 
 func kStaffList(deptID int, q table.TableQuery) string {
@@ -154,9 +156,21 @@ func (s *staffService) Create(ctx context.Context, deptID int, input model.Staff
 			return nil, ErrConflict("phone already exists")
 		}
 	}
+	if input.Email != "" {
+		exists, err := s.repo.CheckEmailExists(ctx, -1, input.Email)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrConflict("email already exists")
+		}
+	}
 
 	dto, err := s.repo.Create(ctx, deptID, input)
 	if err != nil {
+		if errors.Is(err, repository.ErrSystemAdminRoleForbidden) {
+			return nil, ErrSystemAdminRoleForbidden
+		}
 		return nil, err
 	}
 
@@ -171,11 +185,58 @@ func (s *staffService) Create(ctx context.Context, deptID int, input model.Staff
 	return dto, nil
 }
 
+func (s *staffService) AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error) {
+	dto, err := s.repo.AddExistingStaffToDepartment(ctx, deptID, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrStaffNotFound) {
+			return nil, ErrStaffNotFound
+		}
+		if errors.Is(err, repository.ErrDepartmentScopeForbidden) {
+			return nil, ErrDepartmentScopeForbidden
+		}
+		return nil, err
+	}
+
+	cache.InvalidateKeys(kStaffAll()...)
+	cache.InvalidateKeys(kStaffByID(userID), kStaffSectionList(userID), kUserRoleList(userID), kSectionStaffAll(userID), kUserDepartment(userID))
+
+	if dto != nil {
+		s.upsertSearch(ctx, deptID, dto)
+	}
+
+	return dto, nil
+}
+
 func (s *staffService) Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error) {
 	input.DepartmentID = utils.Ptr(deptID)
 
+	if input.Phone != "" {
+		exists, err := s.repo.CheckPhoneExists(ctx, input.ID, input.Phone)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrConflict("phone already exists")
+		}
+	}
+	if input.Email != "" {
+		exists, err := s.repo.CheckEmailExists(ctx, input.ID, input.Email)
+		if err != nil {
+			return nil, err
+		}
+		if exists {
+			return nil, ErrConflict("email already exists")
+		}
+	}
+
 	dto, err := s.repo.Update(ctx, deptID, input)
 	if err != nil {
+		if errors.Is(err, repository.ErrStaffNotFound) {
+			return nil, ErrStaffNotFound
+		}
+		if errors.Is(err, repository.ErrSystemAdminRoleForbidden) {
+			return nil, ErrSystemAdminRoleForbidden
+		}
 		return nil, err
 	}
 

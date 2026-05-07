@@ -13,6 +13,7 @@ import (
 	model "github.com/khiemnd777/noah_api/modules/main/features/__model"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/department"
+	"github.com/khiemnd777/noah_api/shared/db/ent/generated/departmentmember"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/role"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/section"
 	"github.com/khiemnd777/noah_api/shared/db/ent/generated/staff"
@@ -29,6 +30,7 @@ import (
 
 type StaffRepository interface {
 	Create(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
+	AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error)
 	Update(ctx context.Context, deptID int, input model.StaffDTO) (*model.StaffDTO, error)
 	AssignStaffToDepartment(ctx context.Context, sourceDeptID int, userID int, destinationDeptID int) (*model.StaffDTO, error)
 	AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error)
@@ -58,6 +60,7 @@ type CorporateAdminAssignmentResult struct {
 
 var ErrStaffNotFound = errors.New("staff not found")
 var ErrDepartmentScopeForbidden = errors.New("department scope forbidden")
+var ErrSystemAdminRoleForbidden = errors.New("system admin role cannot be assigned from staff form")
 
 func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
 	if dto == nil {
@@ -66,8 +69,37 @@ func setDepartmentIDFromPersistedStaff(dto *model.StaffDTO, deptID *int) {
 	dto.DepartmentID = deptID
 }
 
+func setDepartmentFromPersistedStaff(dto *model.StaffDTO, deptID *int, deptName *string) {
+	if dto == nil {
+		return
+	}
+	dto.DepartmentID = deptID
+	dto.DepartmentName = deptName
+}
+
 func NewStaffRepository(db *generated.Client, deps *module.ModuleDeps[config.ModuleConfig], cfMgr *customfields.Manager) StaffRepository {
 	return &staffRepo{db: db, deps: deps, cfMgr: cfMgr}
+}
+
+func validateAssignableStaffRoleIDsInTx(ctx context.Context, tx *generated.Tx, roleIDs []int) error {
+	roleIDs = utils.DedupInt(roleIDs, -1)
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	hasSystemAdminRole, err := tx.Role.Query().
+		Where(
+			role.IDIn(roleIDs...),
+			role.RoleNameEQ("admin"),
+		).
+		Exist(ctx)
+	if err != nil {
+		return err
+	}
+	if hasSystemAdminRole {
+		return ErrSystemAdminRoleForbidden
+	}
+	return nil
 }
 
 func (r *staffRepo) getDepartmentIDByUserID(ctx context.Context, userID int) (*int, error) {
@@ -83,8 +115,13 @@ func (r *staffRepo) getDepartmentIDByUserID(ctx context.Context, userID int) (*i
 	return &deptID, nil
 }
 
-func (r *staffRepo) getDepartmentMapByUserIDs(ctx context.Context, userIDs []int) (map[int]*int, error) {
-	out := make(map[int]*int, len(userIDs))
+type staffDepartmentInfo struct {
+	ID   *int
+	Name *string
+}
+
+func (r *staffRepo) getDepartmentMapByUserIDs(ctx context.Context, userIDs []int) (map[int]staffDepartmentInfo, error) {
+	out := make(map[int]staffDepartmentInfo, len(userIDs))
 	if len(userIDs) == 0 {
 		return out, nil
 	}
@@ -97,7 +134,10 @@ func (r *staffRepo) getDepartmentMapByUserIDs(ctx context.Context, userIDs []int
 	}
 
 	q := fmt.Sprintf(
-		"SELECT user_staff, department_id FROM staffs WHERE user_staff IN (%s)",
+		`SELECT s.user_staff, s.department_id, d.name
+		FROM staffs s
+		LEFT JOIN departments d ON d.id = s.department_id
+		WHERE s.user_staff IN (%s)`,
 		strings.Join(placeholders, ","),
 	)
 
@@ -110,15 +150,20 @@ func (r *staffRepo) getDepartmentMapByUserIDs(ctx context.Context, userIDs []int
 	for rows.Next() {
 		var uid int
 		var dept sql.NullInt64
-		if err := rows.Scan(&uid, &dept); err != nil {
+		var deptName sql.NullString
+		if err := rows.Scan(&uid, &dept, &deptName); err != nil {
 			return nil, err
 		}
+		info := staffDepartmentInfo{}
 		if dept.Valid {
 			deptID := int(dept.Int64)
-			out[uid] = &deptID
-			continue
+			info.ID = &deptID
 		}
-		out[uid] = nil
+		if deptName.Valid {
+			name := deptName.String
+			info.Name = &name
+		}
+		out[uid] = info
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -245,6 +290,9 @@ func (r *staffRepo) Create(ctx context.Context, deptID int, input model.StaffDTO
 	// Edge – Roles
 	if input.RoleIDs != nil {
 		roleIDs := utils.DedupInt(input.RoleIDs, -1)
+		if err = validateAssignableStaffRoleIDsInTx(ctx, tx, roleIDs); err != nil {
+			return nil, err
+		}
 		if len(roleIDs) > 0 {
 			_, err = tx.User.UpdateOneID(userEnt.ID).
 				AddRoleIDs(roleIDs...).
@@ -262,6 +310,80 @@ func (r *staffRepo) Create(ctx context.Context, deptID int, input model.StaffDTO
 	dto.RoleIDs = input.RoleIDs
 	dto.CustomFields = input.CustomFields
 
+	return dto, nil
+}
+
+func (r *staffRepo) AddExistingStaffToDepartment(ctx context.Context, deptID int, userID int) (*model.StaffDTO, error) {
+	tx, err := r.db.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
+
+	deptEnt, err := tx.Department.Query().
+		Where(
+			department.IDEQ(deptID),
+			department.ActiveEQ(true),
+			department.Deleted(false),
+		).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, ErrDepartmentScopeForbidden
+		}
+		return nil, err
+	}
+
+	userEnt, err := tx.User.Query().
+		Where(
+			user.IDEQ(userID),
+			user.DeletedAtIsNil(),
+			user.HasStaff(),
+		).
+		WithRoles().
+		WithStaff(func(sq *generated.StaffQuery) {
+			sq.WithSections(func(ssq *generated.StaffSectionQuery) {
+				ssq.WithSection()
+			})
+		}).
+		Only(ctx)
+	if err != nil {
+		if generated.IsNotFound(err) {
+			return nil, ErrStaffNotFound
+		}
+		return nil, err
+	}
+
+	if err = ensureDepartmentMembershipInTx(ctx, tx, userID, deptID); err != nil {
+		return nil, err
+	}
+
+	dto := mapper.MapAs[*generated.User, *model.StaffDTO](userEnt)
+	dto.DepartmentID = &deptID
+	dto.DepartmentName = &deptEnt.Name
+	for _, roleEnt := range userEnt.Edges.Roles {
+		dto.RoleIDs = append(dto.RoleIDs, roleEnt.ID)
+		dto.RoleNames = append(dto.RoleNames, roleEnt.RoleName)
+	}
+	if userEnt.Edges.Staff != nil {
+		staffEnt := userEnt.Edges.Staff
+		for _, staffSectionEnt := range staffEnt.Edges.Sections {
+			if staffSectionEnt.Edges.Section != nil {
+				dto.SectionIDs = append(dto.SectionIDs, staffSectionEnt.SectionID)
+				dto.SectionNames = append(dto.SectionNames, staffSectionEnt.Edges.Section.Name)
+			}
+		}
+		dto.CustomFields = staffEnt.CustomFields
+	}
+
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	err = nil
 	return dto, nil
 }
 
@@ -398,6 +520,9 @@ func (r *staffRepo) Update(ctx context.Context, deptID int, input model.StaffDTO
 	// Edge – Roles
 	if input.RoleIDs != nil {
 		roleIDs := utils.DedupInt(input.RoleIDs, -1)
+		if err = validateAssignableStaffRoleIDsInTx(ctx, tx, roleIDs); err != nil {
+			return nil, err
+		}
 
 		upd := tx.User.UpdateOneID(userEnt.ID).ClearRoles()
 		if len(roleIDs) > 0 {
@@ -514,11 +639,6 @@ func (r *staffRepo) AssignStaffToDepartment(ctx context.Context, sourceDeptID in
 }
 
 func (r *staffRepo) AssignCorporateAdminToDepartment(ctx context.Context, userID int, departmentID int) (*CorporateAdminAssignmentResult, error) {
-	corporateAdminID, err := r.getDepartmentStaffUserID(ctx, userID, departmentID)
-	if err != nil {
-		return nil, err
-	}
-
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return nil, err
@@ -531,29 +651,24 @@ func (r *staffRepo) AssignCorporateAdminToDepartment(ctx context.Context, userID
 		}
 	}()
 
-	deptEnt, err := tx.Department.Query().
-		Where(department.IDEQ(departmentID)).
-		Only(ctx)
+	deptEnt, err := validateCorporateAdminTargetInTx(ctx, tx, userID, departmentID)
 	if err != nil {
-		if generated.IsNotFound(err) {
-			return nil, fmt.Errorf("department not found")
-		}
 		return nil, err
 	}
 
 	previousCorporateAdminID := deptEnt.CorporateAdministratorID
 
 	if _, err = tx.Department.UpdateOneID(departmentID).
-		SetCorporateAdministratorID(corporateAdminID).
+		SetCorporateAdministratorID(userID).
 		Save(ctx); err != nil {
 		return nil, err
 	}
 
-	if err = SyncDepartmentCorporateAdminInTx(ctx, tx, corporateAdminID, departmentID); err != nil {
+	if err = SyncDepartmentCorporateAdminInTx(ctx, tx, userID, departmentID); err != nil {
 		return nil, err
 	}
 
-	if previousCorporateAdminID != nil && *previousCorporateAdminID > 0 && *previousCorporateAdminID != corporateAdminID {
+	if previousCorporateAdminID != nil && *previousCorporateAdminID > 0 && *previousCorporateAdminID != userID {
 		if err = removeCorporateAdminRoleIfUnusedInTx(ctx, tx, *previousCorporateAdminID, departmentID); err != nil {
 			return nil, err
 		}
@@ -561,16 +676,11 @@ func (r *staffRepo) AssignCorporateAdminToDepartment(ctx context.Context, userID
 
 	return &CorporateAdminAssignmentResult{
 		PreviousCorporateAdminID: previousCorporateAdminID,
-		CurrentCorporateAdminID:  corporateAdminID,
+		CurrentCorporateAdminID:  userID,
 	}, nil
 }
 
 func (r *staffRepo) UnassignCorporateAdminFromDepartment(ctx context.Context, userID int, departmentID int) (int, error) {
-	corporateAdminID, err := r.getDepartmentStaffUserID(ctx, userID, departmentID)
-	if err != nil {
-		return 0, err
-	}
-
 	tx, err := r.db.Tx(ctx)
 	if err != nil {
 		return 0, err
@@ -583,10 +693,15 @@ func (r *staffRepo) UnassignCorporateAdminFromDepartment(ctx context.Context, us
 		}
 	}()
 
+	if _, err = validateCorporateAdminTargetInTx(ctx, tx, userID, departmentID); err != nil {
+		return 0, err
+	}
+
 	deptEnt, err := tx.Department.Query().
 		Where(
 			department.IDEQ(departmentID),
-			department.CorporateAdministratorIDEQ(corporateAdminID),
+			department.Deleted(false),
+			department.CorporateAdministratorIDEQ(userID),
 		).
 		Only(ctx)
 	if err != nil {
@@ -602,30 +717,48 @@ func (r *staffRepo) UnassignCorporateAdminFromDepartment(ctx context.Context, us
 		return 0, err
 	}
 
-	if err = removeCorporateAdminRoleIfUnusedInTx(ctx, tx, corporateAdminID, departmentID); err != nil {
+	if err = removeCorporateAdminRoleIfUnusedInTx(ctx, tx, userID, departmentID); err != nil {
 		return 0, err
 	}
 
-	return corporateAdminID, nil
+	return userID, nil
 }
 
-func (r *staffRepo) getDepartmentStaffUserID(ctx context.Context, userID int, departmentID int) (int, error) {
-	userEnt, err := r.db.User.Query().
+func validateCorporateAdminTargetInTx(ctx context.Context, tx *generated.Tx, userID int, departmentID int) (*generated.Department, error) {
+	if userID <= 0 {
+		return nil, fmt.Errorf("user not found")
+	}
+	if departmentID <= 0 {
+		return nil, fmt.Errorf("department not found")
+	}
+
+	userExists, err := tx.User.Query().
 		Where(
 			user.IDEQ(userID),
 			user.DeletedAtIsNil(),
-			user.HasStaffWith(staff.DepartmentIDEQ(departmentID)),
+		).
+		Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !userExists {
+		return nil, fmt.Errorf("user not found")
+	}
+
+	deptEnt, err := tx.Department.Query().
+		Where(
+			department.IDEQ(departmentID),
+			department.Deleted(false),
 		).
 		Only(ctx)
 	if err != nil {
-		if !generated.IsNotFound(err) {
-			return 0, err
+		if generated.IsNotFound(err) {
+			return nil, fmt.Errorf("department not found")
 		}
-	} else {
-		return userEnt.ID, nil
+		return nil, err
 	}
 
-	return 0, fmt.Errorf("staff not found")
+	return deptEnt, nil
 }
 
 func (r *staffRepo) ChangePassword(ctx context.Context, id int, newPassword string) error {
@@ -693,6 +826,15 @@ func (r *staffRepo) GetByID(ctx context.Context, id int) (*model.StaffDTO, error
 		return nil, err
 	}
 	dto.DepartmentID = departmentID
+	if departmentID != nil {
+		deptEnt, err := r.db.Department.Query().
+			Where(department.IDEQ(*departmentID)).
+			Only(ctx)
+		if err != nil {
+			return nil, err
+		}
+		dto.DepartmentName = &deptEnt.Name
+	}
 	dto.SectionIDs = sectionIDs
 	dto.RoleIDs = roleIDs
 
@@ -710,12 +852,21 @@ func (r *staffRepo) GetByID(ctx context.Context, id int) (*model.StaffDTO, error
 }
 
 func (r *staffRepo) List(ctx context.Context, deptID int, query table.TableQuery) (table.TableListResult[model.StaffDTO], error) {
+	deptEnt, err := r.db.Department.Query().
+		Where(department.IDEQ(deptID)).
+		Only(ctx)
+	if err != nil {
+		var zero table.TableListResult[model.StaffDTO]
+		return zero, err
+	}
+
 	list, err := table.TableList(
 		ctx,
 		r.db.User.Query().
 			Where(
 				user.DeletedAtIsNil(),
-				user.HasStaffWith(staff.DepartmentIDEQ(deptID)),
+				user.HasStaff(),
+				user.HasDeptMembershipsWith(departmentmember.DepartmentIDEQ(deptID)),
 			).
 			WithRoles().
 			WithStaff(func(sq *generated.StaffQuery) {
@@ -728,19 +879,11 @@ func (r *staffRepo) List(ctx context.Context, deptID int, query table.TableQuery
 		user.FieldID,
 		user.FieldID,
 		func(src []*generated.User) []*model.StaffDTO {
-			userIDs := make([]int, 0, len(src))
-			for _, u := range src {
-				userIDs = append(userIDs, u.ID)
-			}
-			deptByUserID, err := r.getDepartmentMapByUserIDs(ctx, userIDs)
-			if err != nil {
-				deptByUserID = map[int]*int{}
-			}
-
 			out := make([]*model.StaffDTO, 0, len(src))
 			for _, u := range src {
 				dto := mapper.MapAs[*generated.User, *model.StaffDTO](u)
-				dto.DepartmentID = deptByUserID[u.ID]
+				dto.DepartmentID = &deptID
+				dto.DepartmentName = &deptEnt.Name
 				for _, roleEnt := range u.Edges.Roles {
 					dto.RoleIDs = append(dto.RoleIDs, roleEnt.ID)
 					dto.RoleNames = append(dto.RoleNames, roleEnt.RoleName)
@@ -801,13 +944,14 @@ func (r *staffRepo) ListBySectionID(ctx context.Context, sectionID int, query ta
 			}
 			deptByUserID, err := r.getDepartmentMapByUserIDs(ctx, userIDs)
 			if err != nil {
-				deptByUserID = map[int]*int{}
+				deptByUserID = map[int]staffDepartmentInfo{}
 			}
 
 			out := make([]*model.StaffDTO, 0, len(src))
 			for _, u := range src {
 				dto := mapper.MapAs[*generated.User, *model.StaffDTO](u)
-				dto.DepartmentID = deptByUserID[u.ID]
+				deptInfo := deptByUserID[u.ID]
+				setDepartmentFromPersistedStaff(dto, deptInfo.ID, deptInfo.Name)
 				if u.Edges.Staff != nil {
 					st := u.Edges.Staff
 
@@ -855,13 +999,14 @@ func (r *staffRepo) ListByRoleName(ctx context.Context, roleName string, query t
 			}
 			deptByUserID, err := r.getDepartmentMapByUserIDs(ctx, userIDs)
 			if err != nil {
-				deptByUserID = map[int]*int{}
+				deptByUserID = map[int]staffDepartmentInfo{}
 			}
 
 			out := make([]*model.StaffDTO, 0, len(src))
 			for _, u := range src {
 				dto := mapper.MapAs[*generated.User, *model.StaffDTO](u)
-				dto.DepartmentID = deptByUserID[u.ID]
+				deptInfo := deptByUserID[u.ID]
+				setDepartmentFromPersistedStaff(dto, deptInfo.ID, deptInfo.Name)
 				if u.Edges.Staff != nil {
 					st := u.Edges.Staff
 
@@ -886,7 +1031,10 @@ func (r *staffRepo) Search(ctx context.Context, query dbutils.SearchQuery) (dbut
 	return dbutils.Search(
 		ctx,
 		r.db.User.Query().
-			Where(user.DeletedAtIsNil()),
+			Where(
+				user.DeletedAtIsNil(),
+				user.HasStaff(),
+			),
 		[]string{
 			dbutils.GetNormField(user.FieldName),
 			dbutils.GetNormField(user.FieldPhone),
@@ -908,7 +1056,8 @@ func (r *staffRepo) Search(ctx context.Context, query dbutils.SearchQuery) (dbut
 				return mapped
 			}
 			for _, dto := range mapped {
-				dto.DepartmentID = deptByUserID[dto.ID]
+				deptInfo := deptByUserID[dto.ID]
+				setDepartmentFromPersistedStaff(dto, deptInfo.ID, deptInfo.Name)
 			}
 			return mapped
 		},
@@ -921,6 +1070,7 @@ func (r *staffRepo) SearchWithRoleName(ctx context.Context, roleName string, que
 		r.db.User.Query().
 			Where(
 				user.DeletedAtIsNil(),
+				user.HasStaff(),
 				user.HasRolesWith(role.RoleNameEQ(roleName)),
 			),
 		[]string{
@@ -944,7 +1094,8 @@ func (r *staffRepo) SearchWithRoleName(ctx context.Context, roleName string, que
 				return mapped
 			}
 			for _, dto := range mapped {
-				dto.DepartmentID = deptByUserID[dto.ID]
+				deptInfo := deptByUserID[dto.ID]
+				setDepartmentFromPersistedStaff(dto, deptInfo.ID, deptInfo.Name)
 			}
 			return mapped
 		},

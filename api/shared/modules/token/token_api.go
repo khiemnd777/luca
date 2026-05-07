@@ -10,9 +10,10 @@ import (
 	"github.com/khiemnd777/noah_api/shared/utils"
 )
 
-func GenerateTokens(ctx context.Context, userId int) (*auth.AuthTokenPair, error) {
+func GenerateTokens(ctx context.Context, userID, departmentID int) (*auth.AuthTokenPair, error) {
 	generateTokenData := map[string]any{
-		"userID": userId,
+		"userID":        userID,
+		"department_id": departmentID,
 	}
 	var result auth.AuthTokenPair
 	err := app.GetHttpClient().CallRequest(
